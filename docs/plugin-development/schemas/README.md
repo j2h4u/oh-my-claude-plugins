@@ -70,9 +70,24 @@ When adding new schemas:
 3. Add CI/CD job in `.github/workflows/validate-plugins.yml`
 4. Document in this README
 
+## IDE Autocomplete
+
+For better autocomplete in your IDE (including 50+ environment variables), you can use the community-maintained improved schema:
+
+```json
+{
+  "$schema": "https://assets.turboai.dev/claude-code-settings.improved.json"
+}
+```
+
+Add this to your `.claude/settings.json` or `.claude/settings.local.json` for enhanced IntelliSense in VSCode and other editors.
+
+**Note**: This is an unofficial community schema with richer autocomplete support. For CI/CD validation, we use the official schema from schemastore.org.
+
 ## References
 
 - [JSON Schema specification](https://json-schema.org/draft-07/schema)
-- [Official Claude Code settings schema](https://json.schemastore.org/claude-code-settings.json)
+- [Official Claude Code settings schema](https://json.schemastore.org/claude-code-settings.json) (used in CI/CD)
+- [Community improved schema](https://assets.turboai.dev/claude-code-settings.improved.json) (for IDE autocomplete)
 - [Claude Code hooks documentation](../../hooks.md)
 - [Plugin development guide](../../plugins.md)
