@@ -1,57 +1,83 @@
 {
-  "$schema": "https://cdn.jsdelivr.net/npm/@anthropic-ai/claude-code@latest/marketplace.schema.json",
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "oh-my-claude-plugins",
-  "description": "Personal collection of Claude Code skills, plugins, and utilities",
-  "author": "j2h4u",
-  "repository": "https://github.com/j2h4u/oh-my-claude-plugins",
+  "description": "Personal collection of Claude Code skills, agents, and plugins",
+  "owner": {
+    "name": "j2h4u",
+    "email": "noreply@github.com"
+  },
   "plugins": [
     {
       "name": "coding-standards",
       "description": "Code quality standards: Bash, Python, Kaizen philosophy, Clean Architecture",
-      "path": "coding-standards",
-      "tags": ["coding", "standards", "bash", "python", "architecture"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../coding-standards"
     },
     {
       "name": "git-tools",
       "description": "Git workflows: GitHub CLI, changelogs, conventional commits, releases",
-      "path": "git",
-      "tags": ["git", "github", "changelog", "versioning"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../git"
     },
     {
       "name": "web-frontend",
       "description": "Web development: React/Next.js best practices, web artifacts, design guidelines",
-      "path": "web",
-      "tags": ["react", "nextjs", "vercel", "frontend"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../web"
     },
     {
       "name": "documentation",
       "description": "Documentation tools: collaborative doc writing, README generation",
-      "path": "docs",
-      "tags": ["documentation", "readme", "writing"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../docs"
     },
     {
       "name": "devops",
       "description": "DevOps tools: Linux system administration for Debian/Ubuntu",
-      "path": "devops",
-      "tags": ["linux", "sysadmin", "debian", "ubuntu"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../devops"
     },
     {
       "name": "claude-code-meta",
       "description": "Claude Code tooling: skill creation, MCP development, CLAUDE.md management",
-      "path": "meta",
-      "tags": ["claude-code", "skills", "mcp", "plugins"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../meta"
     },
     {
       "name": "productivity",
       "description": "Productivity tools: meeting transcript analysis",
-      "path": "productivity",
-      "tags": ["productivity", "meetings", "analysis"]
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../productivity"
     },
     {
       "name": "agents",
-      "description": "Custom agents: Python code review and quick fixing",
-      "path": "agents",
-      "tags": ["agents", "python", "code-review", "fixer"]
+      "description": "Custom agents: Python code review, quick fixing, mechanical tasks",
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "../agents"
     }
   ]
 }
