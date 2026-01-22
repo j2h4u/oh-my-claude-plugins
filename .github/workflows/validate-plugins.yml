@@ -27,33 +27,33 @@ jobs:
       - name: Check required fields in marketplace
         run: |
           echo "Checking required marketplace fields..."
-          
+
           # Check top-level required fields
           if ! jq -e ".name" .claude-plugin/marketplace.json > /dev/null; then
             echo "✗ Missing required field: name"
             exit 1
           fi
           echo "✓ Field 'name' present"
-          
+
           if ! jq -e ".owner" .claude-plugin/marketplace.json > /dev/null; then
             echo "✗ Missing required field: owner"
             exit 1
           fi
           echo "✓ Field 'owner' present"
-          
+
           # Check owner.name exists
           if ! jq -e ".owner.name" .claude-plugin/marketplace.json > /dev/null; then
             echo "✗ Missing required field: owner.name"
             exit 1
           fi
           echo "✓ Field 'owner.name' present"
-          
+
           if ! jq -e ".plugins" .claude-plugin/marketplace.json > /dev/null; then
             echo "✗ Missing required field: plugins"
             exit 1
           fi
           echo "✓ Field 'plugins' present"
-          
+
           # Check plugins is an array
           if ! jq -e ".plugins | type == \"array\"" .claude-plugin/marketplace.json > /dev/null; then
             echo "✗ Field 'plugins' must be an array"
@@ -75,25 +75,25 @@ jobs:
       - name: Validate marketplace plugin entries
         run: |
           echo "Validating marketplace plugin entries..."
-          
+
           # Check each plugin entry in marketplace
           plugin_count=$(jq '.plugins | length' .claude-plugin/marketplace.json)
-          
+
           for ((i=0; i<$plugin_count; i++)); do
             echo ""
             echo "Checking marketplace entry $((i+1))..."
-            
+
             # Check required fields for marketplace entries
             if ! jq -e ".plugins[$i].name" .claude-plugin/marketplace.json > /dev/null; then
               echo "✗ Plugin entry $((i+1)): Missing required field 'name'"
               exit 1
             fi
-            
+
             if ! jq -e ".plugins[$i].source" .claude-plugin/marketplace.json > /dev/null; then
               echo "✗ Plugin entry $((i+1)): Missing required field 'source'"
               exit 1
             fi
-            
+
             # Check author format if present
             if jq -e ".plugins[$i].author" .claude-plugin/marketplace.json > /dev/null; then
               if ! jq -e ".plugins[$i].author | type == \"object\"" .claude-plugin/marketplace.json > /dev/null; then
@@ -106,11 +106,11 @@ jobs:
               fi
               echo "✓ Plugin entry $((i+1)): Field 'author' is properly formatted"
             fi
-            
+
             plugin_name=$(jq -r ".plugins[$i].name" .claude-plugin/marketplace.json)
             echo "✓ Marketplace entry for '$plugin_name' is valid"
           done
-          
+
           echo ""
           echo "✅ All marketplace plugin entries are valid"
 
@@ -166,7 +166,7 @@ jobs:
               exit 1
             fi
             echo "✓ Required field 'name' present"
-            
+
             # Check optional but recommended fields
             if jq -e ".author" "$plugin_json" > /dev/null; then
               # If author exists, check it's an object
@@ -180,7 +180,7 @@ jobs:
               fi
               echo "✓ Field 'author' is properly formatted"
             fi
-            
+
             # Validate repository field if present (should be string, not object)
             if jq -e ".repository" "$plugin_json" > /dev/null; then
               if ! jq -e ".repository | type == \"string\"" "$plugin_json" > /dev/null; then
@@ -196,18 +196,48 @@ jobs:
             else
               echo "✓ README.md exists"
             fi
-            
+
+            # Check hooks configuration
+            if [ -d "$plugin_path/hooks" ]; then
+              echo "✓ Hooks directory exists"
+
+              # If hooks directory exists, plugin.json must have hooks field
+              if ! jq -e ".hooks" "$plugin_json" > /dev/null; then
+                echo "✗ Hooks directory exists but 'hooks' field missing in plugin.json"
+                exit 1
+              fi
+
+              # Verify hooks file exists
+              hooks_path=$(jq -r ".hooks" "$plugin_json")
+              hooks_file="$plugin_path/$hooks_path"
+              if [ ! -f "$hooks_file" ]; then
+                echo "✗ Hooks file not found: $hooks_file"
+                exit 1
+              fi
+
+              # Validate hooks JSON syntax
+              if ! jq empty "$hooks_file" 2>/dev/null; then
+                echo "✗ Invalid JSON in hooks file: $hooks_file"
+                exit 1
+              fi
+
+              echo "✓ Hooks configuration is valid"
+            elif jq -e ".hooks" "$plugin_json" > /dev/null; then
+              echo "✗ Field 'hooks' present but hooks directory not found"
+              exit 1
+            fi
+
             # Check commands directory and validate command files
             if [ -d "$plugin_path/commands" ]; then
               echo "✓ Commands directory exists"
-              
+
               # Find all markdown files in commands directory
               command_files=$(find "$plugin_path/commands" -name "*.md" 2>/dev/null)
-              
+
               if [ -n "$command_files" ]; then
                 for cmd_file in $command_files; do
                   cmd_name=$(basename "$cmd_file")
-                  
+
                   # Check if file has frontmatter (starts with ---)
                   if head -n 1 "$cmd_file" | grep -q "^---$"; then
                     echo "✓ Command '$cmd_name' has frontmatter"
@@ -249,3 +279,284 @@ jobs:
           fi
 
           echo "✓ No duplicate plugin names"
+
+  shellcheck-scripts:
+    name: Shellcheck Bash Scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on all bash scripts
+        run: |
+          echo "Running shellcheck on bash scripts..."
+
+          # Find all .sh files
+          bash_scripts=$(find . -name "*.sh" -type f | grep -v ".git" | grep -v "node_modules")
+
+          if [ -z "$bash_scripts" ]; then
+            echo "No bash scripts found"
+            exit 0
+          fi
+
+          exit_code=0
+          for script in $bash_scripts; do
+            echo ""
+            echo "Checking: $script"
+            if shellcheck "$script"; then
+              echo "✓ $script passed shellcheck"
+            else
+              echo "✗ $script failed shellcheck"
+              exit_code=1
+            fi
+          done
+
+          if [ $exit_code -eq 0 ]; then
+            echo ""
+            echo "✅ All bash scripts passed shellcheck"
+          else
+            echo ""
+            echo "❌ Some scripts failed shellcheck"
+            exit 1
+          fi
+
+  validate-frontmatter:
+    name: Validate YAML Frontmatter
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Python and PyYAML
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          pip3 install PyYAML
+
+      - name: Validate frontmatter in SKILL.md files
+        run: |
+          echo "Validating YAML frontmatter in SKILL.md files..."
+
+          skill_files=$(find . -name "SKILL.md" -type f)
+
+          exit_code=0
+          for skill_file in $skill_files; do
+            echo ""
+            echo "Checking: $skill_file"
+
+            # Check if file starts with ---
+            if ! head -n 1 "$skill_file" | grep -q "^---$"; then
+              echo "✗ Missing frontmatter delimiter at start"
+              exit_code=1
+              continue
+            fi
+
+            # Extract frontmatter and validate YAML
+            frontmatter=$(awk '/^---$/{i++}i==1{print;next}i==2{exit}' "$skill_file" | sed '1d')
+
+            pycheck='import sys,yaml;d=yaml.safe_load(sys.stdin)'
+            if echo "$frontmatter" | python3 -c "$pycheck" 2>/dev/null; then
+              # Check required fields
+              pychk_name="$pycheck;sys.exit(0 if 'name' in d else 1)"
+              if ! echo "$frontmatter" | python3 -c "$pychk_name"; then
+                echo "✗ Missing required field: name"
+                exit_code=1
+                continue
+              fi
+
+              pychk_desc="$pycheck;sys.exit(0 if 'description' in d else 1)"
+              if ! echo "$frontmatter" | python3 -c "$pychk_desc"; then
+                echo "✗ Missing required field: description"
+                exit_code=1
+                continue
+              fi
+
+              echo "✓ Valid frontmatter with required fields"
+            else
+              echo "✗ Invalid YAML in frontmatter"
+              exit_code=1
+            fi
+          done
+
+          if [ $exit_code -eq 0 ]; then
+            echo ""
+            echo "✅ All SKILL.md frontmatter is valid"
+          else
+            echo ""
+            echo "❌ Some SKILL.md files have invalid frontmatter"
+            exit 1
+          fi
+
+      - name: Validate frontmatter in agent files
+        run: |
+          echo "Validating YAML frontmatter in agent files..."
+
+          agent_files=$(find ./agents -name "*.md" -type f -path "*/agents/*" 2>/dev/null || true)
+
+          if [ -z "$agent_files" ]; then
+            echo "No agent files found"
+            exit 0
+          fi
+
+          exit_code=0
+          for agent_file in $agent_files; do
+            echo ""
+            echo "Checking: $agent_file"
+
+            # Check if file starts with ---
+            if ! head -n 1 "$agent_file" | grep -q "^---$"; then
+              echo "✗ Missing frontmatter delimiter at start"
+              exit_code=1
+              continue
+            fi
+
+            # Extract frontmatter and validate YAML
+            frontmatter=$(awk '/^---$/{i++}i==1{print;next}i==2{exit}' "$agent_file" | sed '1d')
+
+            pycheck='import sys,yaml;d=yaml.safe_load(sys.stdin)'
+            if echo "$frontmatter" | python3 -c "$pycheck" 2>/dev/null; then
+              # Check required fields
+              pychk_name="$pycheck;sys.exit(0 if 'name' in d else 1)"
+              if ! echo "$frontmatter" | python3 -c "$pychk_name"; then
+                echo "✗ Missing required field: name"
+                exit_code=1
+                continue
+              fi
+
+              pychk_desc="$pycheck;sys.exit(0 if 'description' in d else 1)"
+              if ! echo "$frontmatter" | python3 -c "$pychk_desc"; then
+                echo "✗ Missing required field: description"
+                exit_code=1
+                continue
+              fi
+
+              echo "✓ Valid frontmatter with required fields"
+            else
+              echo "✗ Invalid YAML in frontmatter"
+              exit_code=1
+            fi
+          done
+
+          if [ $exit_code -eq 0 ]; then
+            echo ""
+            echo "✅ All agent frontmatter is valid"
+          else
+            echo ""
+            echo "❌ Some agent files have invalid frontmatter"
+            exit 1
+          fi
+
+  validate-skill-descriptions:
+    name: Validate Skill Description Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Python and PyYAML
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          pip3 install PyYAML
+
+      - name: Check skill description format
+        run: |
+          echo "Validating skill description format (CRITICAL for discovery)..."
+          echo "According to CLAUDE.md: descriptions must use third-person"
+          echo "and include 8-12 quoted trigger phrases"
+          echo ""
+
+          skill_files=$(find . -name "SKILL.md" -type f)
+
+          exit_code=0
+          pyget_desc='import sys,yaml;d=yaml.safe_load(sys.stdin);print(d.get("description",""))'
+
+          for skill_file in $skill_files; do
+            echo "Checking: $skill_file"
+
+            # Extract description from frontmatter
+            frontmatter=$(awk '/^---$/{i++}i==1{print;next}i==2{exit}' "$skill_file" | sed '1d')
+            description=$(echo "$frontmatter" | python3 -c "$pyget_desc" 2>/dev/null || echo "")
+
+            if [ -z "$description" ]; then
+              echo "✗ No description found"
+              exit_code=1
+              continue
+            fi
+
+            # Check if description starts with "This skill should be used when"
+            if ! echo "$description" | grep -q "This skill should be used when"; then
+              echo "✗ Description must start with 'This skill should be used when'"
+              echo "  Got: ${description:0:80}..."
+              exit_code=1
+              continue
+            fi
+
+            # Count quoted phrases (approximate - looks for "phrase" patterns)
+            quoted_count=$(echo "$description" | grep -o '"[^"]*"' | wc -l)
+
+            if [ "$quoted_count" -lt 3 ]; then
+              echo "⚠️  Warning: Only $quoted_count quoted trigger phrases found (recommended: 8-12)"
+              echo "  This may affect skill discovery"
+            fi
+
+            echo "✓ Description format is valid (${quoted_count} quoted phrases)"
+          done
+
+          if [ $exit_code -eq 0 ]; then
+            echo ""
+            echo "✅ All skill descriptions follow the required format"
+          else
+            echo ""
+            echo "❌ Some skill descriptions don't follow the required format"
+            exit 1
+          fi
+
+  check-hook-scripts-executable:
+    name: Check Hook Scripts Are Executable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check hook scripts are executable
+        run: |
+          echo "Checking that hook scripts are executable..."
+
+          # Find all hook script files
+          hook_scripts=$(find . -path "*/hooks/scripts/*.sh" -type f 2>/dev/null || true)
+
+          if [ -z "$hook_scripts" ]; then
+            echo "No hook scripts found"
+            exit 0
+          fi
+
+          exit_code=0
+          for script in $hook_scripts; do
+            echo ""
+            echo "Checking: $script"
+
+            if [ -x "$script" ]; then
+              echo "✓ Script is executable"
+            else
+              echo "✗ Script is NOT executable (needs chmod +x)"
+              exit_code=1
+            fi
+          done
+
+          if [ $exit_code -eq 0 ]; then
+            echo ""
+            echo "✅ All hook scripts are executable"
+          else
+            echo ""
+            echo "❌ Some hook scripts are missing executable permissions"
+            echo "Run: chmod +x <script-path>"
+            exit 1
+          fi

@@ -1,0 +1,21 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: error
+  document-start: disable
+  truthy: disable
+  brackets:
+    max-spaces-inside: 1
+  trailing-spaces:
+    level: error
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    spaces: 2
+    indent-sequences: true
+  key-duplicates: enable
+  empty-lines:
+    max: 2
