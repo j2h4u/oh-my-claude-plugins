@@ -40,6 +40,30 @@ jsonschema -i ../../meta/hooks/hooks.json hooks.schema.json
 }
 ```
 
+**CRITICAL: Standard `hooks/hooks.json` loading**
+
+⚠️ **Important**: Claude Code automatically loads `hooks/hooks.json` if it exists.
+
+**Do NOT** add `"hooks": "./hooks/hooks.json"` to your `plugin.json`:
+```json
+{
+  "name": "my-plugin",
+  "hooks": "./hooks/hooks.json"  ❌ WRONG - causes duplicate loading error
+}
+```
+
+The `hooks` field should **only** be used for **additional** hook files:
+```json
+{
+  "name": "my-plugin",
+  "hooks": "./hooks/custom-hooks.json"  ✅ CORRECT - additional hooks
+}
+```
+
+**Summary**:
+- `hooks/hooks.json` → loaded automatically, no field needed
+- Other hook files → use `"hooks": "path/to/file.json"`
+
 **Supported hook events**:
 - `PreToolUse` - Before tool execution
 - `PostToolUse` - After tool execution
