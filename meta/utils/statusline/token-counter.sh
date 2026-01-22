@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+#
 # ccusage statusline example:
 # 🤖 Sonnet 4.5 | 💰 $25.17 session / $25.21 today / $10.76 block (3h 9m left) | 🔥 $5.81/hr 🟢 (Normal) | 🧠 387,071 (194%)
-
-# our statusline example:
-# oh-my-claude-plugins/ ⑂main • Sonnet 4.5 • sess $25.3 / today $1.7 / total $26.9 • 51%
-# ^ cwd
-#            git branch ^
-#                         model ^
-#                                                                free context window ^
+#
+# we prepend it with current directory and git branch:
+# oh-my-claude-plugins/ ⑂main 
+#
 
 function die {
     local -r message="${1:-}"
@@ -45,6 +43,7 @@ function die {
 
     declare -r SEP1=" ${DGRAY}•${NOCOLOR} "
     declare -r SEP2=" ${DGRAY}|${NOCOLOR} "
+    declare -r BRANCH_LABEL='⑂'
 }
 
 function read_json_input {
@@ -52,7 +51,7 @@ function read_json_input {
     local input
 
     # code
-    IFS= read -r -d '' -t 1 input || true
+    IFS= read -r -d '' -t 1 input || return # actually it's "return $?", but implicitly
 
     # result: JSON input from stdin
     echo "$input"
@@ -123,10 +122,10 @@ function render_statusline {
 
     # code
     git_part=""
-    [[ -n "$git_branch" ]] && git_part="⑂${DIM}${git_branch}${NOCOLOR}${SEP2}"
+    [[ -n "$git_branch" ]] && git_part="${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}${SEP2}"
 
     # result: formatted statusline
-    printf '%s%s%s%s\n' \
+    printf '%b%b%b%b\n' \
         "${BLUE}${dir_name}${NOCOLOR}" \
         "${SEP2}" \
         "$git_part" \
@@ -138,7 +137,7 @@ function main {
     local input current_dir dir_name git_branch ccusage_statusline
 
     # code
-    input=$( read_json_input )
+    input=$( read_json_input ) || die "Nothing received from stdin ($?)"
 
     # assert: got input
     [[ -n "$input" ]] || die "No JSON input received from stdin"
