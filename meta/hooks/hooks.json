@@ -1,13 +1,16 @@
 {
-  "PostToolUse": [
-    {
-      "matcher": "Write|Edit",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/ensure-agents-ref.sh"
-        }
-      ]
-    }
-  ]
+  "description": "Ensure CLAUDE.md contains @./AGENTS.md reference after Write/Edit operations",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/ensure-agents-ref.sh"
+          }
+        ]
+      }
+    ]
+  }
 }
