@@ -1,10 +1,13 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "oh-my-claude-plugins",
-  "description": "Personal collection of Claude Code skills, agents, and plugins",
   "owner": {
     "name": "j2h4u",
     "email": "noreply@github.com"
+  },
+  "metadata": {
+    "description": "Personal collection of Claude Code skills, agents, and plugins",
+    "version": "1.0.0"
   },
   "plugins": [
     {

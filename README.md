@@ -4,6 +4,10 @@
 
 Skills, agents, and hooks that make Claude Code smarter about your workflow — from coding standards to git automation.
 
+[![GitHub stars](https://img.shields.io/github/stars/j2h4u/oh-my-claude-plugins?style=social)](https://github.com/j2h4u/oh-my-claude-plugins/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Validate Plugins](https://github.com/j2h4u/oh-my-claude-plugins/actions/workflows/validate-plugins.yml/badge.svg)](https://github.com/j2h4u/oh-my-claude-plugins/actions/workflows/validate-plugins.yml)
+
 ## Quick Start
 
 ```bash
@@ -106,10 +110,43 @@ Use as local plugin directory (development mode):
 claude --plugin-dir /path/to/oh-my-claude-plugins
 ```
 
+## Documentation
+
+### Plugin System Guides (`docs/`)
+
+Comprehensive documentation for Claude Code plugin development:
+
+| Guide | Description |
+|-------|-------------|
+| [Plugins](docs/plugins.md) | Plugin development quickstart |
+| [Plugins Reference](docs/plugins-reference.md) | Technical specifications and schemas |
+| [Plugin Marketplaces](docs/plugin-marketplaces.md) | Marketplace creation and management |
+| [Hooks](docs/hooks.md) | Event-driven automation (27KB reference) |
+| [Skills](docs/skills.md) | Agent skills development |
+| [Sub-Agents](docs/sub-agents.md) | Specialized AI assistants |
+| [Slash Commands](docs/slash-commands.md) | Command system reference |
+| [Settings](docs/settings.md) | Configuration guide (46KB) |
+
+### Skill Quality Report
+
+See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed analysis of all skills, including ratings, issues, and recommended improvements.
+
 ## Requirements
 
 - Claude Code CLI
 - Git (for version control features)
+
+## Contributing
+
+Plugin validation runs automatically on every push via GitHub Actions. To validate locally:
+
+```bash
+# Check JSON syntax
+jq empty .claude-plugin/marketplace.json
+
+# Validate plugin structure
+bash .github/workflows/validate-plugins.yml
+```
 
 ## License
 
