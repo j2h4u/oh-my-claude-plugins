@@ -201,27 +201,51 @@ jobs:
             if [ -d "$plugin_path/hooks" ]; then
               echo "✓ Hooks directory exists"
 
-              # If hooks directory exists, plugin.json must have hooks field
-              if ! jq -e ".hooks" "$plugin_json" > /dev/null; then
-                echo "✗ Hooks directory exists but 'hooks' field missing in plugin.json"
-                exit 1
-              fi
+              # Check if standard hooks/hooks.json exists
+              standard_hooks="$plugin_path/hooks/hooks.json"
+              if [ -f "$standard_hooks" ]; then
+                # Standard hooks.json exists - validate it
+                if ! jq empty "$standard_hooks" 2>/dev/null; then
+                  echo "✗ Invalid JSON in hooks file: $standard_hooks"
+                  exit 1
+                fi
 
-              # Verify hooks file exists
-              hooks_path=$(jq -r ".hooks" "$plugin_json")
-              hooks_file="$plugin_path/$hooks_path"
-              if [ ! -f "$hooks_file" ]; then
-                echo "✗ Hooks file not found: $hooks_file"
-                exit 1
-              fi
+                # If hooks field is present, it should NOT point to standard location
+                if jq -e ".hooks" "$plugin_json" > /dev/null; then
+                  hooks_path=$(jq -r ".hooks" "$plugin_json")
+                  if [ "$hooks_path" = "./hooks/hooks.json" ] || [ "$hooks_path" = "hooks/hooks.json" ]; then
+                    echo "✗ Field 'hooks' should not reference standard hooks/hooks.json"
+                    echo "  Standard hooks/hooks.json is loaded automatically"
+                    echo "  Use 'hooks' field only for additional hook files"
+                    exit 1
+                  fi
+                fi
 
-              # Validate hooks JSON syntax
-              if ! jq empty "$hooks_file" 2>/dev/null; then
-                echo "✗ Invalid JSON in hooks file: $hooks_file"
-                exit 1
-              fi
+                echo "✓ Standard hooks configuration is valid"
+              else
+                # No standard hooks.json - hooks field is required
+                if ! jq -e ".hooks" "$plugin_json" > /dev/null; then
+                  echo "✗ Hooks directory exists but no hooks/hooks.json found"
+                  echo "  Either create hooks/hooks.json or specify custom path in 'hooks' field"
+                  exit 1
+                fi
 
-              echo "✓ Hooks configuration is valid"
+                # Verify custom hooks file exists
+                hooks_path=$(jq -r ".hooks" "$plugin_json")
+                hooks_file="$plugin_path/$hooks_path"
+                if [ ! -f "$hooks_file" ]; then
+                  echo "✗ Hooks file not found: $hooks_file"
+                  exit 1
+                fi
+
+                # Validate hooks JSON syntax
+                if ! jq empty "$hooks_file" 2>/dev/null; then
+                  echo "✗ Invalid JSON in hooks file: $hooks_file"
+                  exit 1
+                fi
+
+                echo "✓ Custom hooks configuration is valid"
+              fi
             elif jq -e ".hooks" "$plugin_json" > /dev/null; then
               echo "✗ Field 'hooks' present but hooks directory not found"
               exit 1
