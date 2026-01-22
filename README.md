@@ -28,9 +28,9 @@ Code quality and development philosophy.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| dignified-bash | Writing bash scripts | Strict mode, shellcheck, defensive patterns | ⭐⭐⭐⭐ | |
-| dignified-python | Writing Python code | LBYL philosophy, version-aware (3.10-3.13), Click CLI | ⭐⭐⭐⭐ | |
-| kaizen | Code quality discussions | Continuous improvement, poka-yoke, YAGNI | ⭐⭐⭐⭐ | |
+| dignified-bash | Writing bash scripts | Strict mode, shellcheck, defensive patterns | ⭐⭐⭐⭐ | Well-structured but standard bash practices |
+| dignified-python | Writing Python code | LBYL philosophy, version-aware (3.10-3.13), Click CLI | ⭐⭐⭐⭐⭐ | Deep LBYL approach, original error-handling philosophy |
+| kaizen | Code quality discussions | Continuous improvement, poka-yoke, YAGNI | ⭐⭐⭐⭐⭐ | Deep principles with original code adaptation |
 | software-architecture | Architecture decisions | Clean Architecture & DDD principles | ⭐⭐ | Needs examples, library guide |
 
 ### git-tools
@@ -39,9 +39,9 @@ Git workflows and GitHub integration.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| changelog-generator | "generate changelog" | Transform commits into user-friendly changelogs | ⭐⭐⭐⭐ | |
-| gh | GitHub CLI usage | PR management, GraphQL API, Projects V2 | ⭐⭐⭐⭐⭐ | Exemplary progressive disclosure |
-| git-workflow-manager | Commits, releases | Conventional commits, semantic versioning | ⭐⭐⭐⭐ | |
+| changelog-generator | "generate changelog" | Transform commits into user-friendly changelogs | ⭐⭐⭐ | Shallow workflow, not deep |
+| gh | GitHub CLI usage | PR management, GraphQL API, Projects V2 | ⭐⭐⭐⭐⭐ | Deep mental model, original workflow patterns |
+| git-workflow-manager | Commits, releases | Conventional commits, semantic versioning | ⭐⭐⭐ | Basic conventional commits reference |
 
 ### web-dev
 
@@ -49,7 +49,7 @@ Frontend development.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| vercel-react-best-practices | React/Next.js code | 45 performance rules: waterfalls, bundles, SSR | ⭐⭐⭐⭐⭐ | Textbook 3-tier structure |
+| vercel-react-best-practices | React/Next.js code | 45 performance rules: waterfalls, bundles, SSR | ⭐⭐⭐⭐ | Great structure but just packages Vercel rules |
 | web-artifacts-builder | "create artifact" | Build React artifacts for Claude.ai | ⭐⭐ | Needs troubleshooting guide, component patterns, examples |
 | web-design-guidelines | UI review | Vercel Web Interface Guidelines | ⭐⭐ | Needs expansion (176→1500 words), sample output examples |
 
@@ -59,8 +59,8 @@ Documentation creation.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| doc-coauthoring | "help write doc" | Collaborative workflow: gathering, refinement, reader testing | ⭐⭐⭐⭐⭐ | Well-structured workflow |
-| readme-generator | "write README" | README best practices by project type | ⭐⭐⭐⭐ | |
+| doc-coauthoring | "help write doc" | Collaborative workflow: gathering, refinement, reader testing | ⭐⭐⭐⭐ | Good workflow but not particularly deep |
+| readme-generator | "write README" | README best practices by project type | ⭐⭐⭐ | Just a process, shallow content |
 
 ### devops
 
@@ -68,7 +68,7 @@ System administration.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| linux-sysadmin | Linux admin tasks | Debian/Ubuntu: systemd, permissions, packages | ⭐⭐⭐⭐ | |
+| linux-sysadmin | Linux admin tasks | Debian/Ubuntu: systemd, permissions, packages | ⭐⭐⭐⭐ | Useful practices, standard content |
 
 ### claude-code-meta
 
@@ -76,11 +76,11 @@ Claude Code tooling and meta-skills.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| cli-skill-creator | "create skill for CLI" | Meta-skill for creating CLI tool skills | ⭐⭐⭐⭐⭐ | Comprehensive CLI introspection workflow |
-| mcp-builder | "build MCP server" | MCP server development: Python, Node.js | ⭐⭐⭐⭐⭐ | Includes working evaluation tools |
-| claude-md-redirect | CLAUDE.md operations | Redirect to AGENTS.md with PostToolUse hook | ⭐⭐⭐⭐ | |
-| claude-md-writer | "write CLAUDE.md" | CLAUDE.md best practices: size limits, 3-tier docs | ⭐⭐⭐⭐ | |
-| opencode-config | OpenCode CLI setup | Custom providers, model selection | ⭐⭐⭐⭐ | |
+| cli-skill-creator | "create skill for CLI" | Meta-skill for creating CLI tool skills | ⭐⭐⭐⭐⭐ | Deep systematic approach, highly original meta-skill |
+| mcp-builder | "build MCP server" | MCP server development: Python, Node.js | ⭐⭐⭐⭐⭐ | Deep best practices, includes working evaluation tools |
+| claude-md-redirect | CLAUDE.md operations | Redirect to AGENTS.md with PostToolUse hook | ⭐⭐⭐ | Utility skill, very shallow |
+| claude-md-writer | "write CLAUDE.md" | CLAUDE.md best practices: size limits, 3-tier docs | ⭐⭐⭐⭐ | Good compilation of best practices |
+| opencode-config | OpenCode CLI setup | Custom providers, model selection | ⭐⭐⭐ | Just config reference, shallow |
 
 **Utility:** `statusline` — Custom statusline showing costs & context usage. Install via `@"statusline-setup"` agent.
 
@@ -90,7 +90,7 @@ Analysis tools.
 
 | Skill | Triggers | Description | Quality | Notes |
 |-------|----------|-------------|---------|-------|
-| meeting-insights-analyzer | "analyze meeting" | Communication patterns, speaking ratios | ⭐⭐⭐⭐ | |
+| meeting-insights-analyzer | "analyze meeting" | Communication patterns, speaking ratios | ⭐⭐⭐⭐ | Original approach to meeting analysis |
 
 ### agents
 
@@ -106,13 +106,27 @@ Custom agents for code tasks.
 
 ### Quality Rating
 
-| Stars | Meaning |
-|-------|---------|
-| ⭐⭐⭐⭐⭐ | Exemplary — high quality, comprehensive content, excellent structure |
-| ⭐⭐⭐⭐ | Production ready — well-structured, complete, ready to use |
-| ⭐⭐ | Functional but incomplete — works but needs examples, guides, or expansion |
+Quality is rated on **four dimensions**:
 
-Check the **Notes** column for specific gaps in ⭐⭐ skills. See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed improvement roadmap.
+1. **Structure** — Progressive disclosure, references/, examples/, clear organization
+2. **Completeness** — All sections present, no missing content
+3. **Depth** — Insights beyond surface level, practical patterns, deep understanding
+4. **Originality** — Unique approach or just packaging existing docs/tools
+
+| Stars | Meaning | Examples |
+|-------|---------|----------|
+| ⭐⭐⭐⭐⭐ | Exemplary — deep + original + comprehensive | gh (mental model), mcp-builder (evaluation tools), kaizen (code adaptation) |
+| ⭐⭐⭐⭐ | High quality — good depth + well-structured | dignified-bash, linux-sysadmin, meeting-insights-analyzer |
+| ⭐⭐⭐ | Solid — complete but shallow/standard | changelog-generator (just workflow), opencode-config (config reference) |
+| ⭐⭐ | Incomplete — needs expansion or examples | software-architecture, web-artifacts-builder, web-design-guidelines |
+
+**Why downgraded from 5→3 stars?**
+- Just a workflow without deep insights (changelog-generator)
+- Simple reference/config guide (git-workflow-manager, opencode-config)
+- Packaging existing docs without original approach (vercel-react-best-practices)
+- Utility skill without depth (claude-md-redirect)
+
+Check **Notes** column for specifics. See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed improvement roadmap.
 
 ## Alternative Installation
 
