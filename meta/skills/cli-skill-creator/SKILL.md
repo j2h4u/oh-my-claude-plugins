@@ -726,4 +726,3 @@ This skill includes two comprehensive reference documents:
 - Load `skill-templates.md` during organization and structure design (Step 6)
 
 These references ensure consistent, comprehensive CLI skill creation following modern best practices.
-```

@@ -4,6 +4,5 @@
   "description": "Custom agents for code review and fixing",
   "author": {
     "name": "j2h4u"
-  },
-  "agents": ".."
+  }
 }

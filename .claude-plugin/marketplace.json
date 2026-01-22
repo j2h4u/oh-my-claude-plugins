@@ -14,7 +14,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./coding-standards"
+      "source": "./coding-standards",
+      "category": "development"
     },
     {
       "name": "git-tools",
@@ -23,7 +24,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./git"
+      "source": "./git",
+      "category": "development"
     },
     {
       "name": "web-frontend",
@@ -32,7 +34,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./web"
+      "source": "./web",
+      "category": "development"
     },
     {
       "name": "documentation",
@@ -41,7 +44,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./docs"
+      "source": "./docs",
+      "category": "productivity"
     },
     {
       "name": "devops",
@@ -50,7 +54,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./devops"
+      "source": "./devops",
+      "category": "development"
     },
     {
       "name": "claude-code-meta",
@@ -59,7 +64,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./meta"
+      "source": "./meta",
+      "category": "development"
     },
     {
       "name": "productivity",
@@ -68,7 +74,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./productivity"
+      "source": "./productivity",
+      "category": "productivity"
     },
     {
       "name": "agents",
@@ -77,7 +84,8 @@
       "author": {
         "name": "j2h4u"
       },
-      "source": "./agents"
+      "source": "./agents",
+      "category": "development"
     }
   ]
 }
