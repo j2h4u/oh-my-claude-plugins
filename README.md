@@ -20,6 +20,73 @@ Skills, agents, and hooks that make Claude Code smarter about your workflow — 
 
 Or browse interactively: `/plugin` → `Browse and install plugins` → `oh-my-claude-plugins`
 
+## Repository Structure
+
+```
+oh-my-claude-plugins/
+├── .claude-plugin/
+│   ├── marketplace.json          # Marketplace metadata
+│   └── plugin.json               # Plugin registry
+├── coding-standards/             # Code quality plugins
+│   ├── plugin.json
+│   └── skills/
+│       ├── dignified-bash/
+│       ├── dignified-python/
+│       ├── kaizen/
+│       └── software-architecture/
+├── git-tools/                    # Git workflow plugins
+│   ├── plugin.json
+│   └── skills/
+│       ├── changelog-generator/
+│       ├── gh/
+│       └── git-workflow-manager/
+├── web-dev/                      # Frontend development
+│   ├── plugin.json
+│   └── skills/
+│       ├── vercel-react-best-practices/
+│       ├── web-artifacts-builder/
+│       └── web-design-guidelines/
+├── docs/                         # Documentation plugins
+│   ├── plugin.json
+│   └── skills/
+│       ├── doc-coauthoring/
+│       └── readme-generator/
+├── devops/                       # System administration
+│   ├── plugin.json
+│   └── skills/
+│       └── linux-sysadmin/
+├── claude-code-meta/             # Claude Code tooling
+│   ├── plugin.json
+│   └── skills/
+│       ├── cli-skill-creator/
+│       ├── mcp-builder/
+│       ├── claude-md-redirect/
+│       ├── claude-md-writer/
+│       └── opencode-config/
+├── productivity/                 # Analysis tools
+│   ├── plugin.json
+│   └── skills/
+│       └── meeting-insights-analyzer/
+├── agents/                       # Custom agents
+│   ├── plugin.json
+│   ├── python-code-reviewer/
+│   ├── python-quick-fixer/
+│   └── quick-worker/
+├── statusline/                   # Utility: custom statusline
+│   └── agents/
+│       └── statusline-setup/
+└── docs/                         # Official documentation
+    ├── plugins.md
+    ├── hooks.md
+    └── plugin-development/
+```
+
+Each plugin directory contains:
+- `plugin.json` — Plugin manifest
+- `skills/` — Skill directories with SKILL.md
+- `agents/` — Agent directories (where applicable)
+- `references/`, `examples/` — Supporting content (in skill dirs)
+
 ## Available Plugins
 
 ### coding-standards
