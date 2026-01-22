@@ -111,12 +111,6 @@ claude --plugin-dir /path/to/oh-my-claude-plugins
 - Claude Code CLI
 - Git (for version control features)
 
-## Status Legend
-
-| Marker | Meaning |
-|--------|---------|
-| *(incomplete)* | Needs work |
-
 ## License
 
 Individual items may have their own licenses. Check each directory.
