@@ -4,6 +4,5 @@
   "description": "Code quality standards: Bash, Python, Kaizen philosophy, Clean Architecture",
   "author": {
     "name": "j2h4u"
-  },
-  "tags": ["coding", "standards", "bash", "python", "architecture", "quality"]
+  }
 }

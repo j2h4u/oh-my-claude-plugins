@@ -4,6 +4,5 @@
   "description": "Git workflows: GitHub CLI, changelogs, conventional commits, releases",
   "author": {
     "name": "j2h4u"
-  },
-  "tags": ["git", "github", "changelog", "versioning", "release"]
+  }
 }

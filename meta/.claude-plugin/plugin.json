@@ -4,6 +4,5 @@
   "description": "Claude Code tooling: skill creation, MCP development, CLAUDE.md management, statusline",
   "author": {
     "name": "j2h4u"
-  },
-  "tags": ["claude-code", "skills", "mcp", "plugins", "tooling"]
+  }
 }

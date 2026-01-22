@@ -4,6 +4,5 @@
   "description": "DevOps tools: Linux system administration for Debian/Ubuntu",
   "author": {
     "name": "j2h4u"
-  },
-  "tags": ["linux", "sysadmin", "debian", "ubuntu", "devops"]
+  }
 }

@@ -4,6 +4,5 @@
   "description": "Documentation tools: collaborative doc writing, README generation",
   "author": {
     "name": "j2h4u"
-  },
-  "tags": ["documentation", "readme", "writing", "collaboration"]
+  }
 }
