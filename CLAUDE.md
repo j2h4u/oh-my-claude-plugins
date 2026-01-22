@@ -6,6 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **oh-my-claude-plugins** is a curated marketplace of Claude Code plugins organized into 8 plugin categories with 19 skills and 3 custom agents. Each plugin is self-contained with its own `plugin.json` manifest and follows Claude Code plugin development standards.
 
+## Critical Constraints
+
+**Skill description format (CRITICAL for discovery):**
+- Must use third-person: "This skill should be used when..."
+- Require 8-12 quoted trigger phrases users would say
+- Anti-pattern: Imperative "Use when..." or no triggers
+- See line 80-88 for exact format
+
+**File size limits:**
+- SKILL.md: 1,000-3,000 words (ideal)
+- CLAUDE.md: < 200 lines (currently 158)
+- references/ files: < 500 lines each
+
 ## Commands
 
 ### Validation
@@ -69,45 +82,26 @@ Skills are rated ⭐⭐ to ⭐⭐⭐⭐⭐ based on:
 
 See `SKILLS-REVIEW-REPORT.md` for detailed analysis and improvement roadmap.
 
-## Skill Development Standards
+## Development Standards
 
-### Description Format (CRITICAL)
-
-All skills must use third-person format with 8-12 trigger phrases:
+### Skill Description Format
 
 ```yaml
-description: This skill should be used when the user asks to "trigger phrase 1", "trigger phrase 2", "mentions concept", or needs [use case description].
+description: This skill should be used when the user asks to "trigger 1", "trigger 2", mentions "concept", or needs [use case].
 ```
-
-**Anti-pattern:** Imperative format like "Use when..." or descriptive without triggers.
-
-### File Structure
-
-- **SKILL.md** — Core content (1,000-3,000 words ideal)
-  - YAML frontmatter with `name` and `description`
-  - Overview, when to use, patterns, examples
-  - References to progressive disclosure files
-- **references/** — Detailed content loaded on-demand
-- **examples/** — Working code samples
 
 ### Bash Scripts
 
-All bash scripts follow **dignified-bash** standards from `coding-standards/skills/dignified-bash/`:
-- Strict mode: `set -euo pipefail`
-- die() function with stderr redirect: `function die { ... } 1>&2`
-- Structured functions with sections: `# args`, `# vars`, `# code`, `# result`
-- Assertions with comments: `# assert: description`
+Follow **dignified-bash** (`coding-standards/skills/dignified-bash/`):
+- `set -euo pipefail`
+- `function die { ... } 1>&2`
+- Function sections: `# args`, `# vars`, `# code`, `# result`
 - Shellcheck compliant
 
 ### Git Workflow
 
-Follow conventional commits with semantic versioning:
-- `feat:` → MINOR bump
-- `fix:` → PATCH bump
-- `feat!:` or `fix!:` → MAJOR bump
-- `docs:`, `refactor:`, `chore:` → no version bump
-
-See `git-tools/skills/git-workflow-manager/` for full workflow.
+Conventional commits → semantic versioning (`git-tools/skills/git-workflow-manager/`):
+- `feat:` → MINOR, `fix:` → PATCH, `feat!:` → MAJOR
 
 ## Key Patterns
 
