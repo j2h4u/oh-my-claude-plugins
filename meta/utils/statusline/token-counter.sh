@@ -22,18 +22,30 @@ function die {
 # consts
 # Color constants - many unused but kept for future customization
 # shellcheck disable=SC2034
-declare -r BLACK=$'\033[0;30m' DGRAY=$'\033[1;30m' RED=$'\033[0;31m' BRED=$'\033[1;31m'
-# shellcheck disable=SC2034
-declare -r GREEN=$'\033[0;32m' BGREEN=$'\033[1;32m' YELLOW=$'\033[0;33m' BYELLOW=$'\033[1;33m'
-# shellcheck disable=SC2034
-declare -r BLUE=$'\033[0;34m' BBLUE=$'\033[1;34m' PURPLE=$'\033[0;35m' BPURPLE=$'\033[1;35m'
-# shellcheck disable=SC2034
-declare -r CYAN=$'\033[0;36m' BCYAN=$'\033[1;36m' LGRAY=$'\033[0;37m' WHITE=$'\033[1;37m'
-# shellcheck disable=SC2034
-declare -r GRAY=$'\033[2;37m' DIM=$'\033[2m' NOCOLOR=$'\033[0m'
+{
+    declare -r BLACK=$'\033[0;30m'
+    declare -r DGRAY=$'\033[1;30m'
+    declare -r RED=$'\033[0;31m'
+    declare -r BRED=$'\033[1;31m'
+    declare -r GREEN=$'\033[0;32m'
+    declare -r BGREEN=$'\033[1;32m'
+    declare -r YELLOW=$'\033[0;33m'
+    declare -r BYELLOW=$'\033[1;33m'
+    declare -r BLUE=$'\033[0;34m'
+    declare -r BBLUE=$'\033[1;34m'
+    declare -r PURPLE=$'\033[0;35m'
+    declare -r BPURPLE=$'\033[1;35m'
+    declare -r CYAN=$'\033[0;36m'
+    declare -r BCYAN=$'\033[1;36m'
+    declare -r LGRAY=$'\033[0;37m'
+    declare -r WHITE=$'\033[1;37m'
+    declare -r GRAY=$'\033[2;37m'
+    declare -r DIM=$'\033[2m'
+    declare -r NOCOLOR=$'\033[0m'
 
-# shellcheck disable=SC2034
-declare -r SEP1=" ${DGRAY}•${NOCOLOR} " SEP2=" ${DGRAY}|${NOCOLOR} "
+    declare -r SEP1=" ${DGRAY}•${NOCOLOR} "
+    declare -r SEP2=" ${DGRAY}|${NOCOLOR} "
+}
 
 function read_json_input {
     # vars
