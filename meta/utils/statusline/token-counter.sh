@@ -51,10 +51,15 @@ function read_json_input {
     local input
 
     # code
-    IFS= read -r -d '' -t 1 input || return # actually it's "return $?", but implicitly
+    # Read all stdin (timeout is for safety, but we check if we got data)
+    IFS= read -r -d '' -t 1 input
 
-    # result: JSON input from stdin
-    echo "$input"
+    # Return data even if timeout occurred, as long as we got something
+    if [[ -n "$input" ]]; then
+        echo "$input"
+    else
+        return 1
+    fi
 }
 
 function extract_current_dir {
