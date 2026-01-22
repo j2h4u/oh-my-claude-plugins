@@ -1,7 +1,6 @@
 ---
 name: dignified-bash
 description: Bash coding style guide. Apply these standards when writing, reviewing, or modifying any shell script, hook, or command-line tool. Triggers on: bash, shell, sh, .sh files, hooks, CLI scripts. Always use bash, never plain sh.
-user-invocable: false
 allowed-tools: Bash
 ---
 

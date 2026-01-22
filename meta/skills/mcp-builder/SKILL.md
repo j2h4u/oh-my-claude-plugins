@@ -53,7 +53,7 @@ Before diving into implementation, understand how to design tools for AI agents 
 - Let agent feedback drive tool improvements
 - Prototype quickly and iterate based on actual agent performance
 
-#### 1.3 Study MCP Protocol Documentation
+#### 1.2 Study MCP Protocol Documentation
 
 **Fetch the latest MCP protocol documentation:**
 
@@ -61,7 +61,7 @@ Use WebFetch to load: `https://modelcontextprotocol.io/llms-full.txt`
 
 This comprehensive document contains the complete MCP specification and guidelines.
 
-#### 1.4 Study Framework Documentation
+#### 1.3 Study Framework Documentation
 
 **Load and read the following reference files:**
 
@@ -75,7 +75,7 @@ This comprehensive document contains the complete MCP specification and guidelin
 - **TypeScript SDK Documentation**: Use WebFetch to load `https://raw.githubusercontent.com/modelcontextprotocol/typescript-sdk/main/README.md`
 - [⚡ TypeScript Implementation Guide](./reference/node_mcp_server.md) - Node/TypeScript-specific best practices and examples
 
-#### 1.5 Exhaustively Study API Documentation
+#### 1.4 Exhaustively Study API Documentation
 
 To integrate a service, read through **ALL** available API documentation:
 - Official API reference documentation
@@ -87,7 +87,7 @@ To integrate a service, read through **ALL** available API documentation:
 
 **To gather comprehensive information, use web search and the WebFetch tool as needed.**
 
-#### 1.6 Create a Comprehensive Implementation Plan
+#### 1.5 Create a Comprehensive Implementation Plan
 
 Based on your research, create a detailed plan that includes:
 

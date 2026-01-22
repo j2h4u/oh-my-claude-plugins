@@ -5,7 +5,7 @@ description: Python coding standards with automatic version detection.
   handling patterns, modern type syntax (list[str], str | None), pathlib operations,
   ABC-based interfaces, absolute imports, and explicit error boundaries at CLI level.
   Also provides production-tested code smell patterns from Dagster Labs for API design,
-  parameter complexity, and code organization. Essential for maintaining erk's dignified
+  parameter complexity, and code organization. Essential for maintaining dignified
   Python standards.
 ---
 

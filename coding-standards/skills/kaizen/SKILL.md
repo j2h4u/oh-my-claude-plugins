@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: Use when Code implementation and refactoring, architecturing or designing systems, process and workflow improvements, error handling and validation. Provide tehniquest to avoid over-engineering and apply iterative improvements.
+description: Use when Code implementation and refactoring, architecting or designing systems, process and workflow improvements, error handling and validation. Provide techniques to avoid over-engineering and apply iterative improvements.
 ---
 
 # Kaizen: Continuous Improvement

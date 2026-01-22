@@ -109,7 +109,7 @@ command here
 
 ## [Unreleased]
 
-## [1.3.0] - 2025-12-17
+## [1.3.0] - 2026-01-23
 ### Added
 - Feature description
 
