@@ -104,6 +104,59 @@ Custom agents for code tasks.
 
 ---
 
+## Skills by Quality
+
+Quick overview grouped by rating to identify improvement priorities:
+
+### ⭐⭐⭐⭐⭐ Exemplary (5 skills)
+
+Deep insights + original approaches, comprehensive content:
+
+| Skill | Category | What makes it exemplary |
+|-------|----------|-------------------------|
+| **gh** | git-tools | Deep mental model, original workflow patterns, exemplary progressive disclosure |
+| **mcp-builder** | claude-code-meta | Deep best practices, includes working evaluation tools |
+| **cli-skill-creator** | claude-code-meta | Highly original meta-skill, systematic CLI introspection approach |
+| **dignified-python** | coding-standards | Deep LBYL philosophy, original error-handling approach |
+| **kaizen** | coding-standards | Deep principles with original adaptation to code |
+
+### ⭐⭐⭐⭐ High Quality (7 skills)
+
+Good depth, well-structured, production ready:
+
+| Skill | Category | Notes |
+|-------|----------|-------|
+| **dignified-bash** | coding-standards | Well-structured but standard bash practices |
+| **linux-sysadmin** | devops | Useful practices, standard content |
+| **doc-coauthoring** | docs | Good workflow but not particularly deep |
+| **claude-md-writer** | claude-code-meta | Good compilation of best practices |
+| **meeting-insights-analyzer** | productivity | Original approach to meeting analysis |
+| **vercel-react-best-practices** | web-dev | Great structure but just packages Vercel rules |
+
+### ⭐⭐⭐ Solid but Shallow (5 skills)
+
+**⚠️ Candidates for replacement/deepening** — Complete but lacking depth or originality:
+
+| Skill | Category | Why shallow/standard | Replacement strategy |
+|-------|----------|----------------------|----------------------|
+| **changelog-generator** | git-tools | Just a workflow, not deep | Find deeper changelog philosophy/patterns |
+| **git-workflow-manager** | git-tools | Basic conventional commits reference | Find advanced git workflow patterns |
+| **opencode-config** | claude-code-meta | Just config reference, shallow | Find deeper OpenCode configuration insights |
+| **claude-md-redirect** | claude-code-meta | Utility, very shallow | Consider removing or expanding |
+| **readme-generator** | docs | Just process, shallow content | Find README philosophy/patterns beyond basics |
+
+### ⭐⭐ Incomplete (3 skills)
+
+**🚨 Priority for improvement** — Functional but missing critical content:
+
+| Skill | Category | What's missing | Search for |
+|-------|----------|----------------|------------|
+| **software-architecture** | coding-standards | Needs examples, library guide | Code pattern examples, library-first guides |
+| **web-artifacts-builder** | web-dev | Needs troubleshooting guide, component patterns, examples | React artifact patterns, debugging guides |
+| **web-design-guidelines** | web-dev | Needs expansion (176→1500 words), sample output examples | UI/UX guidelines, review examples |
+
+---
+
 ### Quality Rating
 
 Quality is rated on **four dimensions**:
