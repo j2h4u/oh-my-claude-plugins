@@ -32,10 +32,11 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
       local -r message="${1:-}"
       local -ri code="${2:-1}"
 
-      echo "FATAL: ${message}" >&2
+      echo "FATAL: ${message}"
       exit "$code"
-  }
+  } 1>&2
   ```
+- **Note:** Redirect stderr at function level with `} 1>&2` instead of `>&2` inside the function. This makes all function output go to stderr automatically.
 - Usage:
   ```bash
   # assert: config file exists
@@ -43,6 +44,18 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
 
   # assert: source library exists
   source "$lib_path" || die "Failed to source: $lib_path" 2
+  ```
+- **Pattern for logging functions:** Use the same `} 1>&2` pattern for any function that should output to stderr:
+  ```bash
+  function log_error {
+      local -r message="$1"
+      echo "ERROR: ${message}"
+  } 1>&2
+
+  function log_warn {
+      local -r message="$1"
+      echo "WARN: ${message}"
+  } 1>&2
   ```
 
 ### 4. Variables & Constants
