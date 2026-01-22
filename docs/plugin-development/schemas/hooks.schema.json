@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/j2h4u/oh-my-claude-plugins/schemas/hooks.json",
+  "title": "Claude Code Plugin Hooks Schema",
+  "description": "JSON Schema for validating Claude Code plugin hooks.json files. Based on official schema: https://json.schemastore.org/claude-code-settings.json",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Optional description of what the hooks do"
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Hook event definitions (same structure as settings.json hooks)",
+      "additionalProperties": false,
+      "properties": {
+        "PreToolUse": {
+          "type": "array",
+          "description": "Hooks that run before tool calls",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "PostToolUse": {
+          "type": "array",
+          "description": "Hooks that run after tool completion",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "Notification": {
+          "type": "array",
+          "description": "Hooks that trigger on notifications",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "UserPromptSubmit": {
+          "type": "array",
+          "description": "Hooks that run when a user submits a prompt",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "Stop": {
+          "type": "array",
+          "description": "Hooks that run when agents finish responding",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "SubagentStop": {
+          "type": "array",
+          "description": "Hooks that run when subagents finish responding",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "PreCompact": {
+          "type": "array",
+          "description": "Hooks that run before the context is compacted",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "SessionStart": {
+          "type": "array",
+          "description": "Hooks that run when a new session starts",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "SessionEnd": {
+          "type": "array",
+          "description": "Hooks that run when a session ends",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        }
+      }
+    }
+  },
+  "required": ["hooks"],
+  "additionalProperties": false,
+  "$defs": {
+    "hookMatcher": {
+      "type": "object",
+      "description": "Hook matcher configuration with multiple hooks",
+      "additionalProperties": false,
+      "required": ["hooks"],
+      "properties": {
+        "matcher": {
+          "type": "string",
+          "description": "Optional pattern to match tool names, case-sensitive (only applicable for PreToolUse and PostToolUse)"
+        },
+        "hooks": {
+          "type": "array",
+          "description": "Array of hooks to execute",
+          "items": {
+            "$ref": "#/$defs/hookCommand"
+          }
+        }
+      }
+    },
+    "hookCommand": {
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "Bash command hook",
+          "additionalProperties": false,
+          "required": ["type", "command"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Hook type",
+              "const": "command"
+            },
+            "command": {
+              "type": "string",
+              "description": "Shell command to execute (can use ${CLAUDE_PLUGIN_ROOT} and $CLAUDE_PROJECT_DIR)",
+              "minLength": 1
+            },
+            "timeout": {
+              "type": "number",
+              "description": "Optional timeout in seconds",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "LLM prompt hook",
+          "additionalProperties": false,
+          "required": ["type", "prompt"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Hook type",
+              "const": "prompt"
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Prompt to evaluate with LLM. Use $ARGUMENTS placeholder for hook input JSON.",
+              "minLength": 1
+            },
+            "timeout": {
+              "type": "number",
+              "description": "Optional timeout in seconds",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+}

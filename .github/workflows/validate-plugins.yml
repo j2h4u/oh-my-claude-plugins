@@ -560,3 +560,21 @@ jobs:
             echo "Run: chmod +x <script-path>"
             exit 1
           fi
+
+  validate-hooks-schema:
+    name: Validate Hooks Against Schema
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Python and jsonschema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          pip3 install jsonschema
+
+      - name: Validate hooks.json files
+        run: |
+          python3 docs/plugin-development/schemas/validate-hooks.py
