@@ -127,6 +127,17 @@ Comprehensive documentation for Claude Code plugin development:
 | [Slash Commands](docs/slash-commands.md) | Command system reference |
 | [Settings](docs/settings.md) | Configuration guide (46KB) |
 
+### Plugin Development Resources (`docs/plugin-development/`)
+
+Advanced guides for plugin developers:
+
+| Resource | Description |
+|----------|-------------|
+| [Schemas](docs/plugin-development/schemas/) | Complete schemas for plugin.json, hooks, marketplace (1,479 lines) |
+| [Best Practices](docs/plugin-development/best-practices/) | Organization, naming conventions, common mistakes (1,156 lines) |
+| [Templates](docs/plugin-development/templates/) | Ready-to-use templates for all plugin components |
+| [Examples](docs/plugin-development/examples/) | Complete plugin walkthrough and testing workflow |
+
 ### Skill Quality Report
 
 See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed analysis of all skills, including ratings, issues, and recommended improvements.
@@ -147,6 +158,10 @@ jq empty .claude-plugin/marketplace.json
 # Validate plugin structure
 bash .github/workflows/validate-plugins.yml
 ```
+
+## Acknowledgments
+
+Inspired by [Claude Code Plugin Template](https://github.com/ivan-magda/claude-code-plugin-template) by Ivan Magda. Plugin development documentation (schemas, best practices, templates) adapted from the template's plugin-authoring skill.
 
 ## License
 
