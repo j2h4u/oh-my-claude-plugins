@@ -89,7 +89,7 @@ Claude Code tooling.
 | claude-md-redirect | CLAUDE.md operations | Redirect to AGENTS.md with PostToolUse hook |
 | claude-md-writer | "write CLAUDE.md" | CLAUDE.md best practices: size limits, 3-tier docs |
 | opencode-config | OpenCode CLI setup | Custom providers, model selection, baseURL |
-| statusline | — | Custom statusline showing costs & context usage |
+| statusline | `@"statusline-setup"` | Custom statusline showing costs & context usage. Run the built-in agent to install. |
 
 ### productivity
 
