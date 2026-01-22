@@ -1,6 +1,6 @@
 ---
 name: claude-md-writer
-description: Use when creating or refactoring CLAUDE.md files - enforces best practices for size, structure, and content organization
+description: This skill should be used when the user asks to "create CLAUDE.md", "refactor CLAUDE.md", "split large CLAUDE.md", "optimize memory files", "set up .claude/rules", "my CLAUDE.md is too big", "organize project documentation", "implement 3-tier documentation", "add conditional rules", "use paths frontmatter", or needs guidance on CLAUDE.md best practices, size limits, memory hierarchy, or the official 3-Tier documentation system.
 ---
 
 # CLAUDE.md Writer

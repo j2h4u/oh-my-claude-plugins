@@ -1,6 +1,6 @@
 ---
 name: readme-generator
-description: Use when creating or rewriting README.md for projects. Triggers on "write README", "create README", "update README". Creates human-focused documentation with proper structure.
+description: This skill should be used when the user asks to "write README", "create README", "update README", "generate README", "improve README", "rewrite README", "create project documentation", or needs to create human-focused README.md files following current best practices with proper structure, quick start sections, and appropriate content organization based on project type (CLI tool, library, web app, full-stack).
 ---
 
 # README Generator

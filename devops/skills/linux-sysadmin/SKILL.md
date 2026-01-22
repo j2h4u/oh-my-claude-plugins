@@ -1,6 +1,6 @@
 ---
 name: linux-sysadmin
-description: Linux system administration best practices for Debian/Ubuntu. Apply when working with system configs, services, cron, and other system-level tasks.
+description: This skill should be used when the user asks to "configure cron", "set up systemd service", "create systemd timer", "use .d directories", "set up sudoers", "configure sysctl", "manage system configs", "set up logging with journald", "create drop-in configs", "use systemd overrides", or works with Debian/Ubuntu system administration tasks involving cron.d, systemd units, sudoers.d, apt sources, and other modular configuration directories following modern Linux best practices.
 user-invocable: false
 allowed-tools: Bash
 ---

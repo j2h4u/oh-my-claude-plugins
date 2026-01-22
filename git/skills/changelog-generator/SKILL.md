@@ -1,6 +1,6 @@
 ---
 name: changelog-generator
-description: Automatically creates user-facing changelogs from git commits by analyzing commit history, categorizing changes, and transforming technical commits into clear, customer-friendly release notes. Turns hours of manual changelog writing into minutes of automated generation.
+description: This skill should be used when the user asks to "create a changelog", "generate changelog", "write release notes", "create release notes", "generate changelog from commits", "create changelog from git history", "summarize commits", "create changelog for version", "generate changelog since last release", "create changelog from past week/month", or needs to transform git commit history into user-friendly changelog entries for customers, product updates, or app store submissions.
 ---
 
 # Changelog Generator

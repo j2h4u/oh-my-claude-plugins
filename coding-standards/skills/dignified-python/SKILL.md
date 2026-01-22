@@ -1,12 +1,6 @@
 ---
 name: dignified-python
-description: Python coding standards with automatic version detection.
-  Use when writing, reviewing, or refactoring Python to ensure adherence to LBYL exception
-  handling patterns, modern type syntax (list[str], str | None), pathlib operations,
-  ABC-based interfaces, absolute imports, and explicit error boundaries at CLI level.
-  Also provides production-tested code smell patterns from Dagster Labs for API design,
-  parameter complexity, and code organization. Essential for maintaining dignified
-  Python standards.
+description: This skill should be used when the user asks to "write Python code", "review Python", "refactor Python", "fix Python types", "improve error handling", "use pathlib", "create ABC interface", "fix mypy errors", "add type hints", mentions "Python", ".py files", "type annotations", or works with any Python development. Enforces LBYL exception handling, modern type syntax (list[str], str | None), pathlib operations, ABC-based interfaces, absolute imports, explicit error boundaries at CLI level, and production-tested code smell patterns from Dagster Labs. Includes automatic Python version detection and version-specific guidance.
 ---
 
 # Dignified Python Coding Standards

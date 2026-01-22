@@ -1,6 +1,6 @@
 ---
 name: claude-md-redirect
-description: Redirects CLAUDE.md operations to AGENTS.md. Triggers when user mentions CLAUDE.md, updating CLAUDE.md, or project memory.
+description: This skill should be used when the user asks to "update CLAUDE.md", "edit CLAUDE.md", "write to CLAUDE.md", "create CLAUDE.md", "add to project memory", mentions "CLAUDE.md", or refers to project-specific notes and learnings. Redirects these operations to AGENTS.md instead, working with the PostToolUse hook that ensures @./AGENTS.md reference in CLAUDE.md for proper project context management.
 user-invocable: false
 ---
 

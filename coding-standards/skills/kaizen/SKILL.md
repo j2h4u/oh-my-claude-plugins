@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: Use when Code implementation and refactoring, architecting or designing systems, process and workflow improvements, error handling and validation. Provide techniques to avoid over-engineering and apply iterative improvements.
+description: This skill should be used when the user asks about "continuous improvement", "avoid over-engineering", "simplest solution", "YAGNI", "incremental improvements", "error proofing", "poka-yoke", "premature optimization", "iterative development", "make invalid states unrepresentable", "fail fast", "standardized work patterns", or needs guidance on applying kaizen principles including continuous improvement, error-proofing by design (poka-yoke), following established patterns, and building just-in-time (JIT) without premature abstraction or optimization.
 ---
 
 # Kaizen: Continuous Improvement

@@ -1,6 +1,6 @@
 ---
 name: meeting-insights-analyzer
-description: Analyzes meeting transcripts and recordings to uncover behavioral patterns, communication insights, and actionable feedback. Identifies when you avoid conflict, use filler words, dominate conversations, or miss opportunities to listen. Perfect for professionals seeking to improve their communication and leadership skills.
+description: This skill should be used when the user asks to "analyze meeting transcripts", "review my communication patterns", "tell me when I avoided conflict", "analyze my speaking ratio", "identify filler words in meetings", "review my facilitation style", "track communication improvement", "analyze leadership patterns", or mentions analyzing recordings from Granola, Zoom, Google Meet, or other transcription services. Uncovers behavioral patterns like conflict avoidance, interruptions, filler words, and listening effectiveness from meeting transcripts.
 ---
 
 # Meeting Insights Analyzer

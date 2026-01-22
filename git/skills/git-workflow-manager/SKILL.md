@@ -1,6 +1,6 @@
 ---
 name: git-workflow-manager
-description: Use when committing, releasing, or managing changelogs - enforces conventional commits, semantic versioning, and consistent release notes format
+description: This skill should be used when the user asks to "create a release", "bump version", "update changelog", "follow conventional commits", "semantic versioning", "commit with conventional format", "prepare a release", "create release notes", "tag a version", mentions "Keep a Changelog", or needs guidance on git workflow standards, conventional commit types (feat:, fix:, chore:, docs:), semantic version bumps (MAJOR.MINOR.PATCH), CHANGELOG.md format, or GitHub release creation with gh CLI.
 ---
 
 # Git Workflow Manager

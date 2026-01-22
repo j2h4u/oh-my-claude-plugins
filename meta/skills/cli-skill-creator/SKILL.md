@@ -1,6 +1,6 @@
 ---
 name: cli-skill-creator
-description: This skill should be used when creating a skill for a CLI tool. Use when users ask to document a command-line tool, create CLI guidance, or build a skill for terminal commands. Essential for systematically introspecting CLI tools through help text, man pages, GitHub repos, and online research, then organizing findings into effective skill documentation.
+description: This skill should be used when the user asks to "create skill for CLI tool", "document CLI tool", "create skill for docker", "create skill for kubectl", "document command-line tool", "create CLI guidance", "build skill for terminal commands", "introspect CLI tool", "create skill from help text", or needs to systematically introspect CLI tools through help text, man pages, GitHub repositories, and online research, then organize findings into effective skill documentation with proper mental model, command reference, and workflow patterns.
 ---
 
 # CLI Skill Creator

@@ -1,6 +1,6 @@
 ---
 name: opencode-config
-description: Use when configuring OpenCode CLI - changing default model, adding providers, setting baseURL, or troubleshooting model selection issues
+description: This skill should be used when the user asks to "configure OpenCode", "change default model", "add custom provider", "set baseURL for OpenCode", "configure Z.AI Coding Plan", "fix model selection issues", "set up opencode.json", "configure OpenAI-compatible provider", "troubleshoot OpenCode models", or needs guidance on OpenCode CLI configuration including provider setup, model selection, and config file structure.
 ---
 
 # OpenCode Configuration

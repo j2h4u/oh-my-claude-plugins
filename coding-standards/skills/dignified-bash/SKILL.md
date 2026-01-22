@@ -1,6 +1,6 @@
 ---
 name: dignified-bash
-description: Bash coding style guide. Apply these standards when writing, reviewing, or modifying any shell script, hook, or command-line tool. Triggers on: bash, shell, sh, .sh files, hooks, CLI scripts. Always use bash, never plain sh.
+description: This skill should be used when the user asks to "write bash script", "create shell script", "review bash code", "write hook", "create systemd service script", "fix shellcheck warnings", "improve bash script", mentions "bash", "shell", ".sh files", or works with any shell scripting including hooks and CLI tools. Enforces bash purist style with strict mode, die() function, proper variable declarations, assertion comments, result comments, shellcheck compliance, and structured function layout.
 allowed-tools: Bash
 ---
 
