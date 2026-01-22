@@ -26,61 +26,61 @@ Or browse interactively: `/plugin` → `Browse and install plugins` → `oh-my-c
 
 Code quality and development philosophy.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| dignified-bash | Writing bash scripts | Strict mode, shellcheck, defensive patterns | ✅ |
-| dignified-python | Writing Python code | LBYL philosophy, version-aware (3.10-3.13), Click CLI | ✅ |
-| kaizen | Code quality discussions | Continuous improvement, poka-yoke, YAGNI | ✅ |
-| software-architecture | Architecture decisions | Clean Architecture & DDD principles | ⚠️ Needs examples, library guide |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| dignified-bash | Writing bash scripts | Strict mode, shellcheck, defensive patterns | ⭐⭐⭐⭐ | |
+| dignified-python | Writing Python code | LBYL philosophy, version-aware (3.10-3.13), Click CLI | ⭐⭐⭐⭐ | |
+| kaizen | Code quality discussions | Continuous improvement, poka-yoke, YAGNI | ⭐⭐⭐⭐ | |
+| software-architecture | Architecture decisions | Clean Architecture & DDD principles | ⭐⭐ | Needs examples, library guide |
 
 ### git-tools
 
 Git workflows and GitHub integration.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| changelog-generator | "generate changelog" | Transform commits into user-friendly changelogs | ✅ |
-| gh | GitHub CLI usage | PR management, GraphQL API, Projects V2 | ✅ High quality |
-| git-workflow-manager | Commits, releases | Conventional commits, semantic versioning | ✅ |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| changelog-generator | "generate changelog" | Transform commits into user-friendly changelogs | ⭐⭐⭐⭐ | |
+| gh | GitHub CLI usage | PR management, GraphQL API, Projects V2 | ⭐⭐⭐⭐⭐ | Exemplary progressive disclosure |
+| git-workflow-manager | Commits, releases | Conventional commits, semantic versioning | ⭐⭐⭐⭐ | |
 
 ### web-dev
 
 Frontend development.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| vercel-react-best-practices | React/Next.js code | 45 performance rules: waterfalls, bundles, SSR | ✅ Exemplary |
-| web-artifacts-builder | "create artifact" | Build React artifacts for Claude.ai | ⚠️ Needs troubleshooting guide, examples |
-| web-design-guidelines | UI review | Vercel Web Interface Guidelines | ⚠️ Needs expansion (176→1500 words), examples |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| vercel-react-best-practices | React/Next.js code | 45 performance rules: waterfalls, bundles, SSR | ⭐⭐⭐⭐⭐ | Textbook 3-tier structure |
+| web-artifacts-builder | "create artifact" | Build React artifacts for Claude.ai | ⭐⭐ | Needs troubleshooting guide, component patterns, examples |
+| web-design-guidelines | UI review | Vercel Web Interface Guidelines | ⭐⭐ | Needs expansion (176→1500 words), sample output examples |
 
 ### docs
 
 Documentation creation.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| doc-coauthoring | "help write doc" | Collaborative workflow: gathering, refinement, reader testing | ✅ High quality |
-| readme-generator | "write README" | README best practices by project type | ✅ |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| doc-coauthoring | "help write doc" | Collaborative workflow: gathering, refinement, reader testing | ⭐⭐⭐⭐⭐ | Well-structured workflow |
+| readme-generator | "write README" | README best practices by project type | ⭐⭐⭐⭐ | |
 
 ### devops
 
 System administration.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| linux-sysadmin | Linux admin tasks | Debian/Ubuntu: systemd, permissions, packages | ✅ |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| linux-sysadmin | Linux admin tasks | Debian/Ubuntu: systemd, permissions, packages | ⭐⭐⭐⭐ | |
 
 ### claude-code-meta
 
 Claude Code tooling and meta-skills.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| cli-skill-creator | "create skill for CLI" | Meta-skill for creating CLI tool skills | ✅ High quality |
-| mcp-builder | "build MCP server" | MCP server development: Python, Node.js | ✅ High quality |
-| claude-md-redirect | CLAUDE.md operations | Redirect to AGENTS.md with PostToolUse hook | ✅ |
-| claude-md-writer | "write CLAUDE.md" | CLAUDE.md best practices: size limits, 3-tier docs | ✅ |
-| opencode-config | OpenCode CLI setup | Custom providers, model selection | ✅ |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| cli-skill-creator | "create skill for CLI" | Meta-skill for creating CLI tool skills | ⭐⭐⭐⭐⭐ | Comprehensive CLI introspection workflow |
+| mcp-builder | "build MCP server" | MCP server development: Python, Node.js | ⭐⭐⭐⭐⭐ | Includes working evaluation tools |
+| claude-md-redirect | CLAUDE.md operations | Redirect to AGENTS.md with PostToolUse hook | ⭐⭐⭐⭐ | |
+| claude-md-writer | "write CLAUDE.md" | CLAUDE.md best practices: size limits, 3-tier docs | ⭐⭐⭐⭐ | |
+| opencode-config | OpenCode CLI setup | Custom providers, model selection | ⭐⭐⭐⭐ | |
 
 **Utility:** `statusline` — Custom statusline showing costs & context usage. Install via `@"statusline-setup"` agent.
 
@@ -88,9 +88,9 @@ Claude Code tooling and meta-skills.
 
 Analysis tools.
 
-| Skill | Triggers | Description | Quality |
-|-------|----------|-------------|---------|
-| meeting-insights-analyzer | "analyze meeting" | Communication patterns, speaking ratios | ✅ |
+| Skill | Triggers | Description | Quality | Notes |
+|-------|----------|-------------|---------|-------|
+| meeting-insights-analyzer | "analyze meeting" | Communication patterns, speaking ratios | ⭐⭐⭐⭐ | |
 
 ### agents
 
@@ -104,14 +104,15 @@ Custom agents for code tasks.
 
 ---
 
-### Quality Legend
+### Quality Rating
 
-| Icon | Meaning | Description |
-|------|---------|-------------|
-| ✅ | Production ready | High quality, well-structured, ready to use |
-| ⚠️ | Needs improvement | Functional but missing examples, guides, or needs expansion |
+| Stars | Meaning |
+|-------|---------|
+| ⭐⭐⭐⭐⭐ | Exemplary — high quality, comprehensive content, excellent structure |
+| ⭐⭐⭐⭐ | Production ready — well-structured, complete, ready to use |
+| ⭐⭐ | Functional but incomplete — works but needs examples, guides, or expansion |
 
-Skills marked with ⚠️ are functional but could benefit from additional content like troubleshooting guides, examples, or expanded documentation. See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed improvement suggestions.
+Check the **Notes** column for specific gaps in ⭐⭐ skills. See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed improvement roadmap.
 
 ## Alternative Installation
 
