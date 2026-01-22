@@ -1,0 +1,57 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/@anthropic-ai/claude-code@latest/marketplace.schema.json",
+  "name": "oh-my-claude-plugins",
+  "description": "Personal collection of Claude Code skills, plugins, and utilities",
+  "author": "j2h4u",
+  "repository": "https://github.com/j2h4u/oh-my-claude-plugins",
+  "plugins": [
+    {
+      "name": "coding-standards",
+      "description": "Code quality standards: Bash, Python, Kaizen philosophy, Clean Architecture",
+      "path": "coding-standards",
+      "tags": ["coding", "standards", "bash", "python", "architecture"]
+    },
+    {
+      "name": "git-tools",
+      "description": "Git workflows: GitHub CLI, changelogs, conventional commits, releases",
+      "path": "git",
+      "tags": ["git", "github", "changelog", "versioning"]
+    },
+    {
+      "name": "web-frontend",
+      "description": "Web development: React/Next.js best practices, web artifacts, design guidelines",
+      "path": "web",
+      "tags": ["react", "nextjs", "vercel", "frontend"]
+    },
+    {
+      "name": "documentation",
+      "description": "Documentation tools: collaborative doc writing, README generation",
+      "path": "docs",
+      "tags": ["documentation", "readme", "writing"]
+    },
+    {
+      "name": "devops",
+      "description": "DevOps tools: Linux system administration for Debian/Ubuntu",
+      "path": "devops",
+      "tags": ["linux", "sysadmin", "debian", "ubuntu"]
+    },
+    {
+      "name": "claude-code-meta",
+      "description": "Claude Code tooling: skill creation, MCP development, CLAUDE.md management",
+      "path": "meta",
+      "tags": ["claude-code", "skills", "mcp", "plugins"]
+    },
+    {
+      "name": "productivity",
+      "description": "Productivity tools: meeting transcript analysis",
+      "path": "productivity",
+      "tags": ["productivity", "meetings", "analysis"]
+    },
+    {
+      "name": "agents",
+      "description": "Custom agents: Python code review and quick fixing",
+      "path": "agents",
+      "tags": ["agents", "python", "code-review", "fixer"]
+    }
+  ]
+}

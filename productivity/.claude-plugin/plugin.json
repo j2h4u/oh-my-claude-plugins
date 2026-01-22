@@ -1,0 +1,9 @@
+{
+  "name": "productivity",
+  "version": "1.0.0",
+  "description": "Productivity tools: meeting transcript analysis",
+  "author": {
+    "name": "j2h4u"
+  },
+  "tags": ["productivity", "meetings", "analysis"]
+}

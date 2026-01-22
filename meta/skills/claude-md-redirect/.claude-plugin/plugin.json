@@ -1,0 +1,5 @@
+{
+  "name": "claude-md-redirect",
+  "version": "1.0.0",
+  "description": "Redirects CLAUDE.md operations to AGENTS.md with automatic reference injection"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "web-frontend",
+  "version": "1.0.0",
+  "description": "Web development: React/Next.js best practices, web artifacts, design guidelines",
+  "author": {
+    "name": "j2h4u"
+  },
+  "tags": ["react", "nextjs", "vercel", "frontend", "web", "design"]
+}
