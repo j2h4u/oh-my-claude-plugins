@@ -6,20 +6,26 @@ Personal collection of Claude Code skills, agents, and plugins for everyday deve
 
 ## Quick Start
 
-**Option 1: Use entire collection**
+**1. Add marketplace:**
+```
+/plugin marketplace add j2h4u/oh-my-claude-plugins
+```
+
+**2. Install plugins:**
+```
+/plugin install coding-standards@oh-my-claude-plugins
+/plugin install git-tools@oh-my-claude-plugins
+/plugin install agents@oh-my-claude-plugins
+```
+
+Or browse interactively:
+1. `/plugin` → `Browse and install plugins`
+2. Select `oh-my-claude-plugins`
+3. Choose plugins to install
+
+**Alternative: Use local directory**
 ```bash
 claude --plugin-dir /path/to/oh-my-claude-plugins
-```
-
-**Option 2: Add marketplace (after publishing to GitHub)**
-```bash
-# In Claude Code settings, add marketplace URL:
-https://raw.githubusercontent.com/j2h4u/oh-my-claude-plugins/main/marketplace.json
-```
-
-**Option 3: Use single plugin**
-```bash
-claude --plugin-dir /path/to/oh-my-claude-plugins/git
 ```
 
 ## What's Included
