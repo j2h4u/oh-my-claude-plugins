@@ -15,9 +15,9 @@ function die {
     local -r message="${1:-}"
     local -ri code="${2:-1}"
 
-    echo "FATAL: ${message}" >&2
+    echo "FATAL: ${message}"
     exit "$code"
-}
+} 1>&2
 
 # consts
 # Color constants - many unused but kept for future customization
@@ -118,16 +118,19 @@ function render_statusline {
     local -r git_branch="$2"
     local -r ccusage_statusline="$3"
 
+    # vars
+    local git_part
+
     # code
-    echo -en "${BLUE}${dir_name}${NOCOLOR}"
-    echo -en "${SEP2}"
+    git_part=""
+    [[ -n "$git_branch" ]] && git_part="⑂${DIM}${git_branch}${NOCOLOR}${SEP2}"
 
-    if [[ -n "$git_branch" ]]; then
-        echo -en "⑂${DIM}${git_branch}${NOCOLOR}"
-        echo -en "${SEP2}"
-    fi
-
-    echo -e "$ccusage_statusline"
+    # result: formatted statusline
+    printf '%s%s%s%s\n' \
+        "${BLUE}${dir_name}${NOCOLOR}" \
+        "${SEP2}" \
+        "$git_part" \
+        "$ccusage_statusline"
 }
 
 function main {
