@@ -90,6 +90,7 @@ function read_json_input {
     IFS= read -r -d '' -t 1 temp || true
 
     # result: assign to caller's variable via nameref
+    # shellcheck disable=SC2034  # input_ref is a nameref that modifies caller's variable
     input_ref="$temp"
 }
 
