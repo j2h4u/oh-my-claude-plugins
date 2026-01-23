@@ -6,7 +6,39 @@ set -euo pipefail
 # 🤖 Sonnet 4.5 | 💰 $25.17 session / $25.21 today / $10.76 block (3h 9m left) | 🔥 $5.81/hr 🟢 (Normal) | 🧠 387,071 (194%)
 #
 # we prepend it with current directory and git branch:
-# oh-my-claude-plugins/ ⑂main 
+# oh-my-claude-plugins/ ⑂main
+#
+# Input JSON structure (anonymized example):
+# {
+#   "session_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+#   "transcript_path": "/path/to/.claude/projects/.../session.jsonl",
+#   "cwd": "/path/to/project",
+#   "model": {"id": "claude-sonnet-4-5-20250929", "display_name": "Sonnet 4.5"},
+#   "workspace": {"current_dir": "/path/to/project", "project_dir": "/path/to/project"},
+#   "version": "2.1.17",
+#   "output_style": {"name": "default"},
+#   "cost": {
+#     "total_cost_usd": 58.07,
+#     "total_duration_ms": 33554050,
+#     "total_api_duration_ms": 10338728,
+#     "total_lines_added": 2453,
+#     "total_lines_removed": 661
+#   },
+#   "context_window": {
+#     "total_input_tokens": 639789,
+#     "total_output_tokens": 447533,
+#     "context_window_size": 200000,
+#     "current_usage": {
+#       "input_tokens": 0,
+#       "output_tokens": 1,
+#       "cache_creation_input_tokens": 146,
+#       "cache_read_input_tokens": 57288
+#     },
+#     "used_percentage": 29,
+#     "remaining_percentage": 71
+#   },
+#   "exceeds_200k_tokens": false
+# }
 #
 
 function die {
