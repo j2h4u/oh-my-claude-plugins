@@ -83,39 +83,27 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
     content=$( <"$file_path" )
     ```
 
-### 5. Nameref for Output Parameters
+### 5. Subshell Awareness
 
-When a function needs to return data via a variable (not stdout), use **nameref** (`local -n`) to avoid subshell issues:
+Command substitution `$(...)` creates a **subshell** where:
+- stdin is not inherited from parent
+- variable changes are not visible to parent
 
-```bash
-function read_json_input {
-    # args
-    local -r var_name="$1"
-
-    # vars
-    local -n output_ref="$var_name"
-    local temp
-
-    # code
-    IFS= read -r -d '' -t 1 temp || true
-
-    # result: assign to caller's variable via nameref
-    # shellcheck disable=SC2034  # nameref modifies caller's variable
-    output_ref="$temp"
-}
-
-# Usage: pass variable NAME, not value
-read_json_input 'my_data'
-echo "$my_data"
-```
-
-**Why nameref?** Command substitution `$(func)` creates a subshell that doesn't receive stdin from parent process. This pattern fails:
+Be careful with functions that read stdin or modify parent scope — calling them via `$(func)` will fail silently:
 ```bash
 # BROKEN: subshell doesn't get stdin
 input=$( read_stdin_func )
 ```
 
-Nameref solves this by assigning directly to the caller's variable without creating a subshell.
+**Solution**: Use **nameref** (`local -n`) to assign directly to caller's variable:
+```bash
+function read_stdin {
+    local -n ref="$1"
+    IFS= read -r -d '' ref || true
+}
+
+read_stdin 'my_data'  # pass variable NAME, not value
+```
 
 ### 6. Associative Arrays (Dicts)
 - Use associative arrays (`declare -A` / `local -A`) where they simplify code logic or improve readability.
