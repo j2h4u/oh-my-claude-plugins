@@ -83,7 +83,41 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
     content=$( <"$file_path" )
     ```
 
-### 5. Associative Arrays (Dicts)
+### 5. Nameref for Output Parameters
+
+When a function needs to return data via a variable (not stdout), use **nameref** (`local -n`) to avoid subshell issues:
+
+```bash
+function read_json_input {
+    # args
+    local -r var_name="$1"
+
+    # vars
+    local -n output_ref="$var_name"
+    local temp
+
+    # code
+    IFS= read -r -d '' -t 1 temp || true
+
+    # result: assign to caller's variable via nameref
+    # shellcheck disable=SC2034  # nameref modifies caller's variable
+    output_ref="$temp"
+}
+
+# Usage: pass variable NAME, not value
+read_json_input 'my_data'
+echo "$my_data"
+```
+
+**Why nameref?** Command substitution `$(func)` creates a subshell that doesn't receive stdin from parent process. This pattern fails:
+```bash
+# BROKEN: subshell doesn't get stdin
+input=$( read_stdin_func )
+```
+
+Nameref solves this by assigning directly to the caller's variable without creating a subshell.
+
+### 6. Associative Arrays (Dicts)
 - Use associative arrays (`declare -A` / `local -A`) where they simplify code logic or improve readability.
 - Good use cases: tracking state, caching lookups, grouping related data.
 - Don't use them just for the sake of it — only when they provide a clear benefit.
@@ -98,7 +132,7 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
   config["port"]="8080"
   ```
 
-### 6. Arithmetic Context
+### 7. Arithmetic Context
 - Use arithmetic contexts `(( ))` for integer comparisons and boolean checks.
 - **Spacing**: Add spaces inside parentheses for readability:
   ```bash
@@ -113,7 +147,7 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
   (( total = a + b ))
   ```
 
-### 7. Conditionals
+### 8. Conditionals
 - Always use double brackets `[[ ]]` for conditional expressions instead of the legacy `[` (test) command.
 - **Combine conditions** inside single brackets using `&&` and `||`:
   ```bash
@@ -134,7 +168,7 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
   result=$( some_command )
   ```
 
-### 8. Assertions & Early Returns
+### 9. Assertions & Early Returns
 - **Avoid nested ifs and ladders** — they are hard to read. Use early returns instead.
 - **All assertions must have a comment** in the format `# assert: <description>`:
   ```bash
@@ -166,7 +200,7 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
   check_dns "$container" || return 0
   ```
 
-### 9. Implicit Return Code
+### 10. Implicit Return Code
 - When a function's return code is determined by its last command, this is valid and concise.
 - **Always precede with a comment** in the format `# result: <description>`:
   ```bash
@@ -193,7 +227,7 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
   }
   ```
 
-### 10. Functions Structure
+### 11. Functions Structure
 Functions must follow a strict "Sections" layout:
 1.  **# args**: explicit parsing of arguments into `local -r` variables.
 2.  **# vars**: declaration of local variables, grouped by type with comments:
@@ -236,14 +270,14 @@ function process_data {
 }
 ```
 
-### 11. External Dependencies
+### 12. External Dependencies
 - Explicitly pass global state (like configuration paths) as arguments to functions. Avoid hidden dependencies on global variables inside helper functions.
 - Use `die()` for failed source:
   ```bash
   source "$script_dir/lib.sh" || die "Failed to source: lib.sh"
   ```
 
-### 12. Misc
+### 13. Misc
 - **Time**: Use `printf` built-ins (`%(fmt)T`) instead of `date` to avoid subprocesses.
 - **Quoting**: Use single quotes for literals; double quotes only for variable or command expansion.
 - **Verbosity & Long-form Flags**: Script verbosity is essential for clarity and long-term maintenance. Always use long-form flags instead of short-form flags for all command-line utilities (e.g., `grep`, `curl`, `jq`) whenever they are available:
@@ -251,5 +285,5 @@ function process_data {
   curl --location --insecure --request 'GET' --output 'file.txt' "$url"
   ```
 
-### 13. Documentation
+### 14. Documentation
 - For `shellcheck disable` directives, ALWAYS add a comment on the preceding line explaining why it is disabled.

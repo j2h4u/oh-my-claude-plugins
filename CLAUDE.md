@@ -1,3 +1,5 @@
+@./AGENTS.md
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -102,6 +104,13 @@ Follow **dignified-bash** (`coding-standards/skills/dignified-bash/`):
 
 Conventional commits → semantic versioning (`git-tools/skills/git-workflow-manager/`):
 - `feat:` → MINOR, `fix:` → PATCH, `feat!:` → MAJOR
+
+### Plugin Versioning
+
+**Always bump plugin version** in `plugin.json` after making code changes to:
+- `utils/` scripts (statusline, helpers)
+- `hooks/` scripts
+- Any executable code that users depend on
 
 ## Key Patterns
 
