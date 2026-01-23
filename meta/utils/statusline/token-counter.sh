@@ -47,19 +47,18 @@ function die {
 }
 
 function read_json_input {
+    # args
+    local -r var_name="$1"
+
     # vars
-    local input
+    local -n input_ref="$var_name"
+    local temp
 
     # code
-    # Read all stdin (timeout is for safety, but we check if we got data)
-    IFS= read -r -d '' -t 1 input
+    IFS= read -r -d '' -t 1 temp || true
 
-    # Return data even if timeout occurred, as long as we got something
-    if [[ -n "$input" ]]; then
-        echo "$input"
-    else
-        return 1
-    fi
+    # result: assign to caller's variable via nameref
+    input_ref="$temp"
 }
 
 function extract_current_dir {
@@ -142,7 +141,7 @@ function main {
     local input current_dir dir_name git_branch ccusage_statusline
 
     # code
-    input=$( read_json_input ) || die "Nothing received from stdin ($?)"
+    read_json_input input
 
     # assert: got input
     [[ -n "$input" ]] || die "No JSON input received from stdin"
