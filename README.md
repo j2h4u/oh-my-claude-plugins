@@ -47,6 +47,10 @@ oh-my-claude-plugins/
 │       ├── dignified-python/
 │       ├── kaizen/
 │       └── software-architecture/
+├── databases/                    # Database tools
+│   ├── plugin.json
+│   └── skills/
+│       └── metabase-swiss-knife/
 ├── devops/                       # System administration
 │   ├── plugin.json
 │   └── skills/
@@ -136,6 +140,14 @@ System administration.
 |-------|-------------|---------|
 | linux-sysadmin | Debian/Ubuntu: systemd, permissions, packages | ⭐⭐⭐⭐ |
 
+### databases
+
+Database tools and management.
+
+| Skill | Description | Quality |
+|-------|-------------|---------|
+| metabase-swiss-knife | CLI for Metabase: inspect, diag, backup/restore, cards, dashboards | ⭐⭐⭐⭐ |
+
 ### claude-code-meta
 
 Claude Code tooling and meta-skills.
@@ -186,7 +198,7 @@ Deep insights + original approaches, comprehensive content:
 | **dignified-python** | coding-standards | Deep LBYL philosophy, original error-handling approach |
 | **kaizen** | coding-standards | Deep principles with original adaptation to code |
 
-### ⭐⭐⭐⭐ High Quality (7 skills)
+### ⭐⭐⭐⭐ High Quality (8 skills)
 
 Good depth, well-structured, production ready:
 
@@ -194,6 +206,7 @@ Good depth, well-structured, production ready:
 |-------|----------|-------|
 | **dignified-bash** | coding-standards | Well-structured but standard bash practices |
 | **linux-sysadmin** | devops | Useful practices, standard content |
+| **metabase-swiss-knife** | databases | Full CLI with backup/restore, zero dependencies |
 | **doc-coauthoring** | docs | Good workflow but not particularly deep |
 | **claude-md-writer** | claude-code-meta | Good compilation of best practices |
 | **meeting-insights-analyzer** | productivity | Original approach to meeting analysis |

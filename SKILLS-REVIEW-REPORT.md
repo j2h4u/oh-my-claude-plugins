@@ -545,29 +545,25 @@ Domains completely absent or critically undercovered in current skill set:
 
 ---
 
-#### 3. Databases & Data Modeling ⚠️ **CRITICAL GAP**
+#### 3. Databases & Data Modeling 🔶 **PARTIAL COVERAGE**
 
-**What's Missing:**
+**Current Coverage:**
+- `metabase-swiss-knife` ⭐⭐⭐⭐ — CLI for Metabase BI tool (inspect, diag, backup/restore, cards, dashboards)
+
+**Still Missing:**
 - SQL best practices (queries, joins, indexing)
 - Schema design patterns
 - Database migrations (Alembic, Liquibase, Prisma Migrate)
 - ORM patterns (SQLAlchemy, Prisma, TypeORM)
 - Query optimization and performance
 - NoSQL patterns (MongoDB, Redis)
-- Data modeling principles (normalization, denormalization)
-
-**Why Critical:**
-- Most applications interact with databases
-- No coverage of SQL or ORMs
-- Performance issues often database-related
 
 **Potential Skills:**
 - `sql-mastery` — Query optimization, indexing, explain plans
 - `sqlalchemy-patterns` — SQLAlchemy best practices, relationship patterns
 - `database-migrations` — Migration strategies, zero-downtime deploys
 
-**Shallow Coverage Check:**
-- Completely absent
+**Note:** metabase-swiss-knife covers BI/analytics tooling, not core database development
 
 ---
 
@@ -709,7 +705,7 @@ Domains completely absent or critically undercovered in current skill set:
 | Documentation | ⭐⭐⭐ Medium | Shallow | Minor | Low |
 | **Backend & APIs** | ⭐ None | N/A | **Critical** | **Highest** |
 | **Testing & QA** | ⭐ None | N/A | **Critical** | **Highest** |
-| **Databases** | ⭐ None | N/A | **Critical** | **High** |
+| **Databases** | ⭐⭐ Low | BI tooling only | Major | Medium |
 | **DevOps & Infrastructure** | ⭐⭐ Low | Shallow | Major | High |
 | **Security** | ⭐ None | N/A | Major | Medium |
 | **Debugging & Observability** | ⭐ None | N/A | Moderate | Medium |
