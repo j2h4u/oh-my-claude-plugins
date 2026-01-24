@@ -6,14 +6,14 @@ set -euo pipefail
 # 🤖 Sonnet 4.5 | 💰 $25.17 session / $25.21 today / $10.76 block (3h 9m left) | 🔥 $5.81/hr 🟢 (Normal) | 🧠 387,071 (194%)
 #
 # we prepend it with current directory, git branch and status:
-# oh-my-claude-plugins/ | ⑂main*+↑²↓¹ | ...
+# oh-my-claude-plugins/ ⑂main*+↑↓ | ...
 #
 # Git status indicators:
 #   *  dirty (unstaged changes)   - yellow dim
 #   +  staged changes             - green dim
 #   ?  untracked files            - gray
-#   ↑N ahead of remote by N       - cyan dim
-#   ↓N behind remote by N         - purple dim
+#   ↑  ahead of remote            - cyan
+#   ↓  behind remote              - purple
 #
 # Input JSON structure (anonymized example):
 # {
@@ -83,26 +83,6 @@ function die {
     declare -r SEP1=" ${DGRAY}•${NOCOLOR} "
     declare -r SEP2=" ${DGRAY}|${NOCOLOR} "
     declare -r BRANCH_LABEL='⑂'
-
-    # Superscript digits for compact display
-    declare -r SUPERSCRIPT_DIGITS="⁰¹²³⁴⁵⁶⁷⁸⁹"
-}
-
-function to_superscript {
-    # args
-    local -r number="$1"
-
-    # vars
-    local result="" digit
-
-    # code
-    for (( i=0; i<${#number}; i++ )); do
-        digit="${number:i:1}"
-        result+="${SUPERSCRIPT_DIGITS:digit:1}"
-    done
-
-    # result: number in superscript
-    echo "$result"
 }
 
 function read_json_input {
@@ -194,8 +174,8 @@ function get_git_status {
     [[ -n "$dirty" ]] && indicators+="${DIM}${YELLOW}*${NOCOLOR}"
     [[ -n "$staged" ]] && indicators+="${DIM}${GREEN}+${NOCOLOR}"
     [[ -n "$untracked" ]] && indicators+="${DIM}${GRAY}?${NOCOLOR}"
-    [[ -n "$ahead" ]] && indicators+="${DIM}↑${CYAN}$(to_superscript "$ahead")${NOCOLOR}"
-    [[ -n "$behind" ]] && indicators+="${DIM}↓${PURPLE}$(to_superscript "$behind")${NOCOLOR}"
+    [[ -n "$ahead" ]] && indicators+="${CYAN}↑${NOCOLOR}"
+    [[ -n "$behind" ]] && indicators+="${PURPLE}↓${NOCOLOR}"
 
     # result: formatted git status string
     echo "$indicators"
@@ -228,7 +208,7 @@ function render_statusline {
     # code
     git_part=""
     if [[ -n "$git_branch" ]]; then
-        git_part="${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}"
+        git_part=" ${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}"
         [[ -n "$git_status" ]] && git_part+="${git_status}"
         git_part+="${SEP2}"
     fi
@@ -236,7 +216,7 @@ function render_statusline {
     # result: formatted statusline
     printf '%b%b%b%b\n' \
         "${BLUE}${dir_name}${NOCOLOR}" \
-        "${SEP2}" \
+        "" \
         "$git_part" \
         "$ccusage_statusline"
 }
