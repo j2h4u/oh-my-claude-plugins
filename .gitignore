@@ -45,6 +45,10 @@ tmp/
 temp/
 *.tmp
 
+# Work in progress (personal/sensitive data)
+docs/_WIP/
+new-skill/
+
 # Archives
 *.zip
 *.tar.gz
