@@ -5,8 +5,15 @@ set -euo pipefail
 # ccusage statusline example:
 # 🤖 Sonnet 4.5 | 💰 $25.17 session / $25.21 today / $10.76 block (3h 9m left) | 🔥 $5.81/hr 🟢 (Normal) | 🧠 387,071 (194%)
 #
-# we prepend it with current directory and git branch:
-# oh-my-claude-plugins/ ⑂main
+# we prepend it with current directory, git branch and status:
+# oh-my-claude-plugins/ | ⑂main*+↑²↓¹ | ...
+#
+# Git status indicators:
+#   *  dirty (unstaged changes)   - yellow dim
+#   +  staged changes             - green dim
+#   ?  untracked files            - gray
+#   ↑N ahead of remote by N       - cyan dim
+#   ↓N behind remote by N         - purple dim
 #
 # Input JSON structure (anonymized example):
 # {
@@ -76,6 +83,26 @@ function die {
     declare -r SEP1=" ${DGRAY}•${NOCOLOR} "
     declare -r SEP2=" ${DGRAY}|${NOCOLOR} "
     declare -r BRANCH_LABEL='⑂'
+
+    # Superscript digits for compact display
+    declare -r SUPERSCRIPT_DIGITS="⁰¹²³⁴⁵⁶⁷⁸⁹"
+}
+
+function to_superscript {
+    # args
+    local -r number="$1"
+
+    # vars
+    local result="" digit
+
+    # code
+    for (( i=0; i<${#number}; i++ )); do
+        digit="${number:i:1}"
+        result+="${SUPERSCRIPT_DIGITS:digit:1}"
+    done
+
+    # result: number in superscript
+    echo "$result"
 }
 
 function read_json_input {
@@ -134,6 +161,46 @@ function get_git_branch {
     echo "$git_branch"
 }
 
+function get_git_status {
+    # args
+    local -r current_dir="$1"
+
+    # vars
+    local status_output header_line file_lines
+    local ahead="" behind="" dirty="" staged="" untracked=""
+    local indicators=""
+
+    # code: run git in subshell to avoid changing cwd
+    status_output=$( git -C "$current_dir" status --porcelain=v1 --branch 2>/dev/null ) || {
+        echo ""
+        return
+    }
+
+    # split: first line is header (## branch...tracking), rest are file statuses
+    header_line="${status_output%%$'\n'*}"
+    file_lines="${status_output#*$'\n'}"
+
+    # parse ahead/behind from header: ## main...origin/main [ahead 2, behind 3]
+    [[ "$header_line" =~ ahead\ ([0-9]+) ]] && ahead="${BASH_REMATCH[1]}"
+    [[ "$header_line" =~ behind\ ([0-9]+) ]] && behind="${BASH_REMATCH[1]}"
+
+    # parse file statuses (XY format: X=staged, Y=unstaged)
+    # check both start of string and after newlines for multiline output
+    [[ "$file_lines" =~ (^|$'\n')[MADRC] ]] && staged="+"
+    [[ "$file_lines" =~ (^|$'\n').[MD] ]] && dirty="*"
+    [[ "$file_lines" =~ (^|$'\n')\?\? ]] && untracked="?"
+
+    # build colored indicators (order: dirty staged untracked ahead behind)
+    [[ -n "$dirty" ]] && indicators+="${DIM}${YELLOW}*${NOCOLOR}"
+    [[ -n "$staged" ]] && indicators+="${DIM}${GREEN}+${NOCOLOR}"
+    [[ -n "$untracked" ]] && indicators+="${DIM}${GRAY}?${NOCOLOR}"
+    [[ -n "$ahead" ]] && indicators+="${DIM}↑${CYAN}$(to_superscript "$ahead")${NOCOLOR}"
+    [[ -n "$behind" ]] && indicators+="${DIM}↓${PURPLE}$(to_superscript "$behind")${NOCOLOR}"
+
+    # result: formatted git status string
+    echo "$indicators"
+}
+
 function get_ccusage_statusline {
     # args
     local -r input="$1"
@@ -152,14 +219,19 @@ function render_statusline {
     # args
     local -r dir_name="$1"
     local -r git_branch="$2"
-    local -r ccusage_statusline="$3"
+    local -r git_status="$3"
+    local -r ccusage_statusline="$4"
 
     # vars
     local git_part
 
     # code
     git_part=""
-    [[ -n "$git_branch" ]] && git_part="${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}${SEP2}"
+    if [[ -n "$git_branch" ]]; then
+        git_part="${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}"
+        [[ -n "$git_status" ]] && git_part+="${git_status}"
+        git_part+="${SEP2}"
+    fi
 
     # result: formatted statusline
     printf '%b%b%b%b\n' \
@@ -171,7 +243,7 @@ function render_statusline {
 
 function main {
     # vars
-    local input current_dir dir_name git_branch ccusage_statusline
+    local input current_dir dir_name git_branch git_status ccusage_statusline
 
     # code
     read_json_input input
@@ -182,9 +254,10 @@ function main {
     current_dir=$( extract_current_dir "$input" )
     dir_name=$( get_dir_name "$current_dir" )
     git_branch=$( get_git_branch "$current_dir" )
+    git_status=$( get_git_status "$current_dir" )
     ccusage_statusline=$( get_ccusage_statusline "$input" )
 
-    render_statusline "$dir_name" "$git_branch" "$ccusage_statusline"
+    render_statusline "$dir_name" "$git_branch" "$git_status" "$ccusage_statusline"
 }
 
 main
