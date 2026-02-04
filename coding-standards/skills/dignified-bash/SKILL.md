@@ -202,6 +202,18 @@ read_stdin 'my_data'  # pass variable NAME, not value
   fi
   ```
   Only use `&&`/`||` chains when the middle command cannot fail (e.g., variable assignments, `echo`, `true`).
+- **Pitfall: `read` in loops and last line without newline.** `read` returns non-zero at EOF even if it read data. If the last line has no trailing newline, it will be skipped:
+  ```bash
+  # BROKEN: skips last line if file has no trailing newline
+  while read -r line; do
+      process "$line"
+  done < file
+
+  # CORRECT: also check if variable has content
+  while read -r line || [[ -n "$line" ]]; do
+      process "$line"
+  done < file
+  ```
 
 ### 9. Assertions & Early Returns
 - **Avoid nested ifs and ladders** — they are hard to read. Use early returns instead.
