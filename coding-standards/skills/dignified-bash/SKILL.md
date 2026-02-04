@@ -68,9 +68,15 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
   - Use `declare -r` or `local -r` for immutable variables.
   - Use `local -a` for indexed arrays inside functions.
   - Use `local -A` for associative arrays (dicts) inside functions.
-  - **Multiple declarations**: When declaring multiple variables of the same type, put them on one line:
+  - **Multiple declarations**: When declaring multiple variables of the same type, put them on one line. If declaring more than 2-3 variables, group them by domain/purpose on separate lines:
     ```bash
-    local network_mode container_name project project_dir
+    # few variables: single line
+    local network_mode container_name
+
+    # many variables: group by domain
+    local project project_dir project_config
+    local container_name container_id
+    local output result
     ```
 - **Assignment**:
   - Separate declaration and assignment for command substitutions to prevent masking return codes (fixes `SC2155`):
