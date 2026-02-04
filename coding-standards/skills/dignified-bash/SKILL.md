@@ -46,6 +46,7 @@ All shell scripts must adhere to the **Bash Purist** style to ensure robustness,
 - **ShellCheck**: All scripts MUST pass `shellcheck` without warnings.
   - If `shellcheck` is not available, install it first: `sudo apt install shellcheck` (Debian/Ubuntu) or equivalent for other systems.
   - Always run `shellcheck <script.sh>` after writing or modifying a script.
+- **Syntax check with `bash -n`**: Run `bash -n script.sh` for quick syntax validation without executing the script. Catches syntax errors that shellcheck might miss. May produce occasional false positives, but still useful as a first-pass check.
 
 ### 3. The die() Function
 - Always define a `die()` function for fatal errors instead of inline `{ echo "error"; exit 1; }`:
