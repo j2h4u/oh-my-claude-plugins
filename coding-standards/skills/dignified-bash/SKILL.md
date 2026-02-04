@@ -318,12 +318,17 @@ function process_data {
   local -r fmt='%-12.12s %-8.8s %-20.20s\n'
 
   # code: header and rows use same format
-  printf "$fmt" 'NAME' 'STATUS' 'MESSAGE'
-  printf "$fmt" '---' '---' '---'
-  for item in "${items[@]}"; do
-      printf "$fmt" "$name" "$status" "$message"
-  done
+  # format string is a constant defined above, safe to use as variable
+  # shellcheck disable=SC2059
+  {
+      printf "$fmt" 'NAME' 'STATUS' 'MESSAGE'
+      printf "$fmt" '---' '---' '---'
+      for item in "${items[@]}"; do
+          printf "$fmt" "$name" "$status" "$message"
+      done
+  }
   ```
+  This is a justified use of `shellcheck disable=SC2059` — the format string is a constant, and reusing it ensures consistent column widths across header and data rows.
 
 ### 14. Documentation
 - **shellcheck disable**: Use `# shellcheck disable=SCxxxx` only as a **last resort** when there is no way to fix or refactor the code. Always try to fix the underlying issue first. If disabling is unavoidable, ALWAYS add a comment on the preceding line explaining why it cannot be fixed:
