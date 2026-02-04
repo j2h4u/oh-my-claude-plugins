@@ -329,6 +329,24 @@ function process_data {
   }
   ```
   This is a justified use of `shellcheck disable=SC2059` — the format string is a constant, and reusing it ensures consistent column widths across header and data rows.
+- **Humanize Large Numbers**: For scripts focused on table output with large numeric values, humanize them like `du -h` or `df -h` (1K, 2.5M, 1.2G). Skip this for general-purpose scripts — it's overengineering if not needed:
+  ```bash
+  function humanize_bytes {
+      # args
+      local -r bytes="$1"
+
+      # code
+      if (( bytes >= 1073741824 )); then
+          printf '%.1fG' "$(echo "scale=1; $bytes / 1073741824" | bc)"
+      elif (( bytes >= 1048576 )); then
+          printf '%.1fM' "$(echo "scale=1; $bytes / 1048576" | bc)"
+      elif (( bytes >= 1024 )); then
+          printf '%.1fK' "$(echo "scale=1; $bytes / 1024" | bc)"
+      else
+          printf '%dB' "$bytes"
+      fi
+  }
+  ```
 
 ### 14. Documentation
 - **shellcheck disable**: Use `# shellcheck disable=SCxxxx` only as a **last resort** when there is no way to fix or refactor the code. Always try to fix the underlying issue first. If disabling is unavoidable, ALWAYS add a comment on the preceding line explaining why it cannot be fixed:
