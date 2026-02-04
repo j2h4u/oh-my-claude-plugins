@@ -298,6 +298,17 @@ function process_data {
 
 ### 13. Misc
 - **Time**: Use `printf` built-ins (`%(fmt)T`) instead of `date` to avoid subprocesses.
+- **Redirects**: Prefer bash-specific redirect operators for readability:
+  ```bash
+  # redirect stdout and stderr to file
+  command &> file.log      # instead of: command > file.log 2>&1
+
+  # pipe stdout and stderr
+  command |& another       # instead of: command 2>&1 | another
+
+  # discard all output
+  command &> /dev/null     # instead of: command > /dev/null 2>&1
+  ```
 - **Quoting**: Use single quotes for literals; double quotes only for variable or command expansion:
   ```bash
   # single quotes: literals, fixed strings, empty strings
