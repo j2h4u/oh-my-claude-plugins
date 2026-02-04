@@ -312,6 +312,18 @@ function process_data {
   - Quote elements with single quotes (or double if interpolation needed)
   - This enables proper syntax highlighting and handles elements with spaces/special characters
   - Single-element additions like `+=( '--verbose' )` can stay on one line
+- **Table Output**: When printing tables, use `printf` with fixed-width format specifiers (`%-N.Ns`). Define the format string once and reuse it for both header and data rows:
+  ```bash
+  # consts
+  local -r fmt='%-12.12s %-8.8s %-20.20s\n'
+
+  # code: header and rows use same format
+  printf "$fmt" 'NAME' 'STATUS' 'MESSAGE'
+  printf "$fmt" '---' '---' '---'
+  for item in "${items[@]}"; do
+      printf "$fmt" "$name" "$status" "$message"
+  done
+  ```
 
 ### 14. Documentation
 - **shellcheck disable**: Use `# shellcheck disable=SCxxxx` only as a **last resort** when there is no way to fix or refactor the code. Always try to fix the underlying issue first. If disabling is unavoidable, ALWAYS add a comment on the preceding line explaining why it cannot be fixed:

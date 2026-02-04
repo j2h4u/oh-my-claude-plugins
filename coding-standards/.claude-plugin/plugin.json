@@ -1,6 +1,6 @@
 {
   "name": "coding-standards",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Code quality standards: Bash, Python, Kaizen philosophy, Clean Architecture",
   "author": {
     "name": "j2h4u"
