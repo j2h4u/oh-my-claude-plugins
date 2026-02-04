@@ -267,7 +267,17 @@ function process_data {
 
 ### 13. Misc
 - **Time**: Use `printf` built-ins (`%(fmt)T`) instead of `date` to avoid subprocesses.
-- **Quoting**: Use single quotes for literals; double quotes only for variable or command expansion.
+- **Quoting**: Use single quotes for literals; double quotes only for variable or command expansion:
+  ```bash
+  # single quotes: literals, fixed strings, empty strings
+  local fallback=''
+  local method='GET'
+  grep --fixed-strings 'error:' "$log_file"
+
+  # double quotes: variables, command substitution, interpolation
+  echo "Processing: $filename"
+  result="$(some_command)"
+  ```
 - **Verbosity & Long-form Flags**: Script verbosity is essential for clarity and long-term maintenance. Always use long-form flags instead of short-form flags for all command-line utilities (e.g., `grep`, `curl`, `jq`) whenever they are available:
   ```bash
   curl --location --insecure --request 'GET' --output 'file.txt' "$url"

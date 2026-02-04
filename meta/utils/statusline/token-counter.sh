@@ -135,7 +135,7 @@ function get_git_branch {
     local git_branch
 
     # code
-    git_branch=$( git -C "$current_dir" branch --show-current 2>/dev/null ) || git_branch=""
+    git_branch=$( git -C "$current_dir" branch --show-current 2>/dev/null ) || git_branch=''
 
     # result: git branch name or empty string
     echo "$git_branch"
