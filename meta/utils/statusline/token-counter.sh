@@ -210,14 +210,13 @@ function render_statusline {
     if [[ -n "$git_branch" ]]; then
         git_part=" ${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}"
         [[ -n "$git_status" ]] && git_part+="${git_status}"
-        git_part+="${SEP2}"
     fi
 
     # result: formatted statusline
     printf '%b%b%b%b\n' \
         "${BLUE}${dir_name}${NOCOLOR}" \
-        "" \
         "$git_part" \
+        "${SEP2}" \
         "$ccusage_statusline"
 }
 
