@@ -2,7 +2,9 @@
 
 Developer utilities for maintaining the marketplace.
 
-## sync-versions.py
+## build-marketplace.py
+
+Build system for the marketplace.
 
 **Problem:** Plugin versions live in two places — local `<plugin>/.claude-plugin/plugin.json` and the central `.claude-plugin/marketplace.json`. Keeping them in sync manually is error-prone.
 
@@ -10,7 +12,7 @@ Developer utilities for maintaining the marketplace.
 
 **Workflow:**
 1. Bump version in local plugin.json when you change plugin code
-2. Run `./scripts/sync-versions.py --sync`
+2. Run `./scripts/build-marketplace.py --sync`
 3. Commit both files
 
 Run without arguments to see available commands.

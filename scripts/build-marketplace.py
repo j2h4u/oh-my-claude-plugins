@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Plugin version synchronization tool for oh-my-claude-plugins marketplace.
+Build system for oh-my-claude-plugins marketplace.
 
-Syncs versions from local plugin.json files to marketplace.json.
+Syncs versions from local plugin.json files to marketplace.json,
+validates marketplace structure, and prepares for release.
 Safe to run without arguments — shows help and usage.
 """
 
@@ -17,10 +18,10 @@ MARKETPLACE_PATH = REPO_ROOT / '.claude-plugin' / 'marketplace.json'
 def print_help() -> None:
     """Print usage information."""
     print('''
-sync-versions.py — Plugin version synchronization tool
+build-marketplace.py — Build system for the marketplace
 
 USAGE:
-    ./scripts/sync-versions.py [COMMAND]
+    ./scripts/build-marketplace.py [COMMAND]
 
 COMMANDS:
     --sync      Sync versions from local plugin.json to marketplace.json
@@ -35,12 +36,12 @@ COMMANDS:
 
 WORKFLOW:
     1. Update version in local <plugin>/.claude-plugin/plugin.json
-    2. Run: ./scripts/sync-versions.py --sync
+    2. Run: ./scripts/build-marketplace.py --sync
     3. Commit both files
 
 PRE-COMMIT HOOK:
     Add to .git/hooks/pre-commit:
-        ./scripts/sync-versions.py --sync && git add .claude-plugin/marketplace.json
+        ./scripts/build-marketplace.py --sync && git add .claude-plugin/marketplace.json
 
 VALIDATION:
     The tool also checks for:

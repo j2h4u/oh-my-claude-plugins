@@ -112,12 +112,12 @@ Conventional commits → semantic versioning (`git-tools/skills/git-workflow-man
 - `hooks/` scripts
 - Any executable code that users depend on
 
-**Version sync:** After updating local `<plugin>/.claude-plugin/plugin.json`, run the sync script:
+**Version sync:** After updating local `<plugin>/.claude-plugin/plugin.json`, run the build script:
 ```bash
-./scripts/sync-versions.py          # Show help (safe, no changes)
-./scripts/sync-versions.py --sync   # Sync versions to marketplace.json
-./scripts/sync-versions.py --check  # Validate only (for CI)
-./scripts/sync-versions.py --list   # Show all plugins with versions
+./scripts/build-marketplace.py          # Show help (safe, no changes)
+./scripts/build-marketplace.py --sync   # Sync versions to marketplace.json
+./scripts/build-marketplace.py --check  # Validate only (for CI)
+./scripts/build-marketplace.py --list   # Show all plugins with versions
 ```
 
 ## Key Patterns
