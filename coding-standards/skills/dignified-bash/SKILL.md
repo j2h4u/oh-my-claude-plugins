@@ -6,6 +6,28 @@ allowed-tools: Bash
 
 # Bash Coding Style Guide
 
+## Before You Write Bash: Choose the Right Tool
+
+**First, evaluate whether Bash is the right choice for the task.** Bash excels at:
+- System automation, glue scripts, pipelines
+- File operations, process management, environment setup
+- Hooks, init scripts, simple CLI wrappers
+- Tasks where external tools (`grep`, `awk`, `sed`, `curl`) do the heavy lifting
+
+**Consider Python instead when the task involves:**
+- Complex JSON/YAML parsing and transformation (not just `jq` one-liners)
+- Data structures: nested objects, lists of dicts, complex state
+- Error handling with structured exceptions
+- HTTP APIs with authentication, retries, error handling
+- String manipulation beyond simple patterns
+- Anything requiring classes, types, or testability
+
+Python is available on virtually every Linux system out of the box. Switching from Bash+jq to Python often **reduces code size by 2-3x** while improving readability and maintainability.
+
+**Rule of thumb:** If your Bash script has more `jq` calls than shell commands, or exceeds ~100 lines, reconsider the language choice.
+
+---
+
 **IMPORTANT: Always use Bash, never plain sh.** Even for simple scripts, hooks, or one-liners — always use `#!/usr/bin/env bash`. Plain POSIX sh lacks essential features (arrays, `[[ ]]`, `set -o pipefail`) and there's no benefit to avoiding bash on modern systems.
 
 All shell scripts must adhere to the **Bash Purist** style to ensure robustness, readability, and maintainability.
