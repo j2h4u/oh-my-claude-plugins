@@ -135,7 +135,7 @@ function get_git_branch {
     local git_branch
 
     # code
-    git_branch=$( cd "$current_dir" 2>/dev/null && git branch --show-current 2>/dev/null || echo '' )
+    git_branch=$( git -C "$current_dir" branch --show-current 2>/dev/null ) || git_branch=""
 
     # result: git branch name or empty string
     echo "$git_branch"
@@ -146,9 +146,8 @@ function get_git_status {
     local -r current_dir="$1"
 
     # vars
-    local status_output header_line file_lines
-    local ahead="" behind="" dirty="" staged="" untracked=""
-    local indicators=""
+    local status_output header_line file_lines indicators
+    local ahead behind dirty staged untracked
 
     # code: run git in subshell to avoid changing cwd
     status_output=$( git -C "$current_dir" status --porcelain=v1 --branch 2>/dev/null ) || {
