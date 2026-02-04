@@ -337,6 +337,15 @@ function process_data {
   # discard all output
   command &> /dev/null     # instead of: command > /dev/null 2>&1
   ```
+- **Here-string `<<<`**: Use here-string to pass variable content to stdin without spawning a subshell:
+  ```bash
+  # good: no subshell
+  grep 'pattern' <<< "$content"
+  jq '.field' <<< "$json"
+
+  # avoid: spawns subshell for echo
+  echo "$content" | grep 'pattern'
+  ```
 - **Quoting**: Use single quotes for literals; double quotes only for variable or command expansion:
   ```bash
   # single quotes: literals, fixed strings, empty strings
