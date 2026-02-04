@@ -314,4 +314,9 @@ function process_data {
   - Single-element additions like `+=( '--verbose' )` can stay on one line
 
 ### 14. Documentation
-- For `shellcheck disable` directives, ALWAYS add a comment on the preceding line explaining why it is disabled.
+- **shellcheck disable**: Use `# shellcheck disable=SCxxxx` only as a **last resort** when there is no way to fix or refactor the code. Always try to fix the underlying issue first. If disabling is unavoidable, ALWAYS add a comment on the preceding line explaining why it cannot be fixed:
+  ```bash
+  # nameref intentionally modifies caller's variable, not a bug
+  # shellcheck disable=SC2034
+  input_ref="$temp"
+  ```
