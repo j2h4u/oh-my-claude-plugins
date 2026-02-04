@@ -186,6 +186,22 @@ read_stdin 'my_data'  # pass variable NAME, not value
   (( count > 0 ))
   result=$( some_command )
   ```
+- **Pitfall: `&&`/`||` chains are NOT if-then-else.** The pattern `foo && bar || baz` does NOT work like `if foo; then bar; else baz; fi`. If `bar` returns non-zero, `baz` will also execute:
+  ```bash
+  # BROKEN: baz runs if bar fails, not just if foo fails
+  check_something && do_work || handle_error
+
+  # SAFE: bar cannot fail (variable assignment)
+  [[ -f "$file" ]] && found=1 || found=0
+
+  # CORRECT: use proper if-then-else for complex logic
+  if check_something; then
+      do_work
+  else
+      handle_error
+  fi
+  ```
+  Only use `&&`/`||` chains when the middle command cannot fail (e.g., variable assignments, `echo`, `true`).
 
 ### 9. Assertions & Early Returns
 - **Avoid nested ifs and ladders** — they are hard to read. Use early returns instead.
