@@ -151,7 +151,7 @@ function get_git_status {
 
     # code: run git in subshell to avoid changing cwd
     status_output=$( git -C "$current_dir" status --porcelain=v1 --branch 2>/dev/null ) || {
-        echo ''
+        echo
         return
     }
 

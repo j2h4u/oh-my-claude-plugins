@@ -308,6 +308,9 @@ function process_data {
   # double quotes: variables, command substitution, interpolation
   echo "Processing: $filename"
   result="$(some_command)"
+
+  # empty line output: just echo without arguments
+  echo
   ```
 - **Verbosity & Long-form Flags**: Script verbosity is essential for clarity and long-term maintenance. Always use long-form flags instead of short-form flags for all command-line utilities (e.g., `grep`, `curl`, `jq`) whenever they are available:
   ```bash
