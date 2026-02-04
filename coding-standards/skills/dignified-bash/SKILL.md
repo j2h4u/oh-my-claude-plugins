@@ -109,15 +109,18 @@ read_stdin 'my_data'  # pass variable NAME, not value
 - Use associative arrays (`declare -A` / `local -A`) where they simplify code logic or improve readability.
 - Good use cases: tracking state, caching lookups, grouping related data.
 - Don't use them just for the sake of it — only when they provide a clear benefit.
+- Multi-element initialization must be on separate lines, with quoted keys and values:
   ```bash
   # dicts
-  declare -A restarted_projects
-  restarted_projects["myproject"]=1
+  local -A config=(
+      ['host']='localhost'
+      ['port']='8080'
+      ['timeout']='30'
+  )
 
-  # dicts
-  local -A config
-  config["host"]="localhost"
-  config["port"]="8080"
+  # dicts: incremental assignment
+  declare -A restarted_projects
+  restarted_projects['myproject']=1
   ```
 
 ### 7. Arithmetic Context
