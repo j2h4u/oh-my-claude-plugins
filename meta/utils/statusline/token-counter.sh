@@ -151,7 +151,7 @@ function get_git_status {
 
     # code: run git in subshell to avoid changing cwd
     status_output=$( git -C "$current_dir" status --porcelain=v1 --branch 2>/dev/null ) || {
-        echo ""
+        echo ''
         return
     }
 
@@ -205,7 +205,7 @@ function render_statusline {
     local git_part
 
     # code
-    git_part=""
+    git_part=''
     if [[ -n "$git_branch" ]]; then
         git_part=" ${BRANCH_LABEL}${DIM}${git_branch}${NOCOLOR}"
         [[ -n "$git_status" ]] && git_part+="${git_status}"
@@ -221,7 +221,9 @@ function render_statusline {
 
 function main {
     # vars
-    local input current_dir dir_name git_branch git_status ccusage_statusline
+    local input ccusage_statusline
+    local current_dir dir_name
+    local git_branch git_status
 
     # code
     read_json_input input
