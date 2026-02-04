@@ -112,9 +112,12 @@ Conventional commits → semantic versioning (`git-tools/skills/git-workflow-man
 - `hooks/` scripts
 - Any executable code that users depend on
 
-**Version sync required:** After updating local `<plugin>/.claude-plugin/plugin.json`, sync the version to `.claude-plugin/marketplace.json` in the `plugins[]` array. This duplication is a current limitation.
-
-**TODO:** Create CI script to auto-sync versions from local plugin.json files to marketplace.json, or validate they match on PR.
+**Version sync:** After updating local `<plugin>/.claude-plugin/plugin.json`, run the sync script:
+```bash
+./scripts/sync-versions.py          # Interactive: shows diff, prompts to apply
+./scripts/sync-versions.py --check  # CI mode: exit 1 if out of sync
+./scripts/sync-versions.py --fix    # Auto-fix without prompting
+```
 
 ## Key Patterns
 
