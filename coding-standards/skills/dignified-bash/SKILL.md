@@ -285,15 +285,16 @@ function process_data {
 - **Arrays for Command Arguments**: When passing a variable list of arguments to a command, use arrays with `"${arr[@]}"` expansion. This preserves quoting and handles arguments with spaces correctly:
   ```bash
   # arrays
-  local -a curl_args=( --location --silent --max-time 30 )
+  local -a curl_args=( '--location' '--silent' '--max-time' '30' )
 
   # code
   if (( verbose )); then
-      curl_args+=( --verbose )
+      curl_args+=( '--verbose' )
   fi
 
   curl "${curl_args[@]}" "$url"
   ```
+  **Quote array elements** with single quotes (or double if interpolation needed). This enables proper syntax highlighting of individual elements and correctly handles elements containing spaces or special characters.
 
 ### 14. Documentation
 - For `shellcheck disable` directives, ALWAYS add a comment on the preceding line explaining why it is disabled.
