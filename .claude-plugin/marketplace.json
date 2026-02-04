@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "Personal collection of Claude Code skills, agents, and plugins",
-    "version": "1.3.0"
+    "version": "1.3.1"
   },
   "plugins": [
     {
@@ -83,7 +83,7 @@
     {
       "name": "agents",
       "description": "Custom agents: Python code review, quick fixing, mechanical tasks",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "j2h4u"
       },
