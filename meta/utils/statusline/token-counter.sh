@@ -438,13 +438,14 @@ function render_statusline {
         pr_part="${SEP2}${pr_status}"
     fi
 
-    # result: formatted statusline
-    printf '%s%s%s%s%s\n' \
-        "${BLUE}${dir_name}${NOCOLOR}" \
+    # result: two-line statusline
+    # line 1: ccusage (model, costs, burn rate, context)
+    # line 2: dir + git + PR status
+    printf '%s\n%s%s%s\n' \
+        "$ccusage_statusline" \
+        "${DIM}${dir_name}${NOCOLOR}" \
         "$git_part" \
-        "$pr_part" \
-        "${SEP2}" \
-        "$ccusage_statusline"
+        "$pr_part"
 }
 
 function demo_statusline {
