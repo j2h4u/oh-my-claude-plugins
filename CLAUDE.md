@@ -105,12 +105,14 @@ Follow **dignified-bash** (`coding-standards/skills/dignified-bash/`):
 Conventional commits → semantic versioning (`git-tools/skills/git-workflow-manager/`):
 - `feat:` → MINOR, `fix:` → PATCH, `feat!:` → MAJOR
 
-### Plugin Versioning
+### Plugin Versioning (MANDATORY — never skip)
 
-**Always bump plugin version** in `plugin.json` after making code changes to:
-- `utils/` scripts (statusline, helpers)
-- `hooks/` scripts
-- Any executable code that users depend on
+**ANY change to plugin files (even a single byte) MUST bump the patch version** in `<plugin>/.claude-plugin/plugin.json` and run `--sync`. No exceptions — cosmetic, refactor, one-liner, typo fix — all bump. This is the signal to marketplace clients that an update is available.
+
+**Mandatory steps on EVERY commit that touches plugin files:**
+1. Bump patch version in `<plugin>/.claude-plugin/plugin.json`
+2. Run `./scripts/build-marketplace.py --sync` (auto-bumps marketplace version)
+3. Commit both `plugin.json` and `marketplace.json` together
 
 **Version sync:** After updating local `<plugin>/.claude-plugin/plugin.json`, run the build script:
 ```bash
