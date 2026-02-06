@@ -85,6 +85,219 @@ function die {
     declare -r BRANCH_LABEL='⑂'
 }
 
+# PR status cache constants
+declare -r PR_CACHE_DIR="${HOME}/.cache/claude-statusline"
+declare -r PR_CACHE_FILE="${PR_CACHE_DIR}/pr-status.json"
+declare -r PR_LOCK_FILE="${PR_CACHE_DIR}/refresh.lock"
+declare -r GH_AVAILABLE_FILE="${PR_CACHE_DIR}/gh-available"
+declare -ri PR_CACHE_TTL=300
+declare -ri GH_CHECK_TTL=1800
+
+function check_gh_available {
+    # args: caller's variable name to receive status string
+    local -r var_name="$1"
+
+    # vars
+    local -n status_ref="$var_name"
+    local cache_age now cached_ts cached_status
+
+    # code: check cached result first
+    if [[ -f "$GH_AVAILABLE_FILE" ]]; then
+        cached_ts=$( stat -c '%Y' "$GH_AVAILABLE_FILE" 2>/dev/null ) \
+            || cached_ts=$( stat -f '%m' "$GH_AVAILABLE_FILE" 2>/dev/null ) \
+            || cached_ts=0
+        now=$( date +%s )
+        cache_age=$(( now - cached_ts ))
+        cached_status=$( < "$GH_AVAILABLE_FILE" )
+        if (( cache_age < GH_CHECK_TTL )) && [[ -n "$cached_status" ]]; then
+            # shellcheck disable=SC2034  # status_ref is a nameref
+            status_ref="$cached_status"
+            [[ "$cached_status" == "ok" ]]
+            return
+        fi
+    fi
+
+    # ensure cache dir exists
+    mkdir -p "$PR_CACHE_DIR"
+
+    # check gh command exists
+    if ! command -v gh &>/dev/null; then
+        echo "no-gh" > "$GH_AVAILABLE_FILE"
+        # shellcheck disable=SC2034
+        status_ref="no-gh"
+        return 1
+    fi
+
+    # check gh auth
+    if ! gh auth status &>/dev/null; then
+        echo "no-auth" > "$GH_AVAILABLE_FILE"
+        # shellcheck disable=SC2034
+        status_ref="no-auth"
+        return 1
+    fi
+
+    echo "ok" > "$GH_AVAILABLE_FILE"
+    # shellcheck disable=SC2034
+    status_ref="ok"
+    # result: gh is available
+    return 0
+}
+
+function is_cache_fresh {
+    # args
+    local -r cache_file="$1"
+    local -ri ttl="$2"
+
+    # vars
+    local file_ts now cache_age
+
+    # code
+    [[ -f "$cache_file" ]] || return 1
+
+    file_ts=$( stat -c '%Y' "$cache_file" 2>/dev/null ) \
+        || file_ts=$( stat -f '%m' "$cache_file" 2>/dev/null ) \
+        || return 1
+    now=$( date +%s )
+    cache_age=$(( now - file_ts ))
+
+    # result: 0 if fresh, 1 if stale
+    (( cache_age < ttl ))
+}
+
+function refresh_pr_cache {
+    # code: acquire lock (nonblock), skip if another refresh is running
+    exec 9>"$PR_LOCK_FILE"
+    flock --nonblock 9 || return 0
+
+    # vars
+    local graphql_result notifications_count tmp_file
+
+    # GraphQL: all my open PRs with CI status
+    graphql_result=$( gh api graphql -f query='
+        query {
+            search(query: "is:open is:pr author:@me", type: ISSUE, first: 20) {
+                nodes {
+                    ... on PullRequest {
+                        number
+                        repository { nameWithOwner }
+                        url
+                        commits(last: 1) {
+                            nodes {
+                                commit {
+                                    statusCheckRollup {
+                                        state
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ' 2>/dev/null ) || graphql_result='{}'
+
+    # REST: unread PR+Issue notifications (participating only — excludes repo-wide watches)
+    notifications_count=$( gh api notifications --jq '
+        [.[] | select(
+            (.subject.type == "PullRequest" or .subject.type == "Issue")
+            and .unread
+            and (.reason == "comment" or .reason == "mention" or .reason == "author" or .reason == "review_requested" or .reason == "assign")
+        )] | length
+    ' 2>/dev/null ) || notifications_count=0
+
+    # atomic write via temp file + mv
+    tmp_file="${PR_CACHE_FILE}.tmp.$$"
+    jq -n \
+        --argjson prs "$graphql_result" \
+        --argjson unread "$notifications_count" \
+        '{ prs: $prs, unread_count: $unread, updated_at: now }' \
+        > "$tmp_file" 2>/dev/null \
+        && mv "$tmp_file" "$PR_CACHE_FILE"
+
+    # release lock
+    exec 9>&-
+}
+
+function make_osc8_link {
+    # args
+    local -r url="$1"
+    local -r text="$2"
+
+    # result: OSC 8 hyperlink escape sequence
+    # shellcheck disable=SC1003  # backslashes are intentional OSC 8 ST (String Terminator)
+    printf '\e]8;;%s\e\\%s\e]8;;\e\\' "$url" "$text"
+}
+
+function get_pr_status {
+    # consts
+    local -r PR_DOT='⁕'
+
+    # vars
+    local gh_status='' cache_json pr_nodes
+    local total_prs ci_state pr_url dot
+    local unread_count output=''
+
+    # code: check if gh is available (from cache)
+    if ! check_gh_available gh_status; then
+        case "$gh_status" in
+            no-gh)   echo "${RED}gh not installed${NOCOLOR}" ;;
+            no-auth) echo "${RED}gh auth login${NOCOLOR}" ;;
+        esac
+        return 0
+    fi
+
+    # ensure cache dir exists
+    mkdir -p "$PR_CACHE_DIR"
+
+    # if cache is stale or missing, trigger background refresh
+    if ! is_cache_fresh "$PR_CACHE_FILE" "$PR_CACHE_TTL"; then
+        refresh_pr_cache &
+        disown
+    fi
+
+    # read cache (if it exists)
+    [[ -f "$PR_CACHE_FILE" ]] || return 0
+    cache_json=$( < "$PR_CACHE_FILE" )
+    [[ -n "$cache_json" ]] || return 0
+
+    # parse PR data
+    total_prs=$( jq -r '.prs.data.search.nodes | length' <<< "$cache_json" 2>/dev/null ) || total_prs=0
+    (( total_prs > 0 )) || return 0
+
+    # collect dots per CI state, sorted by severity: red → yellow → green → gray
+    pr_nodes=$( jq -r '.prs.data.search.nodes' <<< "$cache_json" 2>/dev/null ) || return 0
+    local dots_red='' dots_pending='' dots_green='' dots_gray=''
+
+    local i
+    for (( i = 0; i < total_prs; i++ )); do
+        ci_state=$( jq -r ".[$i].commits.nodes[0].commit.statusCheckRollup.state // \"UNKNOWN\"" <<< "$pr_nodes" 2>/dev/null ) || ci_state="UNKNOWN"
+        pr_url=$( jq -r ".[$i].url // empty" <<< "$pr_nodes" 2>/dev/null ) || pr_url=""
+
+        dot=$( make_osc8_link "$pr_url" "${PR_DOT}" )
+        case "$ci_state" in
+            FAILURE|ERROR)    dots_red+="$dot" ;;
+            PENDING|EXPECTED) dots_pending+="$dot" ;;
+            SUCCESS)          dots_green+="$dot" ;;
+            *)                dots_gray+="$dot" ;;
+        esac
+    done
+
+    # assemble: red → yellow → green → gray (each cluster in its color)
+    [[ -n "$dots_red" ]]    && output+="${RED}${dots_red}${NOCOLOR}"
+    [[ -n "$dots_pending" ]] && output+="${BLUE}${dots_pending}${NOCOLOR}"
+    [[ -n "$dots_green" ]]  && output+="${GREEN}${dots_green}${NOCOLOR}"
+    [[ -n "$dots_gray" ]]   && output+="${DGRAY}${dots_gray}${NOCOLOR}"
+
+    # append unread comment count
+    unread_count=$( jq -r '.unread_count // 0' <<< "$cache_json" 2>/dev/null ) || unread_count=0
+    if (( unread_count > 0 )); then
+        output+=" ${CYAN}💬${unread_count}${NOCOLOR}"
+    fi
+
+    # result: formatted PR status string
+    echo "$output"
+}
+
 function read_json_input {
     # args
     local -r var_name="$1"
@@ -111,8 +324,8 @@ function extract_current_dir {
     # code
     current_dir=$( jq --raw-output '.workspace.current_dir' <<< "$input" )
 
-    # assert: jq succeeded
-    [[ -n "$current_dir" ]] || die "Failed to extract current_dir from JSON"
+    # assert: jq succeeded and returned a real path (not jq's "null" for missing keys)
+    [[ -n "$current_dir" && "$current_dir" != "null" ]] || die "Failed to extract current_dir from JSON"
 
     # result: current directory path
     echo "$current_dir"
@@ -146,8 +359,8 @@ function get_git_status {
     local -r current_dir="$1"
 
     # vars
-    local status_output header_line file_lines indicators
-    local ahead behind dirty staged untracked
+    local status_output header_line file_lines indicators=''
+    local ahead='' behind='' dirty='' staged='' untracked=''
 
     # code: run git in subshell to avoid changing cwd
     status_output=$( git -C "$current_dir" status --porcelain=v1 --branch 2>/dev/null ) || {
@@ -188,7 +401,15 @@ function get_ccusage_statusline {
     local ccusage_output
 
     # code
-    ccusage_output=$( bun x ccusage statusline --visual-burn-rate emoji-text <<< "$input" )
+    if ! command -v bun &>/dev/null; then
+        echo "${RED}bun not found${NOCOLOR}"
+        return 0
+    fi
+
+    ccusage_output=$( bun x ccusage statusline --visual-burn-rate text --refresh-interval 60 <<< "$input" 2>/dev/null ) || {
+        echo "${RED}ccusage error${NOCOLOR}"
+        return 0
+    }
 
     # result: ccusage statusline output
     echo "$ccusage_output"
@@ -199,10 +420,11 @@ function render_statusline {
     local -r dir_name="$1"
     local -r git_branch="$2"
     local -r git_status="$3"
-    local -r ccusage_statusline="$4"
+    local -r pr_status="$4"
+    local -r ccusage_statusline="$5"
 
     # vars
-    local git_part
+    local git_part pr_part
 
     # code
     git_part=''
@@ -211,19 +433,69 @@ function render_statusline {
         [[ -n "$git_status" ]] && git_part+="${git_status}"
     fi
 
+    pr_part=''
+    if [[ -n "$pr_status" ]]; then
+        pr_part="${SEP2}${pr_status}"
+    fi
+
     # result: formatted statusline
-    printf '%b%b%b%b\n' \
+    printf '%s%s%s%s%s\n' \
         "${BLUE}${dir_name}${NOCOLOR}" \
         "$git_part" \
+        "$pr_part" \
         "${SEP2}" \
         "$ccusage_statusline"
 }
 
+function demo_statusline {
+    # consts
+    local -r D='⁕'
+
+    # code: render demo scenarios with synthetic data
+    echo "=== Demo: all green ==="
+    render_statusline \
+        "my-project/" \
+        "main" \
+        "${DIM}${GREEN}+${NOCOLOR}" \
+        "${GREEN}${D}${D}${D}${NOCOLOR}" \
+        "🤖 Sonnet 4.5 ${DGRAY}|${NOCOLOR} 💰 \$12.34 session"
+
+    echo "=== Demo: mixed CI + unread comments ==="
+    render_statusline \
+        "my-project/" \
+        "feat/auth" \
+        "${DIM}${YELLOW}*${NOCOLOR}${DIM}${GREEN}+${NOCOLOR}" \
+        "${RED}${D}${NOCOLOR}${BLUE}${D}${D}${NOCOLOR}${GREEN}${D}${D}${NOCOLOR}${DGRAY}${D}${NOCOLOR} ${CYAN}💬3${NOCOLOR}" \
+        "🤖 Opus 4.6 ${DGRAY}|${NOCOLOR} 💰 \$58.07 session"
+
+    echo "=== Demo: gh not installed ==="
+    render_statusline \
+        "my-project/" \
+        "main" \
+        "" \
+        "${RED}gh not installed${NOCOLOR}" \
+        "🤖 Sonnet 4.5 ${DGRAY}|${NOCOLOR} 💰 \$0.42 session"
+
+    echo "=== Demo: bun not found ==="
+    render_statusline \
+        "my-project/" \
+        "develop" \
+        "${CYAN}↑${NOCOLOR}" \
+        "" \
+        "${RED}bun not found${NOCOLOR}"
+}
+
 function main {
+    # code: handle --demo flag
+    if [[ "${1:-}" == "--demo" ]]; then
+        demo_statusline
+        return 0
+    fi
+
     # vars
     local input ccusage_statusline
     local current_dir dir_name
-    local git_branch git_status
+    local git_branch git_status pr_status
 
     # code
     read_json_input input
@@ -235,9 +507,10 @@ function main {
     dir_name=$( get_dir_name "$current_dir" )
     git_branch=$( get_git_branch "$current_dir" )
     git_status=$( get_git_status "$current_dir" )
+    pr_status=$( get_pr_status )
     ccusage_statusline=$( get_ccusage_statusline "$input" )
 
-    render_statusline "$dir_name" "$git_branch" "$git_status" "$ccusage_statusline"
+    render_statusline "$dir_name" "$git_branch" "$git_status" "$pr_status" "$ccusage_statusline"
 }
 
-main
+main "$@"

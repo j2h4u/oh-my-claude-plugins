@@ -1,27 +1,38 @@
 # Custom Statusline for Claude Code
 
-Enhanced statusline that prepends directory name and git branch to `ccusage` output.
+Enhanced statusline that prepends directory name, git branch, and PR status to `ccusage` output.
 
 ## Preview
 
 ```
-oh-my-claude-plugins/ ⑂main | 🤖 Sonnet 4.5 | 💰 $25.17 session / $25.21 today / $10.76 block (3h 9m left) | 🔥 $5.81/hr 🟢 (Normal) | 🧠 387,071 (194%)
+oh-my-claude-plugins/ ⑂main*+ | PR 7 | 🤖 Sonnet 4.5 | 💰 $25.17 session / ...
+```
+
+**With CI failure + unread comments:**
+```
+oh-my-claude-plugins/ ⑂main*+ | PR 7 #9997 💬2 | 🤖 Sonnet 4.5 | ...
 ```
 
 **Format:**
 ```
-<dir_name>/ ⑂<git_branch> | <ccusage output>
+<dir_name>/ ⑂<git_branch><status> | PR <count> [#failed...] [💬N] | <ccusage output>
 ```
 
 - **oh-my-claude-plugins/** — Current directory name (blue)
 - **⑂main** — Git branch (dimmed, only shown if in git repo)
+- **PR 7** — Open PR count (green=ok, yellow=pending, red=failure). Clickable → github.com/pulls
+- **#9997** — Failed PR numbers (red). Clickable → PR page. Only shown on CI failure
+- **💬2** — Unread PR comment count (cyan). Only shown when > 0
 - **Rest** — Output from [`ccusage`](https://github.com/ryoppippi/ccusage) statusline with costs, burn rate, and context usage
+
+If `gh` is not installed, shows `gh not installed` in red. If not authenticated, shows `gh auth login` in red. The PR section is hidden when there are 0 open PRs.
 
 ## Requirements
 
 - `jq` — JSON processing
 - `bun` — For running ccusage
 - [`ccusage`](https://github.com/ryoppippi/ccusage) — Claude Code usage tracker
+- [`gh`](https://cli.github.com/) — GitHub CLI (optional, for PR status indicator)
 
 ### Install dependencies
 
@@ -65,8 +76,22 @@ chmod +x ~/.claude/token-counter.sh
 1. **Receives JSON from Claude Code** via stdin containing workspace info (current directory, git status, model, tokens, costs)
 2. **Extracts directory name** — Shows basename with trailing slash
 3. **Gets git branch** (if in repo) — Safely checks current branch
-4. **Delegates to ccusage** — Passes JSON to `ccusage statusline --visual-burn-rate emoji-text`
-5. **Formats output** — Prepends directory + branch with color coding and separators
+4. **Gets PR status** — Checks cached GitHub PR data (see below)
+5. **Delegates to ccusage** — Passes JSON to `ccusage statusline --visual-burn-rate emoji-text`
+6. **Formats output** — Prepends directory + branch + PR status with color coding and separators
+
+### PR Status Caching
+
+PR data is cached to avoid blocking the statusline render:
+
+- **Cache directory:** `~/.cache/claude-statusline/`
+- **Cache TTL:** 5 minutes (300s) for PR data, 30 minutes for `gh` availability check
+- **Background refresh:** When cache is stale, a background process fetches new data via `gh` GraphQL/REST API
+- **Lock file:** `flock --nonblock` prevents parallel refresh processes
+- **Atomic writes:** Cache updates use temp file + `mv` to avoid partial reads
+- **First run:** PR section is hidden until the first background refresh completes
+
+PR links use OSC 8 terminal hyperlinks — clickable in modern terminals (iTerm2, WezTerm, kitty, Windows Terminal).
 
 All done following dignified-bash standards:
 - Strict mode (`set -euo pipefail`)
@@ -102,3 +127,10 @@ All ANSI colors are defined but only a few are used. Others kept for easy custom
 **Git branch not showing:**
 - Only displays when in a git repository
 - Check: `git branch --show-current` in your project
+
+**PR status not showing:**
+- Requires `gh` CLI installed and authenticated (`gh auth login`)
+- Hidden when you have 0 open PRs
+- First render after cache expires may show stale data (refreshes in background)
+- Check cache: `cat ~/.cache/claude-statusline/pr-status.json | jq`
+- Force refresh: `rm -rf ~/.cache/claude-statusline/`
