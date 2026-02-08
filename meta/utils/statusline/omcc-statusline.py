@@ -30,8 +30,8 @@ PR_CACHE_TTL = 300       # 5 min
 CI_CACHE_TTL = 120       # 2 min
 GH_CHECK_TTL = 1800      # 30 min
 
-CACHE_DIR = Path("/tmp") / "claude-statusline"
-THEME_FILE = Path.home() / ".config" / "claude-statusline" / "theme.json"
+CACHE_DIR = Path("/tmp") / "omcc-statusline"
+THEME_FILE = Path.home() / ".config" / "omcc-statusline" / "theme.json"
 PR_CACHE_FILE = CACHE_DIR / "pr-status.json"
 PR_LOCK_FILE = CACHE_DIR / "refresh.lock"
 GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"

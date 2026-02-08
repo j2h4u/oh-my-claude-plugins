@@ -17,7 +17,7 @@ from pathlib import Path
 
 # --- paths -------------------------------------------------------------------
 
-CONFIG_DIR = Path.home() / ".config" / "claude-statusline"
+CONFIG_DIR = Path.home() / ".config" / "omcc-statusline"
 CONFIG_FILE = CONFIG_DIR / "theme.json"
 
 # --- ANSI helpers ------------------------------------------------------------

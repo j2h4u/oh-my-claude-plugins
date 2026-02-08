@@ -121,8 +121,8 @@ Blocking on any one source doesn't delay the others.
 
 PR data is cached to avoid blocking statusline render:
 
-- **Cache location:** `~/.config/claude-statusline/` (config) + `/tmp/claude-statusline/` (runtime cache)
-- **Theme config:** `~/.config/claude-statusline/theme.json`
+- **Cache location:** `~/.config/omcc-statusline/` (config) + `/tmp/omcc-statusline/` (runtime cache)
+- **Theme config:** `~/.config/omcc-statusline/theme.json`
 - **PR cache TTL:** 5 minutes
 - **CI cache TTL:** 2 minutes
 - **GH availability check TTL:** 30 minutes
@@ -176,12 +176,12 @@ python3 ~/.claude/plugins/marketplace/oh-my-claude-plugins/meta/utils/statusline
 - Requires `gh` CLI installed and authenticated
 - First render may show nothing (refreshes in background)
 - Subsequent renders show cached PR data
-- Check cache: `cat /tmp/claude-statusline/pr-status.json | jq .prs.data.search.nodes`
-- Force refresh: `rm -rf /tmp/claude-statusline/`
+- Check cache: `cat /tmp/omcc-statusline/pr-status.json | jq .prs.data.search.nodes`
+- Force refresh: `rm -rf /tmp/omcc-statusline/`
 
 **Theme not applying:**
 - Restart Claude Code after saving theme
-- Verify config exists: `cat ~/.config/claude-statusline/theme.json`
+- Verify config exists: `cat ~/.config/omcc-statusline/theme.json`
 
 **Performance issues:**
 - PR/CI fetches happen in background, shouldn't block statusline
