@@ -1,6 +1,6 @@
 ---
 name: gh-repo-create
-description: Create a GitHub repository, configure SSH deployment keys, and set up git remote for the current folder. Works on macOS, Linux, and Unix systems.
+description: This skill should be used when the user asks to "create github repo", "create a new repository", "set up github remote", "configure deploy keys", "init github project", "push to new repo", "create repo with SSH keys", "set up git remote". Creates a GitHub repository, configures SSH deployment keys, and sets up git remote for the current folder.
 ---
 
 # GitHub Repository Creation & Setup

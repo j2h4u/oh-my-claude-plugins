@@ -1,6 +1,6 @@
 ---
 name: claude-orphan-cleanup
-description: Find and terminate orphaned Claude Code CLI processes that consume CPU resources. Works on macOS and Linux systems.
+description: This skill should be used when the user asks to "find orphaned processes", "kill claude processes", "clean up claude orphans", "terminate stuck claude", "claude consuming CPU", "check for orphan processes", "cleanup claude code processes", "find zombie claude processes". Finds and terminates orphaned Claude Code CLI processes that consume CPU resources on macOS and Linux.
 ---
 
 # Claude Code Orphan Process Cleanup

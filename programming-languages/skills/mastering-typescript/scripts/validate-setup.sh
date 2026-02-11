@@ -34,7 +34,7 @@ echo ""
 echo "Checking Node.js..."
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node -v | sed 's/v//')
-    MAJOR_VERSION=$(echo $NODE_VERSION | cut -d. -f1)
+    MAJOR_VERSION=$(echo "$NODE_VERSION" | cut -d. -f1)
     if [[ $MAJOR_VERSION -ge 20 ]]; then
         pass "Node.js $NODE_VERSION (recommended: 20+)"
     else
@@ -62,8 +62,8 @@ echo ""
 echo "Checking TypeScript..."
 if [[ -f "node_modules/typescript/package.json" ]]; then
     TS_VERSION=$(node -p "require('./node_modules/typescript/package.json').version")
-    MAJOR_VERSION=$(echo $TS_VERSION | cut -d. -f1)
-    MINOR_VERSION=$(echo $TS_VERSION | cut -d. -f2)
+    MAJOR_VERSION=$(echo "$TS_VERSION" | cut -d. -f1)
+    MINOR_VERSION=$(echo "$TS_VERSION" | cut -d. -f2)
     if [[ $MAJOR_VERSION -ge 5 ]] && [[ $MINOR_VERSION -ge 5 ]]; then
         pass "TypeScript $TS_VERSION installed"
     else

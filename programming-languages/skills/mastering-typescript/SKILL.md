@@ -1,7 +1,10 @@
 ---
 name: mastering-typescript
 description: |
-  Master enterprise-grade TypeScript development with type-safe patterns, modern tooling, and framework integration. This skill provides comprehensive guidance for TypeScript 5.9+, covering type system fundamentals (generics, mapped types, conditional types, satisfies operator), enterprise patterns (error handling, validation with Zod), React integration for type-safe frontends, NestJS for scalable APIs, and LangChain.js for AI applications. Use when building type-safe applications, migrating JavaScript codebases, configuring modern toolchains (Vite 7, pnpm, ESLint, Vitest), implementing advanced type patterns, or comparing TypeScript with Java/Python approaches.
+  This skill should be used when the user asks to "write typescript", "configure typescript project",
+  "add type hints", "use generics", "migrate to typescript", "set up vite with typescript",
+  "implement type-safe patterns", "use satisfies operator", "configure eslint for typescript",
+  or needs guidance on enterprise TypeScript 5.9+ development with React, NestJS, or LangChain.js.
 version: 1.0.0
 category: programming-languages
 triggers:

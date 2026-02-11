@@ -1,10 +1,9 @@
 ---
 name: typescript-unbloating
 description: |
-  Simplifies and refines TypeScript/JavaScript code for clarity, consistency, and maintainability
-  while preserving all functionality. Use when the user asks to "simplify typescript code",
-  "refactor this js code", "unbloat javascript", "clean up this react component", "reduce
-  complexity in typescript", or mentions code simplification for JS/TS/React/TSX files.
+  This skill should be used when the user asks to "simplify typescript code", "simplify javascript",
+  "refactor this js code", "unbloat javascript", "unbloat typescript", "clean up this react component",
+  "reduce complexity in typescript", "simplify tsx", or mentions code simplification for JS/TS/React/TSX files.
 version: 1.0.0
 category: code-quality
 triggers:
