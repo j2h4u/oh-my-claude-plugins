@@ -1,7 +1,7 @@
 {
   "name": "programming-languages",
-  "version": "1.0.1",
-  "description": "Programming language guides and tools: TypeScript comprehensive guide, JavaScript code simplification",
+  "version": "1.0.2",
+  "description": "Programming language guides and tools: TypeScript comprehensive guide, TypeScript/JavaScript code unbloating",
   "author": {
     "name": "j2h4u"
   }

@@ -1,6 +1,28 @@
 ---
-name: code-simplifier
-description: Simplifies and refines code for clarity, consistency, and maintainability while preserving all functionality. Focuses on recently modified code unless instructed otherwise.
+name: typescript-unbloating
+description: |
+  Simplifies and refines TypeScript/JavaScript code for clarity, consistency, and maintainability
+  while preserving all functionality. Use when the user asks to "simplify typescript code",
+  "refactor this js code", "unbloat javascript", "clean up this react component", "reduce
+  complexity in typescript", or mentions code simplification for JS/TS/React/TSX files.
+version: 1.0.0
+category: code-quality
+triggers:
+  - simplify this typescript
+  - simplify this javascript
+  - simplify this ts code
+  - simplify this js code
+  - refactor typescript
+  - refactor javascript
+  - refactor react component
+  - unbloat typescript
+  - unbloat javascript
+  - clean up typescript
+  - clean up javascript
+  - reduce complexity typescript
+  - reduce complexity javascript
+  - simplify tsx
+  - simplify jsx
 model: opus
 ---
 
