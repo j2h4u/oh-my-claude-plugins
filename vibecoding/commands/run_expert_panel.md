@@ -153,6 +153,8 @@ For file deliverables, save to `/mnt/user-data/outputs/` as markdown.
 
 | Role | Mandate | Intentional Bias | Signature Question |
 |---|---|---|---|
+| **Product Manager** | Owns scope, prioritization, and acceptance criteria. Translates business needs into actionable requirements. Cuts features that don't serve the user. | User value & focus | *"Does the user actually need this?"* |
+| **Team Lead** | Ensures the plan is implementable by the team. Evaluates skill gaps, workload, code review burden, and onboarding cost. Guards team capacity. | Feasibility & team health | *"Can the team deliver and maintain this?"* |
 | **Business Owner** | Advocates for uptime, user experience, cost efficiency, and proportional response. Rejects over-engineering. | Stability & simplicity | *"Is this worth the disruption?"* |
 | **System Architect** | Designs coherent, maintainable solutions. Evaluates systemic impact, dependencies, and technical debt. | Long-term health & elegance | *"How does this fit the whole system?"* |
 | **Security Analyst** | Identifies attack surfaces, privilege escalation, compliance gaps. Proposes hardening. Assumes breach. | Zero trust & least privilege | *"How can this be exploited?"* |
@@ -160,6 +162,8 @@ For file deliverables, save to `/mnt/user-data/outputs/` as markdown.
 | **Sys Admin** | Deep Linux internals: systemd, networking, filesystems, kernel tuning, packages, logging. | OS-level precision | *"What will actually happen on the box?"* |
 | **Researcher** | Finds best practices, official docs, CVEs, changelogs, community-validated solutions. Cites sources. | Evidence over opinion | *"What does the documentation say?"* |
 | **QA Engineer** | Designs validation, edge-case tests, rollback verification. Actively tries to break proposed solutions. | Adversarial & failure-aware | *"What if this fails halfway through?"* |
+| **SRE** | Monitors observability, SLOs, error budgets, alerting, and graceful degradation. Thinks in failure domains and blast radius. Consulted, not decisive. | Observability & resilience | *"How will we know when this breaks in production?"* |
+| **Kaizen Master** | Challenges over-engineering, premature abstraction, and scope creep. Advocates for incremental delivery, YAGNI, poka-yoke (error-proofing by design), and JIT complexity. Kills gold-plating. | Simplicity & incrementalism | *"Do we need this now, or are we solving a future problem?"* |
 
 ### When to skip experts
 
@@ -241,6 +245,26 @@ Use when delivering a design doc file:
 ## Next Steps
 1. [Action] — [Owner/Timeline if known]
 ```
+
+---
+
+## Execution Mode
+
+By default, all experts run sequentially within the main context. However, when the problem is complex or multiple experts need deep independent analysis, **launch experts as parallel subagents** using the Task tool:
+
+```
+Task(subagent_type="general-purpose", prompt="You are [Role]. Analyze the following problem from your perspective: ...")
+```
+
+**When to use subagents:**
+- 3+ experts need to analyze simultaneously (saves time)
+- An expert needs to do deep research (Researcher searching docs, SRE checking monitoring)
+- The problem is large enough that sequential analysis would lose context
+
+**When to stay sequential:**
+- Simple problems with 2-3 expert voices
+- Quick brainstorming where back-and-forth matters
+- User explicitly asks for inline discussion
 
 ---
 

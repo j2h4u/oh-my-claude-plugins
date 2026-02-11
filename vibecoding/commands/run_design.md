@@ -145,9 +145,11 @@ Evaluate each approach against:
 | 5 | Pattern alignment — follows established codebase conventions | High |
 | 6 | DRY — maximizes reuse of existing code | High |
 | 7 | Testability — can be comprehensively tested | High |
-| 8 | Maintainability — easy to understand and modify | Medium |
-| 9 | Performance — no unacceptable latency or resource cost | Medium |
-| 10 | User experience — impact on end users | Medium |
+| 8 | Simplicity (Kaizen) — minimal complexity for current requirements, no premature abstraction | High |
+| 9 | Incrementalism (Kaizen) — can be delivered incrementally, avoids big-bang changes | Medium |
+| 10 | Maintainability — easy to understand and modify | Medium |
+| 11 | Performance — no unacceptable latency or resource cost | Medium |
+| 12 | User experience — impact on end users | Medium |
 
 ### 2.3 Rejection Criteria
 
@@ -160,6 +162,9 @@ Evaluate each approach against:
 - Allows arbitrary writes outside designated areas
 - Requires disabling security profiles or protections
 - Runs with unnecessarily elevated privileges
+
+- Solves hypothetical future requirements instead of current needs (YAGNI)
+- Introduces abstractions for one-time operations
 
 Add project-specific rejection criteria from the security documentation.
 
@@ -394,6 +399,26 @@ Identify which project documentation needs updates based on the feature:
 | Configuration changes | Config reference docs |
 
 Include specific additions/changes in the design document. Follow each document's existing style.
+
+---
+
+## Execution Mode
+
+By default, phases run sequentially within the main context. However, for complex features, **launch independent analyses as parallel subagents** using the Task tool:
+
+```
+Task(subagent_type="general-purpose", prompt="Analyze [aspect] of the following feature design: ...")
+```
+
+**Recommended subagent use:**
+- Phase 1: Launch Explore agents in parallel to study different documentation areas
+- Phase 2: Generate approaches in parallel subagents for independent thinking
+- Phase 4.2: Security threat modeling as a dedicated subagent
+- Verification: Run Grounded Verification as a background agent to independently check results
+
+**When to stay sequential:**
+- User consultation (Phase 3) — always inline
+- Simple features where parallelism adds overhead
 
 ---
 
