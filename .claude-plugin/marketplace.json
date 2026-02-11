@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "Personal collection of Claude Code skills, agents, and plugins",
-    "version": "1.3.6"
+    "version": "1.3.7"
   },
   "plugins": [
     {
@@ -22,8 +22,8 @@
     },
     {
       "name": "git-tools",
-      "description": "Git workflows: GitHub CLI, changelogs, conventional commits, releases",
-      "version": "1.0.0",
+      "description": "Git workflows: GitHub CLI, repo creation, changelogs, conventional commits, releases",
+      "version": "1.0.1",
       "author": {
         "name": "j2h4u"
       },
@@ -62,7 +62,7 @@
     },
     {
       "name": "claude-code-meta",
-      "description": "Claude Code tooling: skill creation, MCP development, CLAUDE.md management",
+      "description": "Claude Code tooling: skill creation, MCP development, CLAUDE.md management, statusline, orphan cleanup",
       "version": "1.0.15",
       "author": {
         "name": "j2h4u"
@@ -72,8 +72,8 @@
     },
     {
       "name": "productivity",
-      "description": "Productivity tools: meeting transcript analysis",
-      "version": "1.0.0",
+      "description": "Productivity tools: meeting transcript analysis, text compression",
+      "version": "1.0.1",
       "author": {
         "name": "j2h4u"
       },
@@ -98,6 +98,26 @@
         "name": "j2h4u"
       },
       "source": "./databases",
+      "category": "development"
+    },
+    {
+      "name": "programming-languages",
+      "description": "Programming language guides: TypeScript comprehensive guide with modern tooling",
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "./programming-languages",
+      "category": "development"
+    },
+    {
+      "name": "vibecoding",
+      "description": "Vibe-based development workflow: design, expert panel, unbloating commands",
+      "version": "1.0.0",
+      "author": {
+        "name": "j2h4u"
+      },
+      "source": "./vibecoding",
       "category": "development"
     }
   ]

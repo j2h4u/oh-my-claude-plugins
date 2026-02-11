@@ -1,7 +1,7 @@
 {
   "name": "git-tools",
-  "version": "1.0.0",
-  "description": "Git workflows: GitHub CLI, changelogs, conventional commits, releases",
+  "version": "1.0.1",
+  "description": "Git workflows: GitHub CLI, repo creation, changelogs, conventional commits, releases",
   "author": {
     "name": "j2h4u"
   }

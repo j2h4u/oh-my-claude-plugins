@@ -1,7 +1,7 @@
 {
   "name": "productivity",
-  "version": "1.0.0",
-  "description": "Productivity tools: meeting transcript analysis",
+  "version": "1.0.1",
+  "description": "Productivity tools: meeting transcript analysis, text compression",
   "author": {
     "name": "j2h4u"
   }
