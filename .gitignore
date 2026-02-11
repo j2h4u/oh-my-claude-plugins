@@ -48,6 +48,7 @@ temp/
 # Work in progress (personal/sensitive data)
 docs/_WIP/
 new-skill/
+inbox/
 
 # Archives
 *.zip
