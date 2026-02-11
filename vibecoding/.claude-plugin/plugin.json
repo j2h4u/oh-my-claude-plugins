@@ -1,7 +1,7 @@
 {
   "name": "vibecoding",
-  "version": "1.0.0",
-  "description": "Vibe-based development workflow: design, expert panel, unbloating commands",
+  "version": "1.0.1",
+  "description": "Vibe-based development workflow: feature design, multi-expert panel brainstorming",
   "author": {
     "name": "j2h4u"
   }

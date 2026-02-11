@@ -53,3 +53,8 @@ new-skill/
 *.zip
 *.tar.gz
 *.rar
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
