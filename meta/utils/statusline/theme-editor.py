@@ -2,7 +2,7 @@
 """TUI theme editor for Claude Code statusline.
 
 Run: python3 theme-editor.py
-Config: ~/.config/claude-statusline/theme.json
+Config: ~/.config/omcc-statusline/theme.json
 """
 
 import json
@@ -19,6 +19,12 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "omcc-statusline"
 CONFIG_FILE = CONFIG_DIR / "theme.json"
+
+# --- demo/example data -------------------------------------------------------
+
+DEMO_PARENT_DIR = "workspace/"
+DEMO_CURRENT_DIR = "my-project/"
+DEMO_BRANCH = "feature/wonderful-new-feature"
 
 # --- ANSI helpers ------------------------------------------------------------
 
@@ -77,10 +83,10 @@ class ElementDef:
     group: str      # visual group id
 
 ELEMENTS = [
-    ElementDef("dir_parent",    "Parent dir",     "Muted parent directory in path",     "j2h4u/",   "dir"),
-    ElementDef("dir_name",      "Current dir",    "Current working directory name",     "openclaw/","dir"),
-    ElementDef("branch_sign",   "Branch sign",    "Git branch indicator symbol",        "⑂",        "git"),
-    ElementDef("branch_name",   "Branch name",    "Current git branch name",            "main",     "git"),
+    ElementDef("dir_parent",    "Parent dir",     "Muted parent directory in path",     DEMO_PARENT_DIR,   "dir"),
+    ElementDef("dir_name",      "Current dir",    "Current working directory name",     DEMO_CURRENT_DIR,  "dir"),
+    ElementDef("branch_sign",   "Branch sign",    "Git branch indicator symbol",        "⑂",               "git"),
+    ElementDef("branch_name",   "Branch name",    "Current git branch name",            DEMO_BRANCH,       "git"),
     ElementDef("git_dirty",     "Dirty",          "Unstaged changes indicator",         "*",        "git"),
     ElementDef("git_staged",    "Staged",         "Staged changes indicator",           "+",        "git"),
     ElementDef("git_untracked", "Untracked",      "Untracked files indicator",          "?",        "git"),
@@ -242,9 +248,9 @@ class Editor:
 
         # (key_or_None, visible_text) — None means plain separator
         segments: list[tuple[str | None, str]] = [
-            ("dir_parent", "j2h4u/"), ("dir_name", "openclaw/"),
+            ("dir_parent", DEMO_PARENT_DIR), ("dir_name", DEMO_CURRENT_DIR),
             (None, " "),
-            ("branch_sign", "⑂"), ("branch_name", "main"),
+            ("branch_sign", "⑂"), ("branch_name", DEMO_BRANCH),
             ("git_dirty", "*"), ("git_staged", "+"),
             ("git_untracked", "?"),
             ("git_ahead", "↑"), ("git_behind", "↓"),

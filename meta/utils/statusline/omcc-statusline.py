@@ -25,20 +25,44 @@ from pathlib import Path
 
 # --- constants ---------------------------------------------------------------
 
+# Display
 PARENT_DIR_MAX_LEN = 15
+BRANCH_LABEL = "⑂"
+PR_DOT = "⁕"
+
+# Demo/example data (used in --demo mode)
+DEMO_DIR_NAME = "my-project/"
+DEMO_BRANCH_MAIN = "feature/wonderful-new-feature"
+DEMO_BRANCH_FEATURE = "feat/auth"
+DEMO_BRANCH_DEV = "develop"
+
+# Cache TTLs (seconds)
 PR_CACHE_TTL = 300       # 5 min
 CI_CACHE_TTL = 120       # 2 min
 GH_CHECK_TTL = 1800      # 30 min
 
+# Timeouts (seconds) - by operation type
+TIMEOUT_SUBPROCESS = 5   # default for run() helper function
+TIMEOUT_GIT = 3          # git status (local operation, fast)
+TIMEOUT_GH_API = 15      # all GitHub API calls (GraphQL, REST)
+TIMEOUT_CCUSAGE = 30     # bun x ccusage (can be slow)
+
+# GitHub API limits
+GH_PR_FETCH_LIMIT = 20   # max PRs to fetch in GraphQL query
+
+# ccusage config
+CCUSAGE_REFRESH_INTERVAL = 60  # seconds
+
+# Error message truncation
+STDERR_MAX_LEN = 50      # max stderr length in error messages
+
+# Paths
 CACHE_DIR = Path("/tmp") / "omcc-statusline"
 THEME_FILE = Path.home() / ".config" / "omcc-statusline" / "theme.json"
 PR_CACHE_FILE = CACHE_DIR / "pr-status.json"
 PR_LOCK_FILE = CACHE_DIR / "refresh.lock"
 GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"
 CI_CACHE_DIR = CACHE_DIR / "ci"
-
-BRANCH_LABEL = "⑂"
-PR_DOT = "⁕"
 
 
 # --- colors ------------------------------------------------------------------
@@ -133,7 +157,7 @@ SEP2 = f" {T.sep}|{T.R} "
 # --- theme config loading ----------------------------------------------------
 
 _ATTR_SGR = {
-    "dim": "\033[2m", "bold": "\033[1m", "italic": "\033[3m",
+    "none": "", "dim": "\033[2m", "bold": "\033[1m", "italic": "\033[3m",
     "underline": "\033[4m", "ul_double": "\033[21m", "ul_curly": "\033[4:3m",
     "ul_dotted": "\033[4:4m", "ul_dashed": "\033[4:5m",
     "blink": "\033[5m", "strike": "\033[9m", "overline": "\033[53m", "reverse": "\033[7m",
@@ -159,6 +183,7 @@ def _build_ansi(entry: dict) -> str:
 def _load_theme_config() -> None:
     """Load theme overrides from config file into T class."""
     global SEP2
+
     if not THEME_FILE.exists():
         return
     try:
@@ -173,7 +198,7 @@ def _load_theme_config() -> None:
 
 # --- helpers -----------------------------------------------------------------
 
-def run(cmd: list[str], *, cwd: str | None = None, timeout: float = 5) -> str | None:
+def run(cmd: list[str], *, cwd: str | None = None, timeout: float = TIMEOUT_SUBPROCESS) -> str | None:
     """Run a subprocess, return stdout or None on any failure."""
     try:
         r = subprocess.run(
@@ -277,7 +302,7 @@ def get_git_info(cwd: str) -> tuple[str, str]:
     indicators = ""
 
     # one call for branch + file statuses
-    out = run(["git", "-C", cwd, "--no-optional-locks", "status", "--porcelain=v1", "--branch"], timeout=3)
+    out = run(["git", "-C", cwd, "--no-optional-locks", "status", "--porcelain=v1", "--branch"], timeout=TIMEOUT_GIT)
     if out is None:
         return branch, indicators
 
@@ -365,7 +390,7 @@ try:
     gql = subprocess.run(
         ["gh", "api", "graphql", "-f", "query=" + '''
         query {
-            search(query: "is:open is:pr author:@me", type: ISSUE, first: 20) {
+            search(query: "is:open is:pr author:@me", type: ISSUE, first: ''' + str(GH_PR_FETCH_LIMIT) + ''') {
                 nodes {
                     ... on PullRequest {
                         number
@@ -386,13 +411,13 @@ try:
             }
         }
         '''.strip()],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=TIMEOUT_GH_API,
     )
     prs = json.loads(gql.stdout) if gql.returncode == 0 else {}
 
     # REST: unread notifications (participating)
     notif = subprocess.run(
-        ["gh", "api", "notifications"], capture_output=True, text=True, timeout=15,
+        ["gh", "api", "notifications"], capture_output=True, text=True, timeout=TIMEOUT_GH_API,
     )
     unread = 0
     if notif.returncode == 0:
@@ -575,7 +600,7 @@ def get_ci_status(cwd: str, branch: str) -> str:
     out = run(
         ["gh", "api", f"repos/{owner}/{repo}/commits/{branch}/check-runs",
          "--jq", ".check_runs"],
-        timeout=10,
+        timeout=TIMEOUT_GH_API,
     )
     if out is None:
         return ""
@@ -636,15 +661,27 @@ def get_ccusage(input_json: str) -> str:
         env = {**os.environ, "FORCE_COLOR": "1"}
         r = subprocess.run(
             ["bun", "x", "ccusage", "statusline",
-             "--visual-burn-rate", "text", "--refresh-interval", "60"],
-            input=input_json, capture_output=True, text=True, timeout=15,
+             "--visual-burn-rate", "text", "--refresh-interval", str(CCUSAGE_REFRESH_INTERVAL)],
+            input=input_json, capture_output=True, text=True, timeout=TIMEOUT_CCUSAGE,
             env=env,
         )
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout.strip()
-        return f"{T.err}ccusage error{T.R}"
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return f"{T.err}ccusage error{T.R}"
+        # Show stderr truncated if available for non-zero returncode
+        stderr_hint = ""
+        if r.stderr:
+            stderr = r.stderr.strip()
+            if len(stderr) <= STDERR_MAX_LEN:
+                stderr_hint = f" ({stderr})"
+            else:
+                stderr_hint = f" ({stderr[:STDERR_MAX_LEN - 3]}…)"
+        return f"{T.err}ccusage code {r.returncode}{stderr_hint}{T.R}"
+    except subprocess.TimeoutExpired:
+        return f"{T.err}ccusage timeout ({TIMEOUT_CCUSAGE}s){T.R}"
+    except FileNotFoundError:
+        return f"{T.err}bun not found{T.R}"
+    except OSError as e:
+        return f"{T.err}ccusage OS error{T.R}"
 
 
 # --- render ------------------------------------------------------------------
@@ -677,8 +714,8 @@ def demo() -> None:
 
     print("=== Demo: all green ===")
     print(render(
-        f"{T.dir_name}my-project/{T.R}",
-        "main",
+        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
+        DEMO_BRANCH_MAIN,
         f"{T.git_staged}+{T.R}",
         "",
         f"{T.pr_ok}{D}{D}{D}{T.R}",
@@ -687,8 +724,8 @@ def demo() -> None:
 
     print("=== Demo: mixed CI + unread comments ===")
     print(render(
-        f"{T.dir_name}my-project/{T.R}",
-        "feat/auth",
+        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
+        DEMO_BRANCH_FEATURE,
         f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
         f"{T.ci_fail}CI{T.R}",
         f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}",
@@ -697,8 +734,8 @@ def demo() -> None:
 
     print("=== Demo: gh not installed ===")
     print(render(
-        f"{T.dir_name}my-project/{T.R}",
-        "main",
+        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
+        DEMO_BRANCH_MAIN,
         "",
         "",
         f"{T.err}gh not installed{T.R}",
@@ -707,8 +744,8 @@ def demo() -> None:
 
     print("=== Demo: bun not found ===")
     print(render(
-        f"{T.dir_name}my-project/{T.R}",
-        "develop",
+        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
+        DEMO_BRANCH_DEV,
         f"{T.git_ahead}↑{T.R}",
         "",
         "",
@@ -740,9 +777,9 @@ def main() -> None:
     except TimeoutError:
         print("FATAL: Timed out reading stdin", file=sys.stderr)
         sys.exit(1)
-    except Exception:
+    except (OSError, IOError, BrokenPipeError) as e:
         signal.alarm(0)
-        print("FATAL: Failed to read stdin", file=sys.stderr)
+        print(f"FATAL: Failed to read stdin: {e}", file=sys.stderr)
         sys.exit(1)
     finally:
         signal.signal(signal.SIGALRM, old_handler)
