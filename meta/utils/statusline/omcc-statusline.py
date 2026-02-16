@@ -51,7 +51,8 @@ TIMEOUT_CCUSAGE = 30     # bun x ccusage (can be slow)
 GH_PR_FETCH_LIMIT = 20   # max PRs to fetch in GraphQL query
 
 # ccusage config
-CCUSAGE_REFRESH_INTERVAL = 60  # seconds
+CCUSAGE_REFRESH_INTERVAL = 60  # seconds (passed to ccusage --refresh-interval)
+CCUSAGE_CACHE_TTL = 300        # 5 min — how often we re-run ccusage
 
 # Error message truncation
 STDERR_MAX_LEN = 50      # max stderr length in error messages
@@ -63,6 +64,8 @@ PR_CACHE_FILE = CACHE_DIR / "pr-status.json"
 PR_LOCK_FILE = CACHE_DIR / "refresh.lock"
 GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"
 CI_CACHE_DIR = CACHE_DIR / "ci"
+CCUSAGE_CACHE_FILE = CACHE_DIR / "ccusage.txt"
+CCUSAGE_LOCK_FILE = CACHE_DIR / "ccusage.lock"
 
 
 # --- colors ------------------------------------------------------------------
@@ -373,6 +376,9 @@ def _refresh_pr_cache_subprocess() -> None:
 import fcntl, json, os, subprocess, sys
 from pathlib import Path
 
+TIMEOUT_GH_API = """ + str(TIMEOUT_GH_API) + r"""
+GH_PR_FETCH_LIMIT = """ + str(GH_PR_FETCH_LIMIT) + r"""
+
 CACHE_DIR = Path(sys.argv[1])
 LOCK = CACHE_DIR / "refresh.lock"
 CACHE = CACHE_DIR / "pr-status.json"
@@ -383,6 +389,7 @@ fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
 try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 except BlockingIOError:
+    os.close(fd)
     sys.exit(0)
 
 try:
@@ -652,36 +659,79 @@ def _format_ci_label(conclusion: str | None) -> str:
 
 # --- ccusage -----------------------------------------------------------------
 
+def _refresh_ccusage_subprocess(input_json: str) -> None:
+    """Fire-and-forget background refresh of ccusage cache."""
+    script = r"""
+import fcntl, json, os, subprocess, shutil, sys
+from pathlib import Path
+
+CACHE_DIR = Path(sys.argv[1])
+LOCK = CACHE_DIR / "ccusage.lock"
+CACHE = CACHE_DIR / "ccusage.txt"
+TIMEOUT = """ + str(TIMEOUT_CCUSAGE) + r"""
+REFRESH_INTERVAL = """ + str(CCUSAGE_REFRESH_INTERVAL) + r"""
+
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    os.close(fd)
+    sys.exit(0)
+
+try:
+    if shutil.which("bun") is None:
+        sys.exit(1)
+
+    input_data = sys.stdin.read()
+    env = {**os.environ, "FORCE_COLOR": "1"}
+    r = subprocess.run(
+        ["bun", "x", "ccusage", "statusline",
+         "--visual-burn-rate", "text", "--refresh-interval", str(REFRESH_INTERVAL)],
+        input=input_data, capture_output=True, text=True, timeout=TIMEOUT, env=env,
+    )
+    if r.returncode == 0 and r.stdout.strip():
+        tmp = str(CACHE) + f".tmp.{os.getpid()}"
+        with open(tmp, "w") as f:
+            f.write(r.stdout.strip())
+        os.replace(tmp, str(CACHE))
+except subprocess.TimeoutExpired:
+    pass
+finally:
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script, str(CACHE_DIR)],
+        start_new_session=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        proc.stdin.write(input_json.encode())
+        proc.stdin.flush()
+        proc.stdin.close()
+    except (OSError, BrokenPipeError):
+        pass
+
+
 def get_ccusage(input_json: str) -> str:
-    """Run ccusage statusline via bun, return its output."""
+    """Return ccusage output from cache, trigger background refresh if stale."""
     if shutil.which("bun") is None:
         return f"{T.err}bun not found{T.R}"
 
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not is_cache_fresh(CCUSAGE_CACHE_FILE, CCUSAGE_CACHE_TTL):
+        _refresh_ccusage_subprocess(input_json)
+
     try:
-        env = {**os.environ, "FORCE_COLOR": "1"}
-        r = subprocess.run(
-            ["bun", "x", "ccusage", "statusline",
-             "--visual-burn-rate", "text", "--refresh-interval", str(CCUSAGE_REFRESH_INTERVAL)],
-            input=input_json, capture_output=True, text=True, timeout=TIMEOUT_CCUSAGE,
-            env=env,
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            return r.stdout.strip()
-        # Show stderr truncated if available for non-zero returncode
-        stderr_hint = ""
-        if r.stderr:
-            stderr = r.stderr.strip()
-            if len(stderr) <= STDERR_MAX_LEN:
-                stderr_hint = f" ({stderr})"
-            else:
-                stderr_hint = f" ({stderr[:STDERR_MAX_LEN - 3]}…)"
-        return f"{T.err}ccusage code {r.returncode}{stderr_hint}{T.R}"
-    except subprocess.TimeoutExpired:
-        return f"{T.err}ccusage timeout ({TIMEOUT_CCUSAGE}s){T.R}"
-    except FileNotFoundError:
-        return f"{T.err}bun not found{T.R}"
-    except OSError as e:
-        return f"{T.err}ccusage OS error{T.R}"
+        content = CCUSAGE_CACHE_FILE.read_text().strip()
+        return content if content else f"{T.sep}ccusage loading…{T.R}"
+    except OSError:
+        return f"{T.sep}ccusage loading…{T.R}"
 
 
 # --- render ------------------------------------------------------------------
