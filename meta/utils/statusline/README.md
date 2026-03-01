@@ -1,17 +1,19 @@
-# OMCC Statusline — Two-line statusline with git, PR dots, and token tracking
+# OMCC Statusline — Slot-based multi-line statusline with git, PR dots, and token tracking
 
-Enhanced statusline for Claude Code: directory + git status + PR indicators on line 2, ccusage metrics on line 1.
+Enhanced statusline for Claude Code with a **slot system** — each line is a slot that can be a built-in provider or an external command. Supports N lines, backward compatible.
 
 ## Preview
 
+**3-line with GSD slot (external command):**
 ```
-🤖 Sonnet 4.5 | 💰 $25.17 session
-j2h4u/ ⑂main*+ CI | ⁕⁕💬2
+🤖 Opus 4.6 | 💰 $25.17 session              ← ccusage (built-in)
+⬆ /gsd:update │ Fixing auth bug │ █████░░░░░ 52%  ← gsd (external command)
+my-project/ ⑂main*+ CI | ⁕⁕💬2                ← git (built-in)
 ```
 
-**Mixed PR states (red/blue/green/gray dots):**
+**Default 2-line (no slots config):**
 ```
-🤖 Opus 4.6 | 💰 $58.07 session
+🤖 Sonnet 4.5 | 💰 $12.34 session
 my-project/ ⑂feat/auth*+ CI | ⁕⁕⁕💬3
 ```
 
@@ -23,13 +25,21 @@ my-project/ ⑂main | gh not installed
 
 **Format:**
 ```
-Line 1: <ccusage metrics>
-Line 2: <dir>/ ⑂<branch><git_indicators> [CI] [PR_dots] [💬N]
+Line N: each slot renders one line (empty slots are skipped)
 ```
 
-### Elements
+### Slot System
 
-- **Line 1:** Model name, costs, token burn rate (from `ccusage`)
+Each slot is either a **built-in provider** or an **external command**. Slots run in parallel for speed.
+
+**Built-in providers:**
+- `ccusage` — Model name, costs, token burn rate (via `bun x ccusage`)
+- `git` — Directory + branch + git status + CI + PR dots + notifications
+
+**External commands:** Any shell command that reads JSON from stdin and outputs one line to stdout.
+
+### Git Line Elements
+
 - **dir/** — Current directory (muted gray)
 - **⑂main** — Git branch indicator + branch name (dimmed)
 - **\* + ? ↑ ↓** — Git status:
@@ -84,7 +94,25 @@ brew install gh   # or: apt install gh
 python3 ~/.claude/plugins/marketplace/oh-my-claude-plugins/meta/utils/statusline/omcc-statusline.py --theme
 ```
 
-4. Restart Claude Code.
+4. (Optional) Configure slots in `~/.config/omcc-statusline/theme.json`:
+
+```json
+{
+  "slots": [
+    {"provider": "ccusage"},
+    {"command": "node ~/.claude/hooks/gsd-statusline.js"},
+    {"provider": "git"}
+  ],
+  "dir_parent": {"fg": 239}
+}
+```
+
+Each slot: `{"provider": "<name>"}` for built-in, or `{"command": "<shell cmd>"}` for external.
+Optional `"ttl": <seconds>` for external commands (default: 60s, controls cache lifetime).
+
+**No `slots` key** = default `[ccusage, git]` (backward compatible).
+
+5. Restart Claude Code.
 
 ### Test the statusline
 
@@ -99,23 +127,16 @@ echo '{"workspace":{"current_dir":"'"$(pwd)"'"}}' | python3 omcc-statusline.py
 ## How It Works
 
 1. **Reads JSON from Claude Code stdin** — Contains workspace directory, model, tokens, costs
-2. **Extracts directory name** — Current dir + parent dir (truncated)
-3. **Fetches git info** — Branch name, ahead/behind counts, working tree status
-4. **Fetches PR status** (background, cached) — Open PRs via GitHub GraphQL API
-5. **Fetches CI status** (cached) — Per-branch check-runs via GitHub REST API
-6. **Fetches ccusage** — Token usage, burn rate, costs (via `bun x ccusage`)
-7. **Formats two-line output** — Parallel thread pool for fast concurrent fetches
-8. **Returns styled output** — ANSI colors based on theme config
+2. **Loads slot config** from `~/.config/omcc-statusline/theme.json` (or defaults to `[ccusage, git]`)
+3. **Executes all slots in parallel** via thread pool — built-in providers and external commands run concurrently
+4. **Each slot produces one line** — empty lines are filtered out
+5. **Returns styled multi-line output** — ANSI colors based on theme config
 
-### Parallel Fetching
+### Slot Execution
 
-Four independent data sources fetch concurrently in thread pool:
-- Git info (subprocess, ~100ms)
-- PR status (disk cache read, ~5ms on cache hit)
-- ccusage (subprocess, variable)
-- CI status (depends on git branch, runs after git completes)
+All slots run concurrently in a thread pool. Built-in providers (`ccusage`, `git`) handle their own data fetching internally. External commands receive the full JSON on stdin and must output one line to stdout.
 
-Blocking on any one source doesn't delay the others.
+**External command caching:** Output is cached in `/tmp/omcc-statusline/slots/` with configurable TTL (default 60s). On failure/timeout (5s limit), stale cache is used as fallback.
 
 ### PR Status Caching
 

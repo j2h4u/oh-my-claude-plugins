@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Claude Code statusline — dir, git, PR dots, ccusage.
+"""Claude Code statusline — slot-based multi-line statusline.
 
-Reads JSON from stdin (Claude Code statusline protocol), renders a two-line
-status: ccusage on line 1, directory + git + PR status on line 2.
+Reads JSON from stdin (Claude Code statusline protocol), renders N lines
+via a slot system. Each slot is either a built-in provider (ccusage, git) or
+an external shell command. Slots are configured in theme.json under "slots".
+
+Default (no config): line 1 = ccusage, line 2 = dir + git + CI + PR.
 
 Git status indicators:
   *  dirty (unstaged changes)   — yellow dim
@@ -12,6 +15,7 @@ Git status indicators:
   ↓  behind remote              — purple
 """
 
+import hashlib
 import json
 import os
 import re
@@ -66,6 +70,10 @@ GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"
 CI_CACHE_DIR = CACHE_DIR / "ci"
 CCUSAGE_CACHE_FILE = CACHE_DIR / "ccusage.txt"
 CCUSAGE_LOCK_FILE = CACHE_DIR / "ccusage.lock"
+SLOT_CACHE_DIR = CACHE_DIR / "slots"
+SLOT_TIMEOUT = 5             # max seconds for external slot command
+SLOT_CACHE_TTL = 60          # seconds — stale cache fallback for external slots
+DEFAULT_SLOTS = [{"provider": "ccusage"}, {"provider": "git"}]
 
 
 # --- colors ------------------------------------------------------------------
@@ -183,20 +191,23 @@ def _build_ansi(entry: dict) -> str:
     return "".join(parts)
 
 
-def _load_theme_config() -> None:
-    """Load theme overrides from config file into T class."""
+def _load_theme_config() -> list[dict]:
+    """Load theme overrides from config file into T class. Return slots config."""
     global SEP2
 
     if not THEME_FILE.exists():
-        return
+        return list(DEFAULT_SLOTS)
     try:
         config = json.loads(THEME_FILE.read_text())
     except (json.JSONDecodeError, OSError):
-        return
+        return list(DEFAULT_SLOTS)
     for key, entry in config.items():
+        if key == "slots":
+            continue
         if hasattr(T, key) and key != "R":
             setattr(T, key, _build_ansi(entry))
     SEP2 = f" {T.sep}|{T.R} "
+    return config.get("slots", list(DEFAULT_SLOTS))
 
 
 # --- helpers -----------------------------------------------------------------
@@ -734,26 +745,134 @@ def get_ccusage(input_json: str) -> str:
         return f"{T.sep}ccusage loading…{T.R}"
 
 
+# --- slot providers ----------------------------------------------------------
+
+def provider_ccusage(input_json: str, cwd: str) -> str:
+    """Built-in provider: ccusage metrics line."""
+    return get_ccusage(input_json)
+
+
+def provider_git(input_json: str, cwd: str) -> str:
+    """Built-in provider: directory + git + CI + PR line."""
+    dir_name = get_dir_name(cwd)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        git_future = pool.submit(get_git_info, cwd)
+        pr_future = pool.submit(get_pr_status)
+
+        try:
+            branch, git_status = git_future.result()
+        except Exception:
+            branch, git_status = "", ""
+
+        try:
+            pr_status = pr_future.result()
+        except Exception:
+            pr_status = ""
+
+    # CI depends on branch, runs after git
+    ci_label = ""
+    if branch:
+        try:
+            ci_label = get_ci_status(cwd, branch)
+        except Exception:
+            ci_label = ""
+
+    # assemble line
+    line = dir_name
+    if branch:
+        line += f" {T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
+        if git_status:
+            line += git_status
+    if ci_label:
+        line += f" {ci_label}"
+    if pr_status:
+        line += f"{SEP2}{pr_status}"
+    return line
+
+
+PROVIDERS: dict[str, callable] = {
+    "ccusage": provider_ccusage,
+    "git": provider_git,
+}
+
+
+# --- external slot executor --------------------------------------------------
+
+def run_external_slot(command: str, input_json: str, ttl: int) -> str:
+    """Run an external command as a slot, with disk cache and stale fallback."""
+    SLOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    expanded = os.path.expanduser(command)
+    cache_key = hashlib.md5(expanded.encode()).hexdigest()
+    cache_file = SLOT_CACHE_DIR / cache_key
+
+    # return fresh cache
+    if is_cache_fresh(cache_file, ttl):
+        try:
+            return cache_file.read_text().strip()
+        except OSError:
+            pass
+
+    # run command
+    env = {**os.environ, "FORCE_COLOR": "1"}
+    try:
+        r = subprocess.run(
+            expanded, shell=True, input=input_json,
+            capture_output=True, text=True, timeout=SLOT_TIMEOUT, env=env,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            output = r.stdout.strip()
+            try:
+                cache_file.write_text(output)
+            except OSError:
+                pass
+            return output
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+    # stale cache fallback
+    try:
+        return cache_file.read_text().strip()
+    except OSError:
+        return ""
+
+
+# --- slot orchestrator -------------------------------------------------------
+
+def execute_slots(slots: list[dict], input_json: str, cwd: str) -> list[str]:
+    """Execute all slots in parallel, return ordered list of non-empty lines."""
+
+    def _run_slot(slot: dict) -> str:
+        provider = slot.get("provider")
+        if provider:
+            func = PROVIDERS.get(provider)
+            if func:
+                return func(input_json, cwd)
+            return ""
+        command = slot.get("command")
+        if command:
+            ttl = slot.get("ttl", SLOT_CACHE_TTL)
+            return run_external_slot(command, input_json, ttl)
+        return ""
+
+    results = [""] * len(slots)
+    with ThreadPoolExecutor(max_workers=max(len(slots), 1)) as pool:
+        futures = {pool.submit(_run_slot, slot): i for i, slot in enumerate(slots)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                results[idx] = future.result()
+            except Exception:
+                results[idx] = ""
+
+    return [line for line in results if line]
+
+
 # --- render ------------------------------------------------------------------
 
-def render(dir_name: str, branch: str, git_status: str, ci_label: str,
-           pr_status: str, ccusage_line: str) -> str:
-    """Render the two-line statusline."""
-    # line 2: dir + git + CI + PR
-    line2 = dir_name
-
-    if branch:
-        line2 += f" {T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
-        if git_status:
-            line2 += git_status
-
-    if ci_label:
-        line2 += f" {ci_label}"
-
-    if pr_status:
-        line2 += f"{SEP2}{pr_status}"
-
-    return f"{ccusage_line}\n{line2}"
+def render(lines: list[str]) -> str:
+    """Join slot output lines."""
+    return "\n".join(lines)
 
 
 # --- demo --------------------------------------------------------------------
@@ -762,45 +881,56 @@ def demo() -> None:
     """Print demo scenarios for visual testing."""
     D = PR_DOT
 
-    print("=== Demo: all green ===")
-    print(render(
-        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
-        DEMO_BRANCH_MAIN,
-        f"{T.git_staged}+{T.R}",
-        "",
-        f"{T.pr_ok}{D}{D}{D}{T.R}",
+    def git_line(branch: str, status: str = "", ci: str = "", pr: str = "") -> str:
+        """Assemble a git-style line for demo display."""
+        line = f"{T.dir_name}{DEMO_DIR_NAME}{T.R}"
+        if branch:
+            line += f" {T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
+            if status:
+                line += status
+        if ci:
+            line += f" {ci}"
+        if pr:
+            line += f"{SEP2}{pr}"
+        return line
+
+    gsd_line = f"⬆ /gsd:update {T.sep}│{T.R} Fixing auth bug {T.sep}│{T.R} █████░░░░░ 52%"
+
+    print("=== Demo: 3-line with GSD slot ===")
+    print(render([
+        f"🤖 Opus 4.6 {T.sep}|{T.R} 💰 $25.17 session",
+        gsd_line,
+        git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
+                 f"{T.ci_fail}CI{T.R}",
+                 f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬2{T.R}"),
+    ]))
+
+    print("=== Demo: all green (2-line, no GSD) ===")
+    print(render([
         f"🤖 Sonnet 4.5 {T.sep}|{T.R} 💰 $12.34 session",
-    ))
+        git_line(DEMO_BRANCH_MAIN, f"{T.git_staged}+{T.R}", "",
+                 f"{T.pr_ok}{D}{D}{D}{T.R}"),
+    ]))
 
     print("=== Demo: mixed CI + unread comments ===")
-    print(render(
-        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
-        DEMO_BRANCH_FEATURE,
-        f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
-        f"{T.ci_fail}CI{T.R}",
-        f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}",
+    print(render([
         f"🤖 Opus 4.6 {T.sep}|{T.R} 💰 $58.07 session",
-    ))
+        git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
+                 f"{T.ci_fail}CI{T.R}",
+                 f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}"),
+    ]))
 
     print("=== Demo: gh not installed ===")
-    print(render(
-        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
-        DEMO_BRANCH_MAIN,
-        "",
-        "",
-        f"{T.err}gh not installed{T.R}",
+    print(render([
         f"🤖 Sonnet 4.5 {T.sep}|{T.R} 💰 $0.42 session",
-    ))
+        git_line(DEMO_BRANCH_MAIN, "", "", f"{T.err}gh not installed{T.R}"),
+    ]))
 
     print("=== Demo: bun not found ===")
-    print(render(
-        f"{T.dir_name}{DEMO_DIR_NAME}{T.R}",
-        DEMO_BRANCH_DEV,
-        f"{T.git_ahead}↑{T.R}",
-        "",
-        "",
+    print(render([
         f"{T.err}bun not found{T.R}",
-    ))
+        git_line(DEMO_BRANCH_DEV, f"{T.git_ahead}↑{T.R}"),
+    ]))
 
 
 # --- main --------------------------------------------------------------------
@@ -810,7 +940,7 @@ def main() -> None:
         editor = Path(__file__).parent / "theme-editor.py"
         os.execvp(sys.executable, [sys.executable, str(editor)])
 
-    _load_theme_config()
+    slots = _load_theme_config()
 
     if len(sys.argv) > 1 and sys.argv[1] == "--demo":
         demo()
@@ -849,48 +979,8 @@ def main() -> None:
         print("FATAL: Failed to extract current_dir from JSON", file=sys.stderr)
         sys.exit(1)
 
-    # directory name — pure string, no subprocess
-    dir_name = get_dir_name(current_dir)
-
-    # parallel execution of 4 independent data sources
-    results: dict[str, object] = {}
-
-    def _git():
-        return get_git_info(current_dir)
-
-    def _pr():
-        return get_pr_status()
-
-    def _ccusage():
-        return get_ccusage(raw)
-
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {
-            pool.submit(_git): "git",
-            pool.submit(_pr): "pr",
-            pool.submit(_ccusage): "ccusage",
-        }
-
-        for future in as_completed(futures):
-            key = futures[future]
-            try:
-                results[key] = future.result()
-            except Exception:
-                results[key] = ("", "") if key == "git" else ""
-
-    branch, git_status = results.get("git", ("", ""))
-    pr_status = results.get("pr", "")
-    ccusage_line = results.get("ccusage", "")
-
-    # CI status depends on git branch, so it runs after git_info
-    ci_label = ""
-    if branch:
-        try:
-            ci_label = get_ci_status(current_dir, branch)
-        except Exception:
-            ci_label = ""
-
-    print(render(dir_name, branch, git_status, ci_label, pr_status, ccusage_line))
+    lines = execute_slots(slots, raw, current_dir)
+    print(render(lines))
 
 
 if __name__ == "__main__":

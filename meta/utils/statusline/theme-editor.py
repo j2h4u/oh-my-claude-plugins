@@ -154,7 +154,14 @@ def load_theme() -> dict[str, ThemeEntry]:
 
 def save_theme(theme: dict[str, ThemeEntry]) -> str:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    data = {}
+    # preserve non-theme keys (e.g. "slots") from existing config
+    existing = {}
+    if CONFIG_FILE.exists():
+        try:
+            existing = json.loads(CONFIG_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    data = {k: v for k, v in existing.items() if k not in theme}
     for key, entry in theme.items():
         d: dict = {}
         if entry.fg is not None:
