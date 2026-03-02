@@ -2,7 +2,7 @@
 """TUI theme editor for Claude Code statusline.
 
 Run: python3 theme-editor.py
-Config: ~/.config/omcc-statusline/theme.json
+Config: ~/.config/omcc-statusline/config.json
 """
 
 import json
@@ -18,7 +18,7 @@ from pathlib import Path
 # --- paths -------------------------------------------------------------------
 
 CONFIG_DIR = Path.home() / ".config" / "omcc-statusline"
-CONFIG_FILE = CONFIG_DIR / "theme.json"
+CONFIG_FILE = CONFIG_DIR / "config.json"
 
 # --- demo/example data -------------------------------------------------------
 
@@ -102,6 +102,12 @@ ELEMENTS = [
     ElementDef("pr_none",       "PR unknown",     "PR dot — no CI status",              "⁕",        "pr"),
     ElementDef("notif",         "Notifications",  "Unread notification count",          "💬3",      "pr"),
     ElementDef("err",           "Error",          "Error messages",                     "error",    "ui"),
+    ElementDef("lim_ok",        "Lim OK",         "Limit utilization < 50%",            "12%",      "lim"),
+    ElementDef("lim_warn",      "Lim warn",       "Limit utilization 50-80%",           "70%",      "lim"),
+    ElementDef("lim_crit",      "Lim crit",       "Limit utilization > 80%",            "100%",     "lim"),
+    ElementDef("lim_label",     "Lim label",      "Window label (5h, 7d, ctx)",         "5h",       "lim"),
+    ElementDef("lim_time",      "Lim time",       "Reset countdown",                    "4h26m",    "lim"),
+    ElementDef("lim_bar_off",   "Bar empty",      "Empty bar portion (░)",              "░░░░░",    "lim"),
 ]
 
 # --- theme data --------------------------------------------------------------
@@ -132,6 +138,12 @@ DEFAULTS: dict[str, ThemeEntry] = {
     "notif":          ThemeEntry(fg=6),
     "sep":            ThemeEntry(fg=8),
     "err":            ThemeEntry(fg=1),
+    "lim_ok":         ThemeEntry(fg=23),
+    "lim_warn":       ThemeEntry(fg=95),
+    "lim_crit":       ThemeEntry(fg=88),
+    "lim_label":      ThemeEntry(fg=238),
+    "lim_time":       ThemeEntry(fg=238),
+    "lim_bar_off":    ThemeEntry(fg=237),
 }
 
 # --- config I/O --------------------------------------------------------------

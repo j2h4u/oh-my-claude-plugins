@@ -2,10 +2,10 @@
 """Claude Code statusline — slot-based multi-line statusline.
 
 Reads JSON from stdin (Claude Code statusline protocol), renders N lines
-via a slot system. Each slot is either a built-in provider (ccusage, git) or
-an external shell command. Slots are configured in theme.json under "slots".
+via a slot system. Each slot is either a built-in provider (limits, git) or
+an external shell command. Slots are configured in config.json under "slots".
 
-Default (no config): line 1 = ccusage, line 2 = dir + git + CI + PR.
+Default (no config): line 1 = limits (5h/7d usage), line 2 = dir + git + CI + PR.
 
 Git status indicators:
   *  dirty (unstaged changes)   — yellow dim
@@ -57,7 +57,7 @@ STDERR_MAX_LEN = 50      # max stderr length in error messages
 
 # Paths
 CACHE_DIR = Path("/tmp") / "omcc-statusline"
-THEME_FILE = Path.home() / ".config" / "omcc-statusline" / "theme.json"
+THEME_FILE = Path.home() / ".config" / "omcc-statusline" / "config.json"
 PR_CACHE_FILE = CACHE_DIR / "pr-status.json"
 PR_LOCK_FILE = CACHE_DIR / "refresh.lock"
 GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"
@@ -66,9 +66,18 @@ SLOT_CACHE_DIR = CACHE_DIR / "slots"
 SLOT_TIMEOUT = 120           # bg subprocess timeout (not blocking — just prevents zombies)
 SLOT_CACHE_TTL = 60          # seconds — how often to re-run external slot commands
 
-# Default ccusage command (used when no slots configured)
-_CCUSAGE_CMD = "bun x ccusage statusline --visual-burn-rate text --refresh-interval 60"
-DEFAULT_SLOTS = [{"command": _CCUSAGE_CMD, "ttl": 300}, {"provider": "git"}]
+# Limits provider
+LIMITS_CACHE_FILE = CACHE_DIR / "limits-cache.json"
+LIMITS_LOCK_FILE = CACHE_DIR / "limits-refresh.lock"
+LIMITS_CACHE_TTL = 120
+LIMITS_HTTP_TIMEOUT = 5
+LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
+LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
+LIMITS_BAR_WIDTH = 5
+# Unicode block elements: index 0 = empty, 1..7 = 1/8..7/8, 8 = full
+_BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
+
+DEFAULT_SLOTS = [{"provider": "limits"}, {"provider": "git"}]
 
 
 # --- colors ------------------------------------------------------------------
@@ -153,6 +162,13 @@ class T:
     # UI chrome
     sep            = Pal.hi_black          # | separator
     err            = Pal.red               # error messages
+    # limits
+    lim_ok         = Pal.rgb_011           # utilization < 50%  (256-color 23)
+    lim_warn       = Pal.rgb_211           # utilization 50-80% (256-color 95)
+    lim_crit       = Pal.rgb_200           # utilization > 80%  (256-color 88)
+    lim_label      = Pal.gray_6            # window label (5h, 7d, ctx)
+    lim_time       = Pal.gray_6            # reset time
+    lim_bar_off    = Pal.gray_5            # empty portion (░)
     # reset shorthand
     R              = Pal.R
 
@@ -663,6 +679,191 @@ def _format_ci_label(conclusion: str | None) -> str:
     return labels.get(conclusion, "")
 
 
+# --- limits provider ---------------------------------------------------------
+
+def _read_oauth_token() -> str | None:
+    """Read OAuth access token from Claude credentials file."""
+    try:
+        data = json.loads(LIMITS_CREDS_FILE.read_text())
+        return data["claudeAiOauth"]["accessToken"]
+    except (OSError, json.JSONDecodeError, KeyError):
+        return None
+
+
+def _parse_iso_utc(raw: str) -> float | None:
+    """Parse ISO-8601 timestamp to epoch seconds (stdlib only)."""
+    from datetime import datetime, timezone
+    try:
+        # strip fractional seconds (e.g. .127928) before timezone
+        s = re.sub(r'\.\d+', '', raw)
+        # normalize timezone offset
+        s = s.replace("+00:00", "+0000").replace("Z", "+0000")
+        if "+" in s[10:]:
+            dt = datetime.strptime(s, "%Y-%m-%dT%H:%M:%S%z")
+        else:
+            dt = datetime.strptime(s, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except (ValueError, TypeError):
+        return None
+
+
+def _format_duration(minutes: int) -> str:
+    """Format minutes into compact duration: 4h26m, 3d 2h, 23m, now."""
+    if minutes <= 0:
+        return "now"
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    mins = minutes % 60
+    if hours < 24:
+        return f"{hours}h{mins:02d}m" if mins else f"{hours}h"
+    days = hours // 24
+    rem_hours = hours % 24
+    return f"{days}d {rem_hours}h" if rem_hours else f"{days}d"
+
+
+def _limits_bar(pct: float, color: str) -> str:
+    """Render a bar in brackets with sub-character precision (40 steps via Unicode blocks)."""
+    total = round(pct / 100 * LIMITS_BAR_WIDTH * 8)
+    total = max(0, min(LIMITS_BAR_WIDTH * 8, total))
+    full = total // 8
+    frac = total % 8
+    empty = LIMITS_BAR_WIDTH - full - (1 if frac else 0)
+    filled = f"{color}{'█' * full}{_BAR_EIGHTHS[frac] if frac else ''}{T.R}"
+    return f"{filled}{' ' * empty}"
+
+
+def _limits_color(pct: float) -> str:
+    """Return color token based on utilization percentage."""
+    if pct >= 80:
+        return T.lim_crit
+    if pct >= 50:
+        return T.lim_warn
+    return T.lim_ok
+
+
+def _format_limit_window(utilization: float, resets_at: str, label: str) -> str:
+    """Format one limit window: '5h ==-------- 12% 4h26m'."""
+    pct = max(0.0, min(100.0, utilization))
+    color = _limits_color(pct)
+    bar = _limits_bar(pct, color)
+
+    # show reset countdown only when utilization >= 50%
+    time_str = ""
+    if pct >= 50:
+        reset_epoch = _parse_iso_utc(resets_at)
+        if reset_epoch is not None:
+            remaining_min = max(0, int((reset_epoch - time.time()) / 60))
+            time_str = f" {T.lim_time}{_format_duration(remaining_min)}{T.R}"
+
+    pct_str = f"{T.lim_label}{pct:.0f}%{T.R}"
+    return f"{T.lim_label}{label}{T.R} {bar} {pct_str}{time_str}"
+
+
+def _refresh_limits_cache_subprocess() -> None:
+    """Fire-and-forget background refresh of limits cache."""
+    token = _read_oauth_token()
+    if not token:
+        return
+
+    script = r"""
+import fcntl, json, os, sys
+from pathlib import Path
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+
+CACHE = Path(sys.argv[1])
+LOCK = Path(sys.argv[2])
+API_URL = sys.argv[3]
+TOKEN = sys.argv[4]
+TIMEOUT = """ + str(LIMITS_HTTP_TIMEOUT) + r"""
+
+CACHE.parent.mkdir(parents=True, exist_ok=True)
+
+fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    os.close(fd)
+    sys.exit(0)
+
+try:
+    req = Request(API_URL)
+    req.add_header("Authorization", f"Bearer {TOKEN}")
+    req.add_header("anthropic-beta", "oauth-2025-04-20")
+    resp = urlopen(req, timeout=TIMEOUT)
+    data = json.loads(resp.read())
+
+    tmp = str(CACHE) + f".tmp.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, str(CACHE))
+except (URLError, OSError, json.JSONDecodeError, ValueError):
+    pass
+finally:
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)
+"""
+    subprocess.Popen(
+        [sys.executable, "-c", script,
+         str(LIMITS_CACHE_FILE), str(LIMITS_LOCK_FILE),
+         LIMITS_API_URL, token],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def provider_limits(input_json: str, cwd: str) -> str:
+    """Built-in provider: API usage limits (5h/7d windows) + context window."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # trigger background refresh if cache stale
+    if not is_cache_fresh(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL):
+        _refresh_limits_cache_subprocess()
+
+    parts: list[str] = []
+
+    # read cached limits data
+    if LIMITS_CACHE_FILE.exists():
+        try:
+            data = json.loads(LIMITS_CACHE_FILE.read_text())
+            five = data.get("five_hour", {})
+            seven = data.get("seven_day", {})
+
+            u5 = five.get("utilization", 0)
+            u7 = seven.get("utilization", 0)
+
+            # hierarchical display
+            if u7 >= 100:
+                # 7d exhausted → only show 7d (5h is meaningless)
+                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d"))
+            elif u5 >= 100:
+                # 5h exhausted, 7d still has room → show both
+                parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
+                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d"))
+            else:
+                # both under limit → show both
+                parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
+                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d"))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # context window from stdin JSON (no API call)
+    try:
+        inp = json.loads(input_json)
+        remaining = inp.get("context_window", {}).get("remaining_percentage")
+        if remaining is not None:
+            used = 100 - remaining
+            color = _limits_color(used)
+            parts.append(f"{T.lim_label}ctx {used:.0f}%{T.R}")
+    except (json.JSONDecodeError, KeyError, TypeError):
+        pass
+
+    return f" {T.sep}·{T.R} ".join(parts)
+
+
 # --- slot providers ----------------------------------------------------------
 
 def provider_git(input_json: str, cwd: str) -> str:
@@ -706,6 +907,7 @@ def provider_git(input_json: str, cwd: str) -> str:
 
 PROVIDERS: dict[str, callable] = {
     "git": provider_git,
+    "limits": provider_limits,
 }
 
 
@@ -786,6 +988,7 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
 
 def execute_slots(slots: list[dict], input_json: str, cwd: str) -> list[str]:
     """Execute all slots in parallel, return ordered list of non-empty lines."""
+    slots = [s for s in slots if s.get("enabled", True)]
 
     def _run_slot(slot: dict) -> str:
         provider = slot.get("provider")
@@ -839,27 +1042,61 @@ def demo() -> None:
             line += f"{SEP2}{pr}"
         return line
 
+    def limits_line(u5: float, r5: str, u7: float, r7: str, ctx: int) -> str:
+        """Assemble a limits-style line for demo display."""
+        parts: list[str] = []
+        if u7 >= 100:
+            parts.append(_format_limit_window(u7, r7, "7d"))
+        else:
+            parts.append(_format_limit_window(u5, r5, "5h"))
+            parts.append(_format_limit_window(u7, r7, "7d"))
+        parts.append(f"{T.lim_label}ctx {ctx}%{T.R}")
+        return f" {T.sep}·{T.R} ".join(parts)
+
+    # demo reset times (relative to now for realistic display)
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    r5h = (now + timedelta(hours=4, minutes=26)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    r5h_low = (now + timedelta(minutes=23)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    r7d = (now + timedelta(days=4, hours=17)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    r7d_med = (now + timedelta(days=1, hours=5)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    r7d_crit = (now + timedelta(days=2, hours=4)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
     gsd_line = f"⬆ /gsd:update {T.sep}│{T.R} Fixing auth bug {T.sep}│{T.R} █████░░░░░ 52%"
 
-    print("=== Demo: 3-line with GSD slot ===")
+    print("=== Demo: limits green — both windows low ===")
     print(render([
-        f"🤖 Opus 4.6 {T.sep}|{T.R} 💰 $25.17 session",
-        gsd_line,
+        limits_line(12, r5h, 35, r7d, 24),
+        git_line(DEMO_BRANCH_MAIN, f"{T.git_staged}+{T.R}", "",
+                 f"{T.pr_ok}{D}{D}{D}{T.R}"),
+    ]))
+
+    print("=== Demo: limits yellow — 5h warn ===")
+    print(render([
+        limits_line(70, r5h, 45, r7d, 65),
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
                  f"{T.ci_fail}CI{T.R}",
                  f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬2{T.R}"),
     ]))
 
-    print("=== Demo: all green (2-line, no GSD) ===")
+    print("=== Demo: 5h exhausted (red), 7d for context ===")
     print(render([
-        f"🤖 Sonnet 4.5 {T.sep}|{T.R} 💰 $12.34 session",
-        git_line(DEMO_BRANCH_MAIN, f"{T.git_staged}+{T.R}", "",
-                 f"{T.pr_ok}{D}{D}{D}{T.R}"),
+        limits_line(100, r5h_low, 80, r7d_med, 80),
+        git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}",
+                 f"{T.ci_wait}CI{T.R}",
+                 f"{T.pr_wait}{D}{T.R}{T.pr_ok}{D}{D}{T.R}"),
     ]))
 
-    print("=== Demo: mixed CI + unread comments ===")
+    print("=== Demo: 7d exhausted — only 7d shown ===")
     print(render([
-        f"🤖 Opus 4.6 {T.sep}|{T.R} 💰 $58.07 session",
+        limits_line(100, r5h_low, 100, r7d_crit, 45),
+        git_line(DEMO_BRANCH_DEV, f"{T.git_ahead}↑{T.R}"),
+    ]))
+
+    print("=== Demo: 3-line with GSD slot ===")
+    print(render([
+        limits_line(25, r5h, 18, r7d, 30),
+        gsd_line,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
                  f"{T.ci_fail}CI{T.R}",
                  f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}"),
@@ -867,14 +1104,8 @@ def demo() -> None:
 
     print("=== Demo: gh not installed ===")
     print(render([
-        f"🤖 Sonnet 4.5 {T.sep}|{T.R} 💰 $0.42 session",
+        limits_line(5, r5h, 10, r7d, 8),
         git_line(DEMO_BRANCH_MAIN, "", "", f"{T.err}gh not installed{T.R}"),
-    ]))
-
-    print("=== Demo: bun not found ===")
-    print(render([
-        f"{T.err}bun not found{T.R}",
-        git_line(DEMO_BRANCH_DEV, f"{T.git_ahead}↑{T.R}"),
     ]))
 
 
