@@ -71,8 +71,8 @@ CI_CACHE_DIR = CACHE_DIR / "ci"
 CCUSAGE_CACHE_FILE = CACHE_DIR / "ccusage.txt"
 CCUSAGE_LOCK_FILE = CACHE_DIR / "ccusage.lock"
 SLOT_CACHE_DIR = CACHE_DIR / "slots"
-SLOT_TIMEOUT = 5             # max seconds for external slot command
-SLOT_CACHE_TTL = 60          # seconds — stale cache fallback for external slots
+SLOT_TIMEOUT = 30            # bg subprocess timeout (not blocking — just prevents zombies)
+SLOT_CACHE_TTL = 60          # seconds — how often to re-run external slot commands
 DEFAULT_SLOTS = [{"provider": "ccusage"}, {"provider": "git"}]
 
 
@@ -799,38 +799,71 @@ PROVIDERS: dict[str, callable] = {
 
 # --- external slot executor --------------------------------------------------
 
+def _refresh_external_slot_subprocess(command: str, input_json: str,
+                                      cache_file: Path, lock_file: Path) -> None:
+    """Fire-and-forget background refresh of an external slot cache."""
+    script = r"""
+import fcntl, os, subprocess, sys
+from pathlib import Path
+
+COMMAND = sys.argv[1]
+CACHE = Path(sys.argv[2])
+LOCK = Path(sys.argv[3])
+TIMEOUT = """ + str(SLOT_TIMEOUT) + r"""
+
+CACHE.parent.mkdir(parents=True, exist_ok=True)
+
+fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    os.close(fd)
+    sys.exit(0)
+
+try:
+    input_data = sys.stdin.read()
+    env = {**os.environ, "FORCE_COLOR": "1"}
+    r = subprocess.run(
+        COMMAND, shell=True, input=input_data,
+        capture_output=True, text=True, timeout=TIMEOUT, env=env,
+    )
+    if r.returncode == 0 and r.stdout.strip():
+        tmp = str(CACHE) + f".tmp.{os.getpid()}"
+        with open(tmp, "w") as f:
+            f.write(r.stdout.strip())
+        os.replace(tmp, str(CACHE))
+except subprocess.TimeoutExpired:
+    pass
+finally:
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script, command, str(cache_file), str(lock_file)],
+        start_new_session=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        proc.stdin.write(input_json.encode())
+        proc.stdin.flush()
+        proc.stdin.close()
+    except (OSError, BrokenPipeError):
+        pass
+
+
 def run_external_slot(command: str, input_json: str, ttl: int) -> str:
-    """Run an external command as a slot, with disk cache and stale fallback."""
+    """Return external slot output from cache, trigger bg refresh if stale."""
     SLOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     expanded = os.path.expanduser(command)
     cache_key = hashlib.md5(expanded.encode()).hexdigest()
     cache_file = SLOT_CACHE_DIR / cache_key
+    lock_file = SLOT_CACHE_DIR / f"{cache_key}.lock"
 
-    # return fresh cache
-    if is_cache_fresh(cache_file, ttl):
-        try:
-            return cache_file.read_text().strip()
-        except OSError:
-            pass
+    if not is_cache_fresh(cache_file, ttl):
+        _refresh_external_slot_subprocess(expanded, input_json, cache_file, lock_file)
 
-    # run command
-    env = {**os.environ, "FORCE_COLOR": "1"}
-    try:
-        r = subprocess.run(
-            expanded, shell=True, input=input_json,
-            capture_output=True, text=True, timeout=SLOT_TIMEOUT, env=env,
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            output = r.stdout.strip()
-            try:
-                cache_file.write_text(output)
-            except OSError:
-                pass
-            return output
-    except (subprocess.TimeoutExpired, OSError):
-        pass
-
-    # stale cache fallback
     try:
         return cache_file.read_text().strip()
     except OSError:
