@@ -49,14 +49,8 @@ GH_CHECK_TTL = 1800      # 30 min
 TIMEOUT_SUBPROCESS = 5   # default for run() helper function
 TIMEOUT_GIT = 3          # git status (local operation, fast)
 TIMEOUT_GH_API = 15      # all GitHub API calls (GraphQL, REST)
-TIMEOUT_CCUSAGE = 30     # bun x ccusage (can be slow)
-
 # GitHub API limits
 GH_PR_FETCH_LIMIT = 20   # max PRs to fetch in GraphQL query
-
-# ccusage config
-CCUSAGE_REFRESH_INTERVAL = 60  # seconds (passed to ccusage --refresh-interval)
-CCUSAGE_CACHE_TTL = 300        # 5 min — how often we re-run ccusage
 
 # Error message truncation
 STDERR_MAX_LEN = 50      # max stderr length in error messages
@@ -68,12 +62,13 @@ PR_CACHE_FILE = CACHE_DIR / "pr-status.json"
 PR_LOCK_FILE = CACHE_DIR / "refresh.lock"
 GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"
 CI_CACHE_DIR = CACHE_DIR / "ci"
-CCUSAGE_CACHE_FILE = CACHE_DIR / "ccusage.txt"
-CCUSAGE_LOCK_FILE = CACHE_DIR / "ccusage.lock"
 SLOT_CACHE_DIR = CACHE_DIR / "slots"
-SLOT_TIMEOUT = 30            # bg subprocess timeout (not blocking — just prevents zombies)
+SLOT_TIMEOUT = 120           # bg subprocess timeout (not blocking — just prevents zombies)
 SLOT_CACHE_TTL = 60          # seconds — how often to re-run external slot commands
-DEFAULT_SLOTS = [{"provider": "ccusage"}, {"provider": "git"}]
+
+# Default ccusage command (used when no slots configured)
+_CCUSAGE_CMD = "bun x ccusage statusline --visual-burn-rate text --refresh-interval 60"
+DEFAULT_SLOTS = [{"command": _CCUSAGE_CMD, "ttl": 300}, {"provider": "git"}]
 
 
 # --- colors ------------------------------------------------------------------
@@ -668,89 +663,7 @@ def _format_ci_label(conclusion: str | None) -> str:
     return labels.get(conclusion, "")
 
 
-# --- ccusage -----------------------------------------------------------------
-
-def _refresh_ccusage_subprocess(input_json: str) -> None:
-    """Fire-and-forget background refresh of ccusage cache."""
-    script = r"""
-import fcntl, json, os, subprocess, shutil, sys
-from pathlib import Path
-
-CACHE_DIR = Path(sys.argv[1])
-LOCK = CACHE_DIR / "ccusage.lock"
-CACHE = CACHE_DIR / "ccusage.txt"
-TIMEOUT = """ + str(TIMEOUT_CCUSAGE) + r"""
-REFRESH_INTERVAL = """ + str(CCUSAGE_REFRESH_INTERVAL) + r"""
-
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
-try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except BlockingIOError:
-    os.close(fd)
-    sys.exit(0)
-
-try:
-    if shutil.which("bun") is None:
-        sys.exit(1)
-
-    input_data = sys.stdin.read()
-    env = {**os.environ, "FORCE_COLOR": "1"}
-    r = subprocess.run(
-        ["bun", "x", "ccusage", "statusline",
-         "--visual-burn-rate", "text", "--refresh-interval", str(REFRESH_INTERVAL)],
-        input=input_data, capture_output=True, text=True, timeout=TIMEOUT, env=env,
-    )
-    if r.returncode == 0 and r.stdout.strip():
-        tmp = str(CACHE) + f".tmp.{os.getpid()}"
-        with open(tmp, "w") as f:
-            f.write(r.stdout.strip())
-        os.replace(tmp, str(CACHE))
-except subprocess.TimeoutExpired:
-    pass
-finally:
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    os.close(fd)
-"""
-    proc = subprocess.Popen(
-        [sys.executable, "-c", script, str(CACHE_DIR)],
-        start_new_session=True,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    try:
-        proc.stdin.write(input_json.encode())
-        proc.stdin.flush()
-        proc.stdin.close()
-    except (OSError, BrokenPipeError):
-        pass
-
-
-def get_ccusage(input_json: str) -> str:
-    """Return ccusage output from cache, trigger background refresh if stale."""
-    if shutil.which("bun") is None:
-        return f"{T.err}bun not found{T.R}"
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not is_cache_fresh(CCUSAGE_CACHE_FILE, CCUSAGE_CACHE_TTL):
-        _refresh_ccusage_subprocess(input_json)
-
-    try:
-        content = CCUSAGE_CACHE_FILE.read_text().strip()
-        return content if content else f"{T.sep}ccusage loading…{T.R}"
-    except OSError:
-        return f"{T.sep}ccusage loading…{T.R}"
-
-
 # --- slot providers ----------------------------------------------------------
-
-def provider_ccusage(input_json: str, cwd: str) -> str:
-    """Built-in provider: ccusage metrics line."""
-    return get_ccusage(input_json)
-
 
 def provider_git(input_json: str, cwd: str) -> str:
     """Built-in provider: directory + git + CI + PR line."""
@@ -792,7 +705,6 @@ def provider_git(input_json: str, cwd: str) -> str:
 
 
 PROVIDERS: dict[str, callable] = {
-    "ccusage": provider_ccusage,
     "git": provider_git,
 }
 

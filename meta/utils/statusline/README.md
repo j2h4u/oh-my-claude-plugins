@@ -33,10 +33,9 @@ Line N: each slot renders one line (empty slots are skipped)
 Each slot is either a **built-in provider** or an **external command**. Slots run in parallel for speed.
 
 **Built-in providers:**
-- `ccusage` — Model name, costs, token burn rate (via `bun x ccusage`)
 - `git` — Directory + branch + git status + CI + PR dots + notifications
 
-**External commands:** Any shell command that reads JSON from stdin and outputs one line to stdout.
+**External commands:** Any shell command that reads JSON from stdin and outputs one line to stdout. Executed as fire-and-forget background subprocesses with flock — never blocks the statusline. Default setup includes `ccusage` as a command slot.
 
 ### Git Line Elements
 
@@ -99,7 +98,7 @@ python3 ~/.claude/plugins/marketplace/oh-my-claude-plugins/meta/utils/statusline
 ```json
 {
   "slots": [
-    {"provider": "ccusage"},
+    {"command": "bun x ccusage statusline --visual-burn-rate text --refresh-interval 60", "ttl": 300},
     {"command": "node ~/.claude/hooks/gsd-statusline.js"},
     {"provider": "git"}
   ],
@@ -107,10 +106,10 @@ python3 ~/.claude/plugins/marketplace/oh-my-claude-plugins/meta/utils/statusline
 }
 ```
 
-Each slot: `{"provider": "<name>"}` for built-in, or `{"command": "<shell cmd>"}` for external.
-Optional `"ttl": <seconds>` for external commands (default: 60s, controls cache lifetime).
+Each slot: `{"command": "<shell cmd>"}` for external commands, or `{"provider": "git"}` for the built-in git line.
+Optional `"ttl": <seconds>` controls cache lifetime (default: 60s). Commands run as background subprocesses with flock.
 
-**No `slots` key** = default `[ccusage, git]` (backward compatible).
+**No `slots` key** = default `[ccusage (command, ttl=300), git (provider)]`.
 
 5. Restart Claude Code.
 
