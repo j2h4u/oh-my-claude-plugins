@@ -95,8 +95,13 @@ RAMP_CYAN   = (23, 51)    # rgb_011 → rgb_055
 RAMP_ORANGE = (58, 202)   # rgb_110 → rgb_510
 # Pace delta: log scale, max delta for full brightness
 PACE_COLOR_MAX_DELTA = 40  # pp — above this = brightest
-# Context window: effective range for color mapping
-CTX_COLOR_RANGE = (10, 80) # below 10% = dimmest cyan, above 80% = brightest orange
+# Context window: muted hue rotation cyan→amber→orange→red (RGB sum ~2, uniform low brightness)
+CTX_RAMP = [
+    (0,   23),   # rgb_011 — dim cyan
+    (40,  58),   # rgb_110 — dim amber
+    (70,  94),   # rgb_210 — dim orange
+    (100, 88),   # rgb_200 — dim red
+]
 # Unicode block elements: index 0 = empty, 1..7 = 1/8..7/8, 8 = full
 _BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
 
@@ -279,7 +284,7 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
-def _cached_json(path: Path, ttl: int, refresh) -> dict | None:
+def _cached_json(path: Path, ttl: int, refresh: "callable") -> dict | None:
     """Return parsed JSON from cache, trigger background refresh if stale."""
     if not is_cache_fresh(path, ttl):
         refresh()
@@ -484,7 +489,7 @@ def _bg_refresh(*, imports: str, payload: str, cache_file: Path, lock_file: Path
 def _refresh_pr_cache_subprocess() -> None:
     """Fire-and-forget background refresh of PR cache."""
     _bg_refresh(
-        imports="import json, subprocess",
+        imports="import json, subprocess, time",
         payload=r"""
     TIMEOUT = """ + str(TIMEOUT_GH_API) + r"""
     gql = subprocess.run(
@@ -524,7 +529,7 @@ def _refresh_pr_cache_subprocess() -> None:
                     and n.get("unread")
                     and n.get("reason") in {"comment", "mention", "author", "review_requested", "assign"}):
                 unread += 1
-    _w(json.dumps({"prs": prs, "unread_count": unread, "updated_at": int(__import__('time').time())}))
+    _w(json.dumps({"prs": prs, "unread_count": unread, "updated_at": int(time.time())}))
 """,
         cache_file=PR_CACHE_FILE,
         lock_file=PR_LOCK_FILE,
@@ -795,11 +800,31 @@ def _ramp_color(pct: float, lo: float = 0.0, hi: float = 100.0) -> str:
     return _ramp((t - 0.5) * 2, RAMP_ORANGE)
 
 
-def _bar(pct: float, width: int = LIMITS_BAR_WIDTH, *,
-         color_range: tuple[float, float] = (0.0, 100.0)) -> str:
-    """Progress bar on dark bg, colored by cyan→orange ramp.
+def _multi_ramp(pct: float, waypoints: list[tuple[float, int]]) -> str:
+    """Piecewise-linear color ramp across multiple waypoints.
 
-    pct: fill level 0..100.  color_range: (lo, hi) for ramp mapping.
+    waypoints: [(pct_threshold, color_index), ...] sorted by pct.
+    Interpolates between adjacent waypoints using _ramp().
+    """
+    if pct <= waypoints[0][0]:
+        return f"\033[38;5;{waypoints[0][1]}m"
+    if pct >= waypoints[-1][0]:
+        return f"\033[38;5;{waypoints[-1][1]}m"
+    for i in range(len(waypoints) - 1):
+        p0, c0 = waypoints[i]
+        p1, c1 = waypoints[i + 1]
+        if pct <= p1:
+            t = (pct - p0) / (p1 - p0) if p1 > p0 else 0.0
+            return _ramp(t, (c0, c1))
+    return f"\033[38;5;{waypoints[-1][1]}m"
+
+
+def _bar(pct: float, width: int = LIMITS_BAR_WIDTH, *,
+         color_range: tuple[float, float] = (0.0, 100.0),
+         ramp: list | None = None) -> str:
+    """Progress bar on dark bg, colored by ramp or cyan→orange default.
+
+    pct: fill level 0..100.  ramp: waypoint list for _multi_ramp.
     """
     clamped = max(0.0, min(100.0, pct))
     total = round(clamped / 100 * width * 8)
@@ -807,7 +832,7 @@ def _bar(pct: float, width: int = LIMITS_BAR_WIDTH, *,
     full = total // 8
     frac = total % 8
     empty = width - full - (1 if frac else 0)
-    color = _ramp_color(clamped, *color_range)
+    color = _multi_ramp(clamped, ramp) if ramp else _ramp_color(clamped, *color_range)
     filled = f"{T.lim_bar_bg}{color}{'█' * full}{_BAR_EIGHTHS[frac] if frac else ''}{T.R}"
     bg_empty = f"{T.lim_bar_bg}{' ' * empty}{T.R}" if empty else ""
     return f"{filled}{bg_empty}"
@@ -894,7 +919,7 @@ def provider_limits(input_json: str, cwd: str) -> str:
         remaining = inp.get("context_window", {}).get("remaining_percentage")
         if remaining is not None:
             used = 100 - remaining
-            parts.append(f"{T.dir_parent}ctx{T.R} {_bar(used, color_range=CTX_COLOR_RANGE)}")
+            parts.append(f"{T.dir_parent}ctx{T.R} {_bar(used, ramp=CTX_RAMP)}")
     except (json.JSONDecodeError, KeyError, TypeError):
         pass
 
@@ -1054,7 +1079,7 @@ def demo() -> None:
         else:
             parts.append(_format_limit_window(u5, r5, "5h"))
             parts.append(_format_limit_window(u7, r7, "7d", show_pace=True))
-        parts.append(f"{T.dir_parent}ctx{T.R} {_bar(ctx, color_range=CTX_COLOR_RANGE)}")
+        parts.append(f"{T.dir_parent}ctx{T.R} {_bar(ctx, ramp=CTX_RAMP)}")
         return SEP_DOT.join(parts)
 
     # demo reset times (relative to now for realistic display)
