@@ -77,13 +77,26 @@ LIMITS_BAR_WIDTH = 5
 LIMITS_WINDOW_SECONDS = 7 * 24 * 3600   # 7-day window duration in seconds
 LIMITS_PACE_BUDGET_HOURS = 120           # 5 working days × 24h — pace budget
 LIMITS_COUNTDOWN_THRESHOLD = 50         # show reset countdown above this utilization %
-LIMITS_COLOR_WARN_THRESHOLD = 50        # yellow above this utilization %
-LIMITS_COLOR_CRIT_THRESHOLD = 80        # red above this utilization %
-LIMITS_PACE_VIBING_DELTA = -10          # ≤ this pp under expected → vibing (green)
-LIMITS_PACE_OK_DELTA = 10               # ≤ this pp over expected → ok (gray)
-LIMITS_PACE_EASY_DELTA = 25             # ≤ this pp over expected → easy (yellow)
-                                         # > EASY → brake (red)
 LIMITS_PACE_MIN_EXPECTED = 1            # skip pace label until expected > this %
+# Pace scale: (max_delta_pp, label) — sorted ascending, first match wins.
+# delta = utilization - expected; negative = under budget (good), positive = over (bad).
+# Logarithmic around zero: tight ±5 for chill, wider ±20 for extremes.
+# based ←(−20)— hyped ←(−5)— chill ←(+5)— salty ←(+20)— depresso
+PACE_SCALE = [
+    (-20, "based"),              # 20+ pp under expected
+    ( -5, "hyped"),              # 5–20 pp under
+    (  5, "chill"),              # ±5 pp — on track
+    ( 20, "salty"),              # 5–20 pp over
+    (float("inf"), "depresso"),  # 20+ pp over expected
+]
+# Color ramp endpoints in 256-color RGB cube (index = 16 + 36*R + 6*G + B).
+# Each tuple: (dim, bright) — the two ends for interpolation.
+RAMP_CYAN   = (23, 51)    # rgb_011 → rgb_055
+RAMP_ORANGE = (58, 202)   # rgb_110 → rgb_510
+# Pace delta: log scale, max delta for full brightness
+PACE_COLOR_MAX_DELTA = 40  # pp — above this = brightest
+# Context window: effective range for color mapping
+CTX_COLOR_RANGE = (10, 80) # below 10% = dimmest cyan, above 80% = brightest orange
 # Unicode block elements: index 0 = empty, 1..7 = 1/8..7/8, 8 = full
 _BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
 
@@ -173,17 +186,14 @@ class T:
     sep            = Pal.hi_black          # | separator
     err            = Pal.red               # error messages
     # limits
-    lim_ok         = Pal.rgb_011           # utilization < 50%  (256-color 23)
-    lim_warn       = Pal.rgb_211           # utilization 50-80% (256-color 95)
-    lim_crit       = Pal.rgb_200           # utilization > 80%  (256-color 88)
-    lim_label      = Pal.gray_6            # window label (5h, 7d, ctx)
     lim_time       = Pal.gray_6            # reset time
-    lim_bar_off    = Pal.gray_5            # empty portion (░)
+    lim_bar_bg     = "\033[48;5;236m"      # dark gray background for bar (color236)
     # reset shorthand
     R              = Pal.R
 
 
 SEP2 = f" {T.sep}|{T.R} "
+SEP_DOT = f" {T.sep}·{T.R} "  # separator between limits sections
 
 
 # --- theme config loading ----------------------------------------------------
@@ -214,7 +224,7 @@ def _build_ansi(entry: dict) -> str:
 
 def _load_theme_config() -> list[dict]:
     """Load theme overrides from config file into T class. Return slots config."""
-    global SEP2
+    global SEP2, SEP_DOT
 
     if not THEME_FILE.exists():
         return list(DEFAULT_SLOTS)
@@ -228,6 +238,7 @@ def _load_theme_config() -> list[dict]:
         if hasattr(T, key) and key != "R":
             setattr(T, key, _build_ansi(entry))
     SEP2 = f" {T.sep}|{T.R} "
+    SEP_DOT = f" {T.sep}·{T.R} "
     return config.get("slots", list(DEFAULT_SLOTS))
 
 
@@ -732,24 +743,54 @@ def _format_duration(minutes: int) -> str:
     return f"{days}d {rem_hours}h" if rem_hours else f"{days}d"
 
 
-def _limits_bar(pct: float, color: str) -> str:
-    """Render a bar in brackets with sub-character precision (40 steps via Unicode blocks)."""
-    total = round(pct / 100 * LIMITS_BAR_WIDTH * 8)
-    total = max(0, min(LIMITS_BAR_WIDTH * 8, total))
+def _ramp(t: float, endpoints: tuple[int, int]) -> str:
+    """Interpolate between two 256-color RGB cube indices. t ∈ [0, 1].
+
+    Decomposes both endpoints into (R, G, B) ∈ 0..5, lerps each channel,
+    reconstructs the index. Works for any two colors in the 16–231 cube.
+    """
+    t = max(0.0, min(1.0, t))
+    c_lo, c_hi = endpoints
+    lr, lg, lb = (c_lo - 16) // 36, ((c_lo - 16) % 36) // 6, (c_lo - 16) % 6
+    hr, hg, hb = (c_hi - 16) // 36, ((c_hi - 16) % 36) // 6, (c_hi - 16) % 6
+    r = max(0, min(5, round(lr + t * (hr - lr))))
+    g = max(0, min(5, round(lg + t * (hg - lg))))
+    b = max(0, min(5, round(lb + t * (hb - lb))))
+    return f"\033[38;5;{16 + 36 * r + 6 * g + b}m"
+
+
+def _pace_delta_color(delta: float) -> str:
+    """Pace delta color: log-scaled cyan (under budget) or orange (over budget)."""
+    import math
+    magnitude = min(abs(delta), PACE_COLOR_MAX_DELTA)
+    t = math.log1p(magnitude) / math.log1p(PACE_COLOR_MAX_DELTA)
+    return _ramp(t, RAMP_CYAN if delta < 0 else RAMP_ORANGE)
+
+
+def _ramp_color(pct: float, lo: float = 0.0, hi: float = 100.0) -> str:
+    """Two-phase cyan→orange color for a value in [lo, hi] range."""
+    t = max(0.0, min(1.0, (pct - lo) / (hi - lo)))
+    if t <= 0.5:
+        return _ramp(t * 2, RAMP_CYAN)
+    return _ramp((t - 0.5) * 2, RAMP_ORANGE)
+
+
+def _bar(pct: float, width: int = LIMITS_BAR_WIDTH, *,
+         color_range: tuple[float, float] = (0.0, 100.0)) -> str:
+    """Progress bar on dark bg, colored by cyan→orange ramp.
+
+    pct: fill level 0..100.  color_range: (lo, hi) for ramp mapping.
+    """
+    clamped = max(0.0, min(100.0, pct))
+    total = round(clamped / 100 * width * 8)
+    total = max(0, min(width * 8, total))
     full = total // 8
     frac = total % 8
-    empty = LIMITS_BAR_WIDTH - full - (1 if frac else 0)
-    filled = f"{color}{'█' * full}{_BAR_EIGHTHS[frac] if frac else ''}{T.R}"
-    return f"{filled}{' ' * empty}"
-
-
-def _limits_color(pct: float) -> str:
-    """Return color token based on utilization percentage."""
-    if pct >= LIMITS_COLOR_CRIT_THRESHOLD:
-        return T.lim_crit
-    if pct >= LIMITS_COLOR_WARN_THRESHOLD:
-        return T.lim_warn
-    return T.lim_ok
+    empty = width - full - (1 if frac else 0)
+    color = _ramp_color(clamped, *color_range)
+    filled = f"{T.lim_bar_bg}{color}{'█' * full}{_BAR_EIGHTHS[frac] if frac else ''}{T.R}"
+    bg_empty = f"{T.lim_bar_bg}{' ' * empty}{T.R}" if empty else ""
+    return f"{filled}{bg_empty}"
 
 
 def _7d_pace_label(utilization: float, resets_at: str) -> str:
@@ -762,21 +803,16 @@ def _7d_pace_label(utilization: float, resets_at: str) -> str:
     if expected < LIMITS_PACE_MIN_EXPECTED:
         return ""
     delta = utilization - expected
-    if delta <= LIMITS_PACE_VIBING_DELTA:
-        return f" {T.lim_ok}vibing{T.R}"
-    if delta <= LIMITS_PACE_OK_DELTA:
-        return f" {T.lim_label}ok{T.R}"
-    if delta <= LIMITS_PACE_EASY_DELTA:
-        return f" {T.lim_warn}easy{T.R}"
-    return f" {T.lim_crit}brake{T.R}"
+    dc = _pace_delta_color(delta)
+    label = next(name for threshold, name in PACE_SCALE if delta <= threshold)
+    return f"{dc}{label} {abs(delta):.0f}%{T.R}"
 
 
 def _format_limit_window(utilization: float, resets_at: str, label: str,
                          show_pace: bool = False) -> str:
-    """Format one limit window: '5h ▋     12%'."""
+    """Format one limit window: '5h ▋    '."""
     pct = max(0.0, min(100.0, utilization))
-    color = _limits_color(pct)
-    bar = _limits_bar(pct, color)
+    bar = _bar(pct)
 
     # show reset countdown only when utilization >= 50%
     time_str = ""
@@ -787,8 +823,9 @@ def _format_limit_window(utilization: float, resets_at: str, label: str,
             time_str = f" {T.lim_time}{_format_duration(remaining_min)}{T.R}"
 
     pace_str = _7d_pace_label(utilization, resets_at) if show_pace else ""
-    pct_str = f"{T.lim_label}{pct:.0f}%{T.R}"
-    return f"{T.lim_label}{label}{T.R} {bar} {pct_str}{time_str}{pace_str}"
+    if pace_str:
+        pace_str = f"{SEP_DOT}{pace_str}"
+    return f"{T.dir_parent}{label}{T.R} {bar}{time_str}{pace_str}"
 
 
 def _refresh_limits_cache_subprocess() -> None:
@@ -884,12 +921,11 @@ def provider_limits(input_json: str, cwd: str) -> str:
         remaining = inp.get("context_window", {}).get("remaining_percentage")
         if remaining is not None:
             used = 100 - remaining
-            color = _limits_color(used)
-            parts.append(f"{T.lim_label}ctx {used:.0f}%{T.R}")
+            parts.append(f"{T.dir_parent}ctx{T.R} {_bar(used, color_range=CTX_COLOR_RANGE)}")
     except (json.JSONDecodeError, KeyError, TypeError):
         pass
 
-    return f" {T.sep}·{T.R} ".join(parts)
+    return SEP_DOT.join(parts)
 
 
 # --- slot providers ----------------------------------------------------------
@@ -1074,12 +1110,12 @@ def demo() -> None:
         """Assemble a limits-style line for demo display."""
         parts: list[str] = []
         if u7 >= 100:
-            parts.append(_format_limit_window(u7, r7, "7d"))
+            parts.append(_format_limit_window(u7, r7, "7d", show_pace=True))
         else:
             parts.append(_format_limit_window(u5, r5, "5h"))
-            parts.append(_format_limit_window(u7, r7, "7d"))
-        parts.append(f"{T.lim_label}ctx {ctx}%{T.R}")
-        return f" {T.sep}·{T.R} ".join(parts)
+            parts.append(_format_limit_window(u7, r7, "7d", show_pace=True))
+        parts.append(f"{T.dir_parent}ctx{T.R} {_bar(ctx, color_range=CTX_COLOR_RANGE)}")
+        return SEP_DOT.join(parts)
 
     # demo reset times (relative to now for realistic display)
     from datetime import datetime, timezone, timedelta

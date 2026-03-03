@@ -6,27 +6,27 @@ Enhanced statusline for Claude Code with a **slot system** — each line is a sl
 
 **Default 2-line (limits + git):**
 ```
-5h ▋░░░░ 12% 4h26m | 7d █▊░░░ 35% 4d17h | ctx 24%
-my-project/ ⑂feat/auth*+ CI | ⁕⁕⁕💬3
+5h ▋     12% · 7d █▊    35% · vibing ↓11% · ctx 24%
+my-project/ ⑂feat/auth*+ CI · ⁕⁕⁕💬3
 ```
 
 **5h exhausted (red), 7d for context:**
 ```
-5h █████ 100% 23m | 7d ████░ 80% 1d 5h | ctx 80%
-my-project/ ⑂main*+ CI | ⁕⁕
+5h █████ 100% 23m · 7d ████  80% 1d 5h · vibing ↓20% · ctx 80%
+my-project/ ⑂main*+ CI · ⁕⁕
 ```
 
 **7d exhausted — only 7d shown:**
 ```
-7d █████ 100% 2d 4h | ctx 45%
+7d █████ 100% 2d 4h · ok ↑3% · ctx 45%
 my-project/ ⑂develop ↑
 ```
 
 **3-line with GSD slot (external command):**
 ```
-5h ▋░░░░ 12% 4h26m | 7d █▊░░░ 35% 4d17h | ctx 24%
+5h ▏     5% · 7d ▉     18% · vibing ↓28% · ctx 30%
 ⬆ /gsd:update │ Fixing auth bug │ █████░░░░░ 52%
-my-project/ ⑂main*+ CI | ⁕⁕💬2
+my-project/ ⑂main*+ CI · ⁕⁕💬2
 ```
 
 **Format:**
@@ -39,16 +39,52 @@ Line N: each slot renders one line (empty slots are skipped)
 Each slot is either a **built-in provider** or an **external command**. Slots run in parallel for speed.
 
 **Built-in providers:**
-- `limits` — API usage limits (5h/7d windows with bar, percentage, reset countdown) + context window utilization
+- `limits` — API usage limits (5h/7d windows with bar, percentage, pace, reset countdown) + context window utilization
 - `git` — Directory + branch + git status + CI + PR dots + notifications
 
 **External commands:** Any shell command that reads JSON from stdin and outputs one line to stdout. Executed as fire-and-forget background subprocesses with flock — never blocks the statusline.
+
+### Limits Line Elements
+
+```
+5h ▋     12% · 7d █▊    35% · vibing ↓11% · ctx 24%
+```
+
+- **`5h` / `7d`** — Window label (5-hour and 7-day rolling usage windows)
+- **`▋    `** — Progress bar (5 chars, Unicode block precision, dark gray background, color adaptive: green < 50% / orange 50–80% / red > 80%)
+- **`12%`** — Utilization percentage
+- **`4h26m`** — Reset countdown (only shown when utilization ≥ 50%)
+- **`·`** — Separator between sections
+- **`vibing ↓11%`** — Pace indicator (7d window only, see below)
+- **`ctx 24%`** — Context window utilization
+
+**Hierarchical display logic:**
+- Normal: both `5h` and `7d` shown
+- `5h ≥ 100%`: both shown (5h in red, 7d for context)
+- `7d ≥ 100%`: only `7d` shown (focus on weekly limit)
+
+### Pace Indicator
+
+Compares actual 7d utilization against expected pace assuming a **5-day × 24h = 120h working budget**.
+
+| Label | Meaning | Delta |
+|-------|---------|-------|
+| `vibing` 🟢 | Well under budget | ≤ −10 pp |
+| `ok` ⬜ | On track | ≤ +10 pp |
+| `easy` 🟡 | Slightly over | ≤ +25 pp |
+| `brake` 🔴 | Significantly over | > +25 pp |
+
+The **`↑` / `↓`** suffix shows how many percentage points above/below expected pace:
+- `vibing ↓11%` — 11% below expected pace (good)
+- `brake ↑35%` — 35% above expected pace (slow down)
+
+Pace is hidden at session start when not enough time has elapsed to compute a meaningful expected value.
 
 ### Git Line Elements
 
 - **dir/** — Current directory (muted gray)
 - **⑂main** — Git branch indicator + branch name (dimmed)
-- **\* + ? ↑ ↓** — Git status:
+- **`* + ? ↑ ↓`** — Git status:
   - `*` dirty (unstaged changes, yellow dim)
   - `+` staged changes (green dim)
   - `?` untracked files (gray)
@@ -98,7 +134,6 @@ python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statuslin
 {
   "slots": [
     {"provider": "limits"},
-    {"command": "bun x ccusage statusline --visual-burn-rate text --refresh-interval 60", "ttl": 300, "enabled": false},
     {"command": "node ~/.claude/hooks/gsd-statusline.js"},
     {"provider": "git"}
   ],
@@ -144,6 +179,7 @@ PR data is cached to avoid blocking statusline render:
 
 - **Cache location:** `~/.config/omcc-statusline/` (config) + `/tmp/omcc-statusline/` (runtime cache)
 - **Theme config:** `~/.config/omcc-statusline/config.json`
+- **Limits cache TTL:** 2 minutes
 - **PR cache TTL:** 5 minutes
 - **CI cache TTL:** 2 minutes
 - **GH availability check TTL:** 30 minutes
@@ -166,7 +202,7 @@ python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statuslin
 - **a** Toggle text attributes (dim, bold, italic, underline, etc.)
 - **c** Copy current element style
 - **v** Paste to current element
-- **s** Save config to `~/.config/claude-statusline/config.json`
+- **s** Save config to `~/.config/omcc-statusline/config.json`
 - **r** Reset current element to default
 - **R** Reset all elements to defaults
 - **q** Quit
@@ -179,9 +215,8 @@ python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statuslin
 
 **Statusline not showing:**
 - Check `~/.claude/settings.json` syntax (use absolute path)
-- Verify script is executable: `chmod +x omcc-statusline.py`
 - Check Python version: `python3 --version` (needs 3.10+)
-- Test manually: `python3 omcc-statusline.py --demo`
+- Test manually: `echo '{}' | python3 omcc-statusline.py --demo`
 
 **Statusline shows error messages in red:**
 - `gh not installed` — Install gh (optional): https://cli.github.com/
@@ -192,6 +227,10 @@ python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statuslin
 - Check credentials: `cat ~/.claude/.credentials.json | python3 -c "import json,sys; print(json.load(sys.stdin)['claudeAiOauth']['accessToken'][:20]+'...')"`
 - Test API manually: `python3 -c "from urllib.request import Request, urlopen; import json; from pathlib import Path; t=json.loads(Path.home().joinpath('.claude/.credentials.json').read_text())['claudeAiOauth']['accessToken']; r=Request('https://api.anthropic.com/api/oauth/usage'); r.add_header('Authorization',f'Bearer {t}'); r.add_header('anthropic-beta','oauth-2025-04-20'); print(json.dumps(json.loads(urlopen(r,timeout=5).read()),indent=2))"`
 - Force refresh: `rm /tmp/omcc-statusline/limits-cache.json`
+
+**Pace not showing:**
+- Hidden until enough time has elapsed in the 7d window (expected > 1%)
+- Only shown on the 7d window
 
 **Git branch not showing:**
 - Only displays when in a git repository
