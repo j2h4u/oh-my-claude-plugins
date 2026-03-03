@@ -74,6 +74,16 @@ LIMITS_HTTP_TIMEOUT = 5
 LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
 LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
 LIMITS_BAR_WIDTH = 5
+LIMITS_WINDOW_SECONDS = 7 * 24 * 3600   # 7-day window duration in seconds
+LIMITS_PACE_BUDGET_HOURS = 120           # 5 working days × 24h — pace budget
+LIMITS_COUNTDOWN_THRESHOLD = 50         # show reset countdown above this utilization %
+LIMITS_COLOR_WARN_THRESHOLD = 50        # yellow above this utilization %
+LIMITS_COLOR_CRIT_THRESHOLD = 80        # red above this utilization %
+LIMITS_PACE_VIBING_DELTA = -10          # ≤ this pp under expected → vibing (green)
+LIMITS_PACE_OK_DELTA = 10               # ≤ this pp over expected → ok (gray)
+LIMITS_PACE_EASY_DELTA = 25             # ≤ this pp over expected → easy (yellow)
+                                         # > EASY → brake (red)
+LIMITS_PACE_MIN_EXPECTED = 1            # skip pace label until expected > this %
 # Unicode block elements: index 0 = empty, 1..7 = 1/8..7/8, 8 = full
 _BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
 
@@ -735,9 +745,9 @@ def _limits_bar(pct: float, color: str) -> str:
 
 def _limits_color(pct: float) -> str:
     """Return color token based on utilization percentage."""
-    if pct >= 80:
+    if pct >= LIMITS_COLOR_CRIT_THRESHOLD:
         return T.lim_crit
-    if pct >= 50:
+    if pct >= LIMITS_COLOR_WARN_THRESHOLD:
         return T.lim_warn
     return T.lim_ok
 
@@ -747,16 +757,16 @@ def _7d_pace_label(utilization: float, resets_at: str) -> str:
     reset_epoch = _parse_iso_utc(resets_at)
     if reset_epoch is None:
         return ""
-    hours_elapsed = max(0.0, (time.time() - (reset_epoch - 7 * 86400)) / 3600)
-    expected = min(hours_elapsed / 120.0 * 100.0, 100.0)
-    if expected < 1:
+    hours_elapsed = max(0.0, (time.time() - (reset_epoch - LIMITS_WINDOW_SECONDS)) / 3600)
+    expected = min(hours_elapsed / LIMITS_PACE_BUDGET_HOURS * 100.0, 100.0)
+    if expected < LIMITS_PACE_MIN_EXPECTED:
         return ""
     delta = utilization - expected
-    if delta <= -10:
+    if delta <= LIMITS_PACE_VIBING_DELTA:
         return f" {T.lim_ok}vibing{T.R}"
-    if delta <= 10:
+    if delta <= LIMITS_PACE_OK_DELTA:
         return f" {T.lim_label}ok{T.R}"
-    if delta <= 25:
+    if delta <= LIMITS_PACE_EASY_DELTA:
         return f" {T.lim_warn}easy{T.R}"
     return f" {T.lim_crit}brake{T.R}"
 
@@ -770,7 +780,7 @@ def _format_limit_window(utilization: float, resets_at: str, label: str,
 
     # show reset countdown only when utilization >= 50%
     time_str = ""
-    if pct >= 50:
+    if pct >= LIMITS_COUNTDOWN_THRESHOLD:
         reset_epoch = _parse_iso_utc(resets_at)
         if reset_epoch is not None:
             remaining_min = max(0, int((reset_epoch - time.time()) / 60))
