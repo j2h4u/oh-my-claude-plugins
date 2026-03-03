@@ -742,8 +742,28 @@ def _limits_color(pct: float) -> str:
     return T.lim_ok
 
 
-def _format_limit_window(utilization: float, resets_at: str, label: str) -> str:
-    """Format one limit window: '5h ==-------- 12% 4h26m'."""
+def _7d_pace_label(utilization: float, resets_at: str) -> str:
+    """Return pace label for 7d window assuming 5-day (120h) working budget."""
+    reset_epoch = _parse_iso_utc(resets_at)
+    if reset_epoch is None:
+        return ""
+    hours_elapsed = max(0.0, (time.time() - (reset_epoch - 7 * 86400)) / 3600)
+    expected = min(hours_elapsed / 120.0 * 100.0, 100.0)
+    if expected < 1:
+        return ""
+    delta = utilization - expected
+    if delta <= -10:
+        return f" {T.lim_ok}vibing{T.R}"
+    if delta <= 10:
+        return f" {T.lim_label}ok{T.R}"
+    if delta <= 25:
+        return f" {T.lim_warn}easy{T.R}"
+    return f" {T.lim_crit}brake{T.R}"
+
+
+def _format_limit_window(utilization: float, resets_at: str, label: str,
+                         show_pace: bool = False) -> str:
+    """Format one limit window: '5h ▋     12%'."""
     pct = max(0.0, min(100.0, utilization))
     color = _limits_color(pct)
     bar = _limits_bar(pct, color)
@@ -756,8 +776,9 @@ def _format_limit_window(utilization: float, resets_at: str, label: str) -> str:
             remaining_min = max(0, int((reset_epoch - time.time()) / 60))
             time_str = f" {T.lim_time}{_format_duration(remaining_min)}{T.R}"
 
+    pace_str = _7d_pace_label(utilization, resets_at) if show_pace else ""
     pct_str = f"{T.lim_label}{pct:.0f}%{T.R}"
-    return f"{T.lim_label}{label}{T.R} {bar} {pct_str}{time_str}"
+    return f"{T.lim_label}{label}{T.R} {bar} {pct_str}{time_str}{pace_str}"
 
 
 def _refresh_limits_cache_subprocess() -> None:
@@ -837,16 +858,13 @@ def provider_limits(input_json: str, cwd: str) -> str:
 
             # hierarchical display
             if u7 >= 100:
-                # 7d exhausted → only show 7d (5h is meaningless)
-                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d"))
+                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
             elif u5 >= 100:
-                # 5h exhausted, 7d still has room → show both
                 parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
-                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d"))
+                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
             else:
-                # both under limit → show both
                 parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
-                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d"))
+                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
         except (json.JSONDecodeError, OSError):
             pass
 
