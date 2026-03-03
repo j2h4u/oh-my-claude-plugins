@@ -271,6 +271,21 @@ def is_cache_fresh(path: Path, ttl: int) -> bool:
         return False
 
 
+def _read_json(path: Path) -> dict | None:
+    """Read and parse a JSON cache file, return None on any error."""
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _cached_json(path: Path, ttl: int, refresh) -> dict | None:
+    """Return parsed JSON from cache, trigger background refresh if stale."""
+    if not is_cache_fresh(path, ttl):
+        refresh()
+    return _read_json(path)
+
+
 def read_remote_url(cwd: str) -> str | None:
     """Read origin remote URL from .git/config — no subprocess."""
     git_dir = Path(cwd) / ".git"
@@ -410,37 +425,72 @@ def get_git_info(cwd: str) -> tuple[str, str]:
     return branch, indicators
 
 
-# --- PR status ---------------------------------------------------------------
+# --- background refresh ------------------------------------------------------
 
-def _refresh_pr_cache_subprocess() -> None:
-    """Fire-and-forget background refresh of PR cache."""
-    # This runs as a detached subprocess so it doesn't block the statusline.
-    script = r"""
-import fcntl, json, os, subprocess, sys
+_BG_SCRIPT = r"""
+import fcntl, os, sys
 from pathlib import Path
-
-TIMEOUT_GH_API = """ + str(TIMEOUT_GH_API) + r"""
-GH_PR_FETCH_LIMIT = """ + str(GH_PR_FETCH_LIMIT) + r"""
-
-CACHE_DIR = Path(sys.argv[1])
-LOCK = CACHE_DIR / "refresh.lock"
-CACHE = CACHE_DIR / "pr-status.json"
-
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
+__IMPORTS__
+CACHE, LOCK = Path(sys.argv[1]), Path(sys.argv[2])
+CACHE.parent.mkdir(parents=True, exist_ok=True)
+def _w(data):
+    tmp = str(CACHE) + f".tmp.{os.getpid()}"
+    with open(tmp, "w") as f:
+        f.write(data)
+    os.replace(tmp, str(CACHE))
 fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
 try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 except BlockingIOError:
     os.close(fd)
     sys.exit(0)
-
 try:
-    # GraphQL: open PRs with CI status
+__PAYLOAD__
+except Exception:
+    pass
+finally:
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)
+"""
+
+
+def _bg_refresh(*, imports: str, payload: str, cache_file: Path, lock_file: Path,
+                extra_argv: tuple = (), stdin_data: str | None = None) -> None:
+    """Fire-and-forget background subprocess with flock + atomic write.
+
+    The payload runs inside flock(LOCK_EX|LOCK_NB). Available in scope:
+      CACHE/LOCK (Path) — argv[1:3].  sys.argv[3:] — extra_argv.
+      _w(data: str) — atomic write to CACHE (tmp + os.replace).
+    """
+    script = _BG_SCRIPT.replace("__IMPORTS__", imports).replace("__PAYLOAD__", payload)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script, str(cache_file), str(lock_file), *extra_argv],
+        start_new_session=True,
+        stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if stdin_data is not None:
+        try:
+            proc.stdin.write(stdin_data.encode())
+            proc.stdin.flush()
+            proc.stdin.close()
+        except (OSError, BrokenPipeError):
+            pass
+
+
+# --- PR status ---------------------------------------------------------------
+
+def _refresh_pr_cache_subprocess() -> None:
+    """Fire-and-forget background refresh of PR cache."""
+    _bg_refresh(
+        imports="import json, subprocess",
+        payload=r"""
+    TIMEOUT = """ + str(TIMEOUT_GH_API) + r"""
     gql = subprocess.run(
         ["gh", "api", "graphql", "-f", "query=" + '''
         query {
-            search(query: "is:open is:pr author:@me", type: ISSUE, first: ''' + str(GH_PR_FETCH_LIMIT) + ''') {
+            search(query: "is:open is:pr author:@me", type: ISSUE, first: """ + str(GH_PR_FETCH_LIMIT) + r""") {
                 nodes {
                     ... on PullRequest {
                         number
@@ -461,39 +511,23 @@ try:
             }
         }
         '''.strip()],
-        capture_output=True, text=True, timeout=TIMEOUT_GH_API,
+        capture_output=True, text=True, timeout=TIMEOUT,
     )
     prs = json.loads(gql.stdout) if gql.returncode == 0 else {}
-
-    # REST: unread notifications (participating)
     notif = subprocess.run(
-        ["gh", "api", "notifications"], capture_output=True, text=True, timeout=TIMEOUT_GH_API,
+        ["gh", "api", "notifications"], capture_output=True, text=True, timeout=TIMEOUT,
     )
     unread = 0
     if notif.returncode == 0:
-        participating_reasons = {"comment", "mention", "author", "review_requested", "assign"}
         for n in json.loads(notif.stdout):
             if (n.get("subject", {}).get("type") in ("PullRequest", "Issue")
                     and n.get("unread")
-                    and n.get("reason") in participating_reasons):
+                    and n.get("reason") in {"comment", "mention", "author", "review_requested", "assign"}):
                 unread += 1
-
-    result = {"prs": prs, "unread_count": unread, "updated_at": int(__import__('time').time())}
-
-    tmp = str(CACHE) + f".tmp.{os.getpid()}"
-    with open(tmp, "w") as f:
-        json.dump(result, f)
-    os.replace(tmp, str(CACHE))
-finally:
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    os.close(fd)
-"""
-    subprocess.Popen(
-        [sys.executable, "-c", script, str(CACHE_DIR)],
-        start_new_session=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    _w(json.dumps({"prs": prs, "unread_count": unread, "updated_at": int(__import__('time').time())}))
+""",
+        cache_file=PR_CACHE_FILE,
+        lock_file=PR_LOCK_FILE,
     )
 
 
@@ -505,17 +539,8 @@ def get_pr_status() -> str:
     if gh == "no-auth":
         return f"{T.err}gh auth login{T.R}"
 
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not is_cache_fresh(PR_CACHE_FILE, PR_CACHE_TTL):
-        _refresh_pr_cache_subprocess()
-
-    if not PR_CACHE_FILE.exists():
-        return ""
-
-    try:
-        cache = json.loads(PR_CACHE_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
+    cache = _cached_json(PR_CACHE_FILE, PR_CACHE_TTL, _refresh_pr_cache_subprocess)
+    if not cache:
         return ""
 
     nodes = cache.get("prs", {}).get("data", {}).get("search", {}).get("nodes", [])
@@ -574,11 +599,8 @@ def _ci_from_pr_cache(branch: str) -> str | None:
 
     Returns formatted label or None if branch not found in cache.
     """
-    if not PR_CACHE_FILE.exists():
-        return None
-    try:
-        cache = json.loads(PR_CACHE_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
+    cache = _read_json(PR_CACHE_FILE)
+    if not cache:
         return None
 
     for pr in cache.get("prs", {}).get("data", {}).get("search", {}).get("nodes", []):
@@ -640,11 +662,9 @@ def get_ci_status(cwd: str, branch: str) -> str:
 
     # return from disk cache if fresh
     if is_cache_fresh(cache_file, CI_CACHE_TTL):
-        try:
-            data = json.loads(cache_file.read_text())
+        data = _read_json(cache_file)
+        if data:
             return _format_ci_label(data.get("conclusion"))
-        except (json.JSONDecodeError, OSError):
-            pass
 
     # fetch check-runs for branch HEAD (1 fork, only if all caches miss)
     out = run(
@@ -833,87 +853,40 @@ def _refresh_limits_cache_subprocess() -> None:
     token = _read_oauth_token()
     if not token:
         return
-
-    script = r"""
-import fcntl, json, os, sys
-from pathlib import Path
-from urllib.request import Request, urlopen
-from urllib.error import URLError
-
-CACHE = Path(sys.argv[1])
-LOCK = Path(sys.argv[2])
-API_URL = sys.argv[3]
-TOKEN = sys.argv[4]
-TIMEOUT = """ + str(LIMITS_HTTP_TIMEOUT) + r"""
-
-CACHE.parent.mkdir(parents=True, exist_ok=True)
-
-fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
-try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except BlockingIOError:
-    os.close(fd)
-    sys.exit(0)
-
-try:
-    req = Request(API_URL)
-    req.add_header("Authorization", f"Bearer {TOKEN}")
+    _bg_refresh(
+        imports="import json\nfrom urllib.request import Request, urlopen",
+        payload=r"""
+    req = Request(sys.argv[3])
+    req.add_header("Authorization", f"Bearer {sys.argv[4]}")
     req.add_header("anthropic-beta", "oauth-2025-04-20")
-    resp = urlopen(req, timeout=TIMEOUT)
-    data = json.loads(resp.read())
-
-    tmp = str(CACHE) + f".tmp.{os.getpid()}"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, str(CACHE))
-except (URLError, OSError, json.JSONDecodeError, ValueError):
-    pass
-finally:
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    os.close(fd)
-"""
-    subprocess.Popen(
-        [sys.executable, "-c", script,
-         str(LIMITS_CACHE_FILE), str(LIMITS_LOCK_FILE),
-         LIMITS_API_URL, token],
-        start_new_session=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    resp = urlopen(req, timeout=""" + str(LIMITS_HTTP_TIMEOUT) + r""")
+    _w(json.dumps(json.loads(resp.read())))
+""",
+        cache_file=LIMITS_CACHE_FILE,
+        lock_file=LIMITS_LOCK_FILE,
+        extra_argv=(LIMITS_API_URL, token),
     )
 
 
 def provider_limits(input_json: str, cwd: str) -> str:
     """Built-in provider: API usage limits (5h/7d windows) + context window."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # trigger background refresh if cache stale
-    if not is_cache_fresh(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL):
-        _refresh_limits_cache_subprocess()
-
     parts: list[str] = []
 
-    # read cached limits data
-    if LIMITS_CACHE_FILE.exists():
-        try:
-            data = json.loads(LIMITS_CACHE_FILE.read_text())
-            five = data.get("five_hour", {})
-            seven = data.get("seven_day", {})
-
-            u5 = five.get("utilization", 0)
-            u7 = seven.get("utilization", 0)
-
-            # hierarchical display
-            if u7 >= 100:
-                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
-            elif u5 >= 100:
-                parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
-                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
-            else:
-                parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
-                parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
-        except (json.JSONDecodeError, OSError):
-            pass
+    data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
+    if data:
+        five = data.get("five_hour", {})
+        seven = data.get("seven_day", {})
+        u5 = five.get("utilization", 0)
+        u7 = seven.get("utilization", 0)
+        if u7 >= 100:
+            parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
+        elif u5 >= 100:
+            parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
+            parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
+        else:
+            parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
+            parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
 
     # context window from stdin JSON (no API call)
     try:
@@ -980,55 +953,22 @@ PROVIDERS: dict[str, callable] = {
 def _refresh_external_slot_subprocess(command: str, input_json: str,
                                       cache_file: Path, lock_file: Path) -> None:
     """Fire-and-forget background refresh of an external slot cache."""
-    script = r"""
-import fcntl, os, subprocess, sys
-from pathlib import Path
-
-COMMAND = sys.argv[1]
-CACHE = Path(sys.argv[2])
-LOCK = Path(sys.argv[3])
-TIMEOUT = """ + str(SLOT_TIMEOUT) + r"""
-
-CACHE.parent.mkdir(parents=True, exist_ok=True)
-
-fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
-try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except BlockingIOError:
-    os.close(fd)
-    sys.exit(0)
-
-try:
-    input_data = sys.stdin.read()
+    _bg_refresh(
+        imports="import subprocess",
+        payload=r"""
     env = {**os.environ, "FORCE_COLOR": "1"}
     r = subprocess.run(
-        COMMAND, shell=True, input=input_data,
-        capture_output=True, text=True, timeout=TIMEOUT, env=env,
+        sys.argv[3], shell=True, input=sys.stdin.read(),
+        capture_output=True, text=True, timeout=""" + str(SLOT_TIMEOUT) + r""", env=env,
     )
     if r.returncode == 0 and r.stdout.strip():
-        tmp = str(CACHE) + f".tmp.{os.getpid()}"
-        with open(tmp, "w") as f:
-            f.write(r.stdout.strip())
-        os.replace(tmp, str(CACHE))
-except subprocess.TimeoutExpired:
-    pass
-finally:
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    os.close(fd)
-"""
-    proc = subprocess.Popen(
-        [sys.executable, "-c", script, command, str(cache_file), str(lock_file)],
-        start_new_session=True,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        _w(r.stdout.strip())
+""",
+        cache_file=cache_file,
+        lock_file=lock_file,
+        extra_argv=(command,),
+        stdin_data=input_json,
     )
-    try:
-        proc.stdin.write(input_json.encode())
-        proc.stdin.flush()
-        proc.stdin.close()
-    except (OSError, BrokenPipeError):
-        pass
 
 
 def run_external_slot(command: str, input_json: str, ttl: int) -> str:
