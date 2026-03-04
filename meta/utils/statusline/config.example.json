@@ -1,0 +1,15 @@
+{
+  "slots": [
+    [
+      {"provider": "path"},
+      {"provider": "git"},
+      {"provider": "limits"},
+      {"provider": "vibes"}
+    ],
+    {
+      "command": "bun x ccusage statusline --visual-burn-rate text --refresh-interval 60",
+      "ttl": 300,
+      "enabled": false
+    }
+  ]
+}

@@ -49,22 +49,9 @@ Test: `python3 omcc-statusline.py --demo`
 
 ## Configuration
 
-`~/.config/omcc-statusline/config.json`:
+`~/.config/omcc-statusline/config.json` — see `config.example.json` for a starting point.
 
-```json
-{
-  "slots": [
-    [{"provider": "path"}, {"provider": "git"}, {"provider": "limits"}, {"provider": "vibes"}],
-    {"command": "node ~/.claude/hooks/gsd-statusline.js"}
-  ],
-  "settings": {
-    "5h_ramp": "traffic",
-    "ctx_display": "horizontal"
-  }
-}
-```
-
-Without `slots` key — default single-line: `path · git · limits · vibes`.
+Without config — default single-line: `path ⋮ git ⋮ limits ⋮ vibes`.
 
 ### Slots
 
@@ -72,7 +59,14 @@ Without `slots` key — default single-line: `path · git · limits · vibes`.
 - `{"command": "<shell>"}` — external command (reads JSON stdin, outputs one line)
 - `"ttl": <seconds>` — cache lifetime (default: 60s)
 - `"enabled": false` — disable without removing
+- `"show": [...]` — render only specific sub-sections (omit for all)
 - Array slot = multiple providers joined on one line
+
+If an external command's executable is not found, a dim placeholder is shown instead (e.g. `[ccusage: not found]`).
+
+**Sub-sections** (`show`):
+- **git**: `branch`, `ci`, `pr`, `notif` — e.g. `{"provider": "git", "show": ["branch", "ci"]}`
+- **limits**: `5h`, `7d`, `ctx` — e.g. `{"provider": "limits", "show": ["7d", "ctx"]}`
 
 ### Settings
 
@@ -80,10 +74,11 @@ Without `slots` key — default single-line: `path · git · limits · vibes`.
 |-----|---------|---------|
 | `5h_ramp`, `7d_ramp`, `ctx_ramp` | aurora, traffic, twilight, ember, spectrum, heatmap | spectrum, spectrum, aurora |
 | `5h_display`, `7d_display`, `ctx_display` | number, vertical, horizontal | vertical |
-| `separator` | any string | · |
-| `separator_section` | any string | \| |
+| `separator` | any string | ⋮ |
+| `git_separator` | any string | · |
+| `limits_separator` | any string | (empty) |
 
-`separator` — between providers (extra). `separator_section` — within provider (intra).
+`separator` — between providers. `git_separator` — within git provider. `limits_separator` — within limits provider.
 
 ## Theme Editor
 
