@@ -102,12 +102,8 @@ ELEMENTS = [
     ElementDef("pr_none",       "PR unknown",     "PR dot — no CI status",              "⁕",        "pr"),
     ElementDef("notif",         "Notifications",  "Unread notification count",          "💬3",      "pr"),
     ElementDef("err",           "Error",          "Error messages",                     "error",    "ui"),
-    ElementDef("lim_ok",        "Lim OK",         "Limit utilization < 50%",            "12%",      "lim"),
-    ElementDef("lim_warn",      "Lim warn",       "Limit utilization 50-80%",           "70%",      "lim"),
-    ElementDef("lim_crit",      "Lim crit",       "Limit utilization > 80%",            "100%",     "lim"),
-    ElementDef("lim_label",     "Lim label",      "Window label (5h, 7d, ctx)",         "5h",       "lim"),
     ElementDef("lim_time",      "Lim time",       "Reset countdown",                    "4h26m",    "lim"),
-    ElementDef("lim_bar_off",   "Bar empty",      "Empty bar portion (░)",              "░░░░░",    "lim"),
+    ElementDef("lim_bar_bg",    "Bar bg",         "Progress bar background",            "▁▂▃",      "lim"),
 ]
 
 # --- theme data --------------------------------------------------------------
@@ -138,42 +134,286 @@ DEFAULTS: dict[str, ThemeEntry] = {
     "notif":          ThemeEntry(fg=6),
     "sep":            ThemeEntry(fg=8),
     "err":            ThemeEntry(fg=1),
-    "lim_ok":         ThemeEntry(fg=23),
-    "lim_warn":       ThemeEntry(fg=95),
-    "lim_crit":       ThemeEntry(fg=88),
-    "lim_label":      ThemeEntry(fg=238),
     "lim_time":       ThemeEntry(fg=238),
-    "lim_bar_off":    ThemeEntry(fg=237),
+    "lim_bar_bg":     ThemeEntry(bg=236),
 }
+
+# --- global settings definitions ---------------------------------------------
+
+RAMP_NAMES = ["aurora", "traffic", "twilight", "ember", "spectrum", "heatmap"]
+DISPLAY_MODES = ["number", "vertical", "horizontal"]
+SEP_OPTIONS = ["·", "•", "│", "─", "⋮", "|", "║", "┃", "❘"]
+
+# Color ramp presets (mirrored from omcc-statusline.py)
+RAMP_PRESETS = {
+    "aurora":    [(0, 44), (35, 33), (70, 127), (100, 160)],
+    "traffic":   [(0, 35), (50, 185), (100, 160)],
+    "twilight":  [(0, 33), (50, 92), (100, 124)],
+    "ember":     [(0, 37), (50, 143), (100, 131)],
+    "spectrum":  [(0, 35), (25, 44), (50, 33), (75, 127), (100, 160)],
+    "heatmap":   [(0, 33), (25, 44), (50, 40), (75, 184), (100, 160)],
+}
+_BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
+_VBAR_EIGHTHS = " ▁▂▃▄▅▆▇█"
+# Demo bar bg (dark gray) — matches lim_bar_bg default
+_BAR_BG = bg256(236)
+
+@dataclass
+class SettingDef:
+    key: str          # config.json key
+    label: str        # display label
+    options: list[str]
+    default: str
+
+SETTINGS_DEFS = [
+    SettingDef("5h_ramp",           "5h ramp",          RAMP_NAMES,          "spectrum"),
+    SettingDef("7d_ramp",           "7d ramp",          RAMP_NAMES,          "spectrum"),
+    SettingDef("ctx_ramp",          "ctx ramp",         RAMP_NAMES,          "aurora"),
+    SettingDef("5h_display",        "5h display",       DISPLAY_MODES,       "vertical"),
+    SettingDef("7d_display",        "7d display",       DISPLAY_MODES,       "vertical"),
+    SettingDef("ctx_display",       "ctx display",      DISPLAY_MODES,       "vertical"),
+    SettingDef("separator",         "Sep extra",        SEP_OPTIONS, "·"),
+    SettingDef("separator_section", "Sep intra",        SEP_OPTIONS, "|"),
+]
+
+
+# --- ramp rendering helpers --------------------------------------------------
+
+def _ramp_lerp(t: float, c_lo: int, c_hi: int) -> int:
+    """Interpolate between two 256-color RGB cube indices. t in [0, 1]."""
+    t = max(0.0, min(1.0, t))
+    lr, lg, lb = (c_lo - 16) // 36, ((c_lo - 16) % 36) // 6, (c_lo - 16) % 6
+    hr, hg, hb = (c_hi - 16) // 36, ((c_hi - 16) % 36) // 6, (c_hi - 16) % 6
+    r = max(0, min(5, round(lr + t * (hr - lr))))
+    g = max(0, min(5, round(lg + t * (hg - lg))))
+    b = max(0, min(5, round(lb + t * (hb - lb))))
+    return 16 + 36 * r + 6 * g + b
+
+
+def _multi_ramp_color(pct: float, waypoints: list[tuple[float, int]]) -> int:
+    """Piecewise-linear color ramp, returns 256-color index."""
+    if pct <= waypoints[0][0]:
+        return waypoints[0][1]
+    if pct >= waypoints[-1][0]:
+        return waypoints[-1][1]
+    for i in range(len(waypoints) - 1):
+        p0, c0 = waypoints[i]
+        p1, c1 = waypoints[i + 1]
+        if pct <= p1:
+            t = (pct - p0) / (p1 - p0) if p1 > p0 else 0.0
+            return _ramp_lerp(t, c0, c1)
+    return waypoints[-1][1]
+
+
+def _render_ramp_strip(ramp_name: str, width: int = 20) -> str:
+    """Render a horizontal color strip showing the ramp gradient."""
+    waypoints = RAMP_PRESETS.get(ramp_name)
+    if not waypoints:
+        return ""
+    parts: list[str] = []
+    for i in range(width):
+        pct = i / (width - 1) * 100
+        c = _multi_ramp_color(pct, waypoints)
+        parts.append(f"{_BAR_BG}{fg256(c)}█{RESET}")
+    return "".join(parts)
+
+
+def _render_demo_vbar(pct: float, ramp_name: str, bar_bg: str) -> str:
+    """Render a single vertical bar character for demo."""
+    waypoints = RAMP_PRESETS.get(ramp_name, RAMP_PRESETS["spectrum"])
+    c = _multi_ramp_color(pct, waypoints)
+    idx = max(0, min(8, round(pct / 100 * 8)))
+    return f"{bar_bg}{fg256(c)}{_VBAR_EIGHTHS[idx]}{RESET}"
+
+
+def _render_demo_hbar(pct: float, ramp_name: str, bar_bg: str, width: int = 5) -> str:
+    """Render a horizontal progress bar for demo."""
+    waypoints = RAMP_PRESETS.get(ramp_name, RAMP_PRESETS["spectrum"])
+    clamped = max(0.0, min(100.0, pct))
+    total = max(0, min(width * 8, round(clamped / 100 * width * 8)))
+    full = total // 8
+    frac = total % 8
+    empty = width - full - (1 if frac else 0)
+    c = _multi_ramp_color(clamped, waypoints)
+    filled = f"{bar_bg}{fg256(c)}{'█' * full}{_BAR_EIGHTHS[frac] if frac else ''}{RESET}"
+    bg_empty = f"{bar_bg}{' ' * empty}{RESET}" if empty else ""
+    return f"{filled}{bg_empty}"
+
+
+def _render_demo_number(pct: float, ramp_name: str, width: int = 0) -> str:
+    """Render a colored percentage number for demo. Pad to width if given."""
+    waypoints = RAMP_PRESETS.get(ramp_name, RAMP_PRESETS["spectrum"])
+    c = _multi_ramp_color(pct, waypoints)
+    text = f"{pct:.0f}%"
+    if width:
+        text = text.rjust(width)
+    return f"{fg256(c)}{text}{RESET}"
+
+
+def _render_demo_indicator(pct: float, ramp_name: str, display: str, bar_bg: str) -> str:
+    """Render an indicator in the given display mode."""
+    if display == "horizontal":
+        return _render_demo_hbar(pct, ramp_name, bar_bg)
+    elif display == "number":
+        return _render_demo_number(pct, ramp_name)
+    return _render_demo_vbar(pct, ramp_name, bar_bg)
+
+
+# --- config validation -------------------------------------------------------
+
+_VALID_THEME_TOKENS = frozenset(e.key for e in ELEMENTS)
+_VALID_SETTINGS_KEYS = frozenset(s.key for s in SETTINGS_DEFS)
+_VALID_TOP_KEYS = frozenset({"slots", "settings", "theme"})
+_VALID_ATTRS = frozenset(name for name, _, _ in ATTRS_AVAILABLE)
+_DEPRECATED_SETTINGS = {
+    "bar_ramp": "renamed to 5h_ramp and 7d_ramp",
+    "bar_style": "renamed to 5h_display, 7d_display, ctx_display",
+}
+
+
+def _validate_config(config: dict) -> list[str]:
+    """Validate hierarchical config, return list of error strings."""
+    errors: list[str] = []
+
+    for key in config:
+        if key not in _VALID_TOP_KEYS:
+            hint = ' (theme tokens go inside "theme")' if key in _VALID_THEME_TOKENS else ""
+            errors.append(f"unknown top-level key: '{key}'{hint}")
+
+    theme = config.get("theme")
+    if theme is not None:
+        if not isinstance(theme, dict):
+            errors.append("theme: must be an object")
+        else:
+            for token, val in theme.items():
+                if token not in _VALID_THEME_TOKENS:
+                    errors.append(f"theme: unknown token '{token}'")
+                    continue
+                if not isinstance(val, dict):
+                    errors.append(f"theme.{token}: must be an object")
+                    continue
+                for field in val:
+                    if field not in ("fg", "bg", "attrs"):
+                        errors.append(f"theme.{token}: unknown field '{field}'")
+                fg = val.get("fg")
+                if fg is not None and (not isinstance(fg, int) or not 0 <= fg <= 255):
+                    errors.append(f"theme.{token}.fg: must be 0-255, got {fg!r}")
+                bg = val.get("bg")
+                if bg is not None and (not isinstance(bg, int) or not 0 <= bg <= 255):
+                    errors.append(f"theme.{token}.bg: must be 0-255, got {bg!r}")
+                attrs = val.get("attrs")
+                if attrs is not None:
+                    if not isinstance(attrs, list):
+                        errors.append(f"theme.{token}.attrs: must be a list")
+                    else:
+                        for a in attrs:
+                            if a not in _VALID_ATTRS:
+                                errors.append(f"theme.{token}.attrs: unknown attr '{a}'")
+
+    settings = config.get("settings")
+    if settings is not None:
+        if not isinstance(settings, dict):
+            errors.append("settings: must be an object")
+        else:
+            for key, val in settings.items():
+                if key in _DEPRECATED_SETTINGS:
+                    errors.append(f"settings.{key}: {_DEPRECATED_SETTINGS[key]}")
+                elif key not in _VALID_SETTINGS_KEYS:
+                    errors.append(f"settings: unknown key '{key}'")
+                elif key in ("5h_ramp", "7d_ramp", "ctx_ramp"):
+                    if val not in RAMP_NAMES:
+                        errors.append(
+                            f"settings.{key}: must be one of "
+                            f"[{', '.join(RAMP_NAMES)}], got {val!r}"
+                        )
+                elif key in ("5h_display", "7d_display", "ctx_display"):
+                    if val not in DISPLAY_MODES:
+                        errors.append(
+                            f"settings.{key}: must be one of "
+                            f"[{', '.join(DISPLAY_MODES)}], got {val!r}"
+                        )
+                elif key in ("separator", "separator_section"):
+                    if not isinstance(val, str) or not val:
+                        errors.append(f"settings.{key}: must be a non-empty string")
+
+    return errors
+
 
 # --- config I/O --------------------------------------------------------------
 
-def load_theme() -> dict[str, ThemeEntry]:
+def _load_validated_config() -> dict:
+    """Read config.json, validate, exit(1) on errors. Return parsed dict."""
+    if not CONFIG_FILE.exists():
+        return {}
+    try:
+        config = json.loads(CONFIG_FILE.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"config: failed to parse JSON: {exc}", file=sys.stderr)
+        print(f"Fix: {CONFIG_FILE}", file=sys.stderr)
+        sys.exit(1)
+
+    errors = _validate_config(config)
+    if errors:
+        for e in errors:
+            print(f"config: {e}", file=sys.stderr)
+        print(f"Fix: {CONFIG_FILE}", file=sys.stderr)
+        sys.exit(1)
+
+    return config
+
+
+def _theme_from_config(config: dict) -> dict[str, ThemeEntry]:
+    """Extract theme entries from validated config."""
     theme = {k: ThemeEntry(fg=v.fg, bg=v.bg, attrs=list(v.attrs))
              for k, v in DEFAULTS.items()}
-    if CONFIG_FILE.exists():
-        try:
-            for key, val in json.loads(CONFIG_FILE.read_text()).items():
-                if key in theme:
-                    theme[key] = ThemeEntry(
-                        fg=val.get("fg"), bg=val.get("bg"),
-                        attrs=val.get("attrs", []),
-                    )
-        except (json.JSONDecodeError, OSError):
-            pass
+    for key, val in config.get("theme", {}).items():
+        if key in theme and isinstance(val, dict):
+            theme[key] = ThemeEntry(
+                fg=val.get("fg"), bg=val.get("bg"),
+                attrs=val.get("attrs", []),
+            )
     return theme
 
 
-def save_theme(theme: dict[str, ThemeEntry]) -> str:
+def _settings_from_config(config: dict) -> dict[str, str]:
+    """Extract settings from validated config."""
+    settings = {s.key: s.default for s in SETTINGS_DEFS}
+    for s in SETTINGS_DEFS:
+        val = config.get("settings", {}).get(s.key)
+        if isinstance(val, str) and val in s.options:
+            settings[s.key] = val
+    return settings
+
+
+def save_theme(theme: dict[str, ThemeEntry],
+               settings: dict[str, str] | None = None) -> str:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    # preserve non-theme keys (e.g. "slots") from existing config
+    # preserve slots from existing config
     existing = {}
     if CONFIG_FILE.exists():
         try:
             existing = json.loads(CONFIG_FILE.read_text())
         except (json.JSONDecodeError, OSError):
             pass
-    data = {k: v for k, v in existing.items() if k not in theme}
+
+    data: dict = {}
+
+    # preserve slots
+    if "slots" in existing:
+        data["slots"] = existing["slots"]
+
+    # write settings section (only non-default values)
+    settings_out: dict = {}
+    if settings:
+        for s in SETTINGS_DEFS:
+            val = settings.get(s.key, s.default)
+            if val != s.default:
+                settings_out[s.key] = val
+    if settings_out:
+        data["settings"] = settings_out
+
+    # write theme section
+    theme_out: dict = {}
     for key, entry in theme.items():
         d: dict = {}
         if entry.fg is not None:
@@ -182,7 +422,9 @@ def save_theme(theme: dict[str, ThemeEntry]) -> str:
             d["bg"] = entry.bg
         if entry.attrs:
             d["attrs"] = entry.attrs
-        data[key] = d
+        theme_out[key] = d
+    data["theme"] = theme_out
+
     tmp_fd, tmp_path = tempfile.mkstemp(dir=str(CONFIG_DIR), prefix=".theme.", suffix=".json")
     try:
         with os.fdopen(tmp_fd, "w") as f:
@@ -216,12 +458,17 @@ def build_style(entry: ThemeEntry, extra: str = "") -> str:
 
 class Editor:
     def __init__(self):
-        self.theme = load_theme()
+        config = _load_validated_config()
+        self.theme = _theme_from_config(config)
+        self.settings = _settings_from_config(config)
         self.cursor = 0          # element index
         self.clipboard: ThemeEntry | None = None
-        self.mode = "nav"        # nav | fg | bg | attr
+        self.mode = "nav"        # nav | fg | bg | attr | settings
         self.color_cursor = 0    # color picker position (0-255)
         self.attr_cursor = 0     # attribute picker position
+        self.settings_cursor = 0 # settings list position
+        self._anim_pct = 0.0     # animation progress 0..100
+        self._anim_ascending = True
         self.msg = ""
         self.running = True
 
@@ -264,26 +511,31 @@ class Editor:
 
     def render_preview(self) -> tuple[str, str]:
         cur = ELEMENTS[self.cursor].key
+        sep = self.settings["separator"]
+        sep_section = self.settings["separator_section"]
+
+        # extra = " · " (between providers), intra = " | " (within provider)
+        extra = ("sep", f" {sep} ")
+        intra = ("sep", f" {sep_section} ")
 
         # (key_or_None, visible_text) — None means plain separator
         segments: list[tuple[str | None, str]] = [
             ("dir_parent", DEMO_PARENT_DIR), ("dir_name", DEMO_CURRENT_DIR),
-            (None, " "),
+            extra,
             ("branch_sign", "⑂"), ("branch_name", DEMO_BRANCH),
             ("git_dirty", "*"), ("git_staged", "+"),
             ("git_untracked", "?"),
             ("git_ahead", "↑"), ("git_behind", "↓"),
             (None, " "),
             ("ci_ok", "CI"), (None, " "), ("ci_fail", "CI"), (None, " "), ("ci_wait", "CI"),
-            (None, " "),
-            ("sep", "|"),
-            (None, " "),
+            intra,
             ("pr_fail", "⁕"), ("pr_wait", "⁕"),
             ("pr_ok", "⁕"), ("pr_none", "⁕"),
             (None, " "),
             ("notif", "💬3"),
             (None, "  "),
             ("err", "error"),
+            extra,
         ]
 
         preview_parts: list[str] = []
@@ -298,9 +550,54 @@ class Editor:
                 preview_parts.append(text)
                 caret_chars.extend([" "] * vlen)
 
+        # append limits demo with caretable lim_time and lim_bar_bg
+        self._append_limits_demo(preview_parts, caret_chars, cur)
+
         preview = "".join(preview_parts)
         carets = f"{DIM}{''.join(caret_chars)}{RESET}"
         return preview, carets
+
+    def _append_limits_demo(self, parts: list[str], carets: list[str], cur: str):
+        """Append limits bars to preview with caretable lim_time and lim_bar_bg."""
+        bar_bg_entry = self.theme.get("lim_bar_bg")
+        bar_bg = bg256(bar_bg_entry.bg) if bar_bg_entry and bar_bg_entry.bg is not None else _BAR_BG
+
+        anim = self._is_anim_active()
+        p = self._anim_pct
+        demos = [
+            ("5h", p if anim else 30, None if anim else "4h26m"),
+            ("7d", p if anim else 55, None),
+            ("ctx", p if anim else 40, None),
+        ]
+        for i, (label, pct, time_text) in enumerate(demos):
+            if i > 0:
+                parts.append(" ")
+                carets.append(" ")
+
+            # label (uses lim_time style)
+            lbl = f"{label} "
+            parts.append(self._styled("lim_time", lbl))
+            carets.extend(["^" if cur == "lim_time" else " "] * self._visual_len(lbl))
+
+            # bar (uses lim_bar_bg)
+            ramp_name = self.settings.get(f"{label}_ramp", "spectrum")
+            display = self.settings.get(f"{label}_display", "vertical")
+            if display == "number":
+                bar_text = _render_demo_number(pct, ramp_name, width=4)
+                bar_vlen = 4
+            elif display == "horizontal":
+                bar_text = _render_demo_hbar(pct, ramp_name, bar_bg)
+                bar_vlen = 5
+            else:
+                bar_text = _render_demo_vbar(pct, ramp_name, bar_bg)
+                bar_vlen = 1
+            parts.append(bar_text)
+            carets.extend(["^" if cur == "lim_bar_bg" else " "] * bar_vlen)
+
+            # time text (only for first demo bar)
+            if time_text:
+                parts.append(self._styled("lim_time", time_text))
+                carets.extend(["^" if cur == "lim_time" else " "] * len(time_text))
 
     # --- legend ---
 
@@ -389,6 +686,61 @@ class Editor:
                 lines.append(f"  {arrow} {active} {color}{sgr}{desc}{RESET}")
         return lines
 
+    # --- settings panel ---
+
+    def _render_setting_preview(self, sdef: SettingDef, val: str) -> str:
+        """Render a visual preview for a setting value."""
+        bar_bg_entry = self.theme.get("lim_bar_bg")
+        bar_bg = bg256(bar_bg_entry.bg) if bar_bg_entry and bar_bg_entry.bg is not None else _BAR_BG
+
+        if sdef.key in ("5h_ramp", "7d_ramp", "ctx_ramp"):
+            # determine this indicator's display mode
+            prefix = sdef.key.split("_")[0]
+            display = self.settings.get(f"{prefix}_display", "vertical")
+            if display == "number":
+                bars = " ".join(_render_demo_number(p, val) for p in range(10, 100, 10))
+            elif display == "horizontal":
+                bars = " ".join(_render_demo_hbar(p, val, bar_bg, 3) for p in (20, 50, 80))
+            else:
+                bars = " ".join(_render_demo_vbar(p, val, bar_bg) for p in range(5, 100, 5))
+            return f"  {bars}"
+        elif sdef.key in ("5h_display", "7d_display", "ctx_display"):
+            prefix = sdef.key.split("_")[0]
+            ramp = self.settings.get(f"{prefix}_ramp", "spectrum")
+            if val == "number":
+                return f"  {_render_demo_number(60, ramp)}"
+            elif val == "horizontal":
+                return f"  {_render_demo_hbar(60, ramp, bar_bg, 8)}"
+            else:
+                bars = " ".join(_render_demo_vbar(p, ramp, bar_bg) for p in (10, 30, 50, 70, 90))
+                return f"  {bars}"
+        elif sdef.key == "separator":
+            sep_entry = self.theme.get("sep")
+            sep_style = build_style(sep_entry) if sep_entry else fg256(8)
+            return f"  {DIM}path{RESET} {sep_style}{val}{RESET} {DIM}git{RESET} {sep_style}{val}{RESET} {DIM}limits{RESET}"
+        elif sdef.key == "separator_section":
+            sep_entry = self.theme.get("sep")
+            sep_style = build_style(sep_entry) if sep_entry else fg256(8)
+            return f"  {DIM}git{RESET} {sep_style}{val}{RESET} {DIM}PR{RESET}"
+        return ""
+
+    def render_settings(self) -> list[str]:
+        lines: list[str] = []
+        for i, sdef in enumerate(SETTINGS_DEFS):
+            arrow = "▸" if i == self.settings_cursor else " "
+            val = self.settings[sdef.key]
+            # show options inline with current highlighted
+            opt_parts: list[str] = []
+            for opt in sdef.options:
+                if opt == val:
+                    opt_parts.append(f"{BOLD}{REVERSE} {opt} {RESET}")
+                else:
+                    opt_parts.append(f" {DIM}{opt}{RESET} ")
+            opts_str = " ".join(opt_parts)
+            preview = self._render_setting_preview(sdef, val)
+            lines.append(f"  {arrow} {sdef.label:20s} {opts_str}{preview}")
+        return lines
+
     # --- full render ---
 
     def render(self):
@@ -444,12 +796,16 @@ class Editor:
             out.append(f"  {BOLD}Toggle attributes{RESET}  {DIM}(↑↓ navigate, Space toggle, Esc done){RESET}\r\n")
             for line in self.render_attr_picker():
                 out.append(f"{line}\r\n")
+        elif self.mode == "settings":
+            out.append(f"  {BOLD}Global Settings{RESET}  {DIM}(↑↓ navigate, ←→ change, Esc back){RESET}\r\n\r\n")
+            for line in self.render_settings():
+                out.append(f"{line}\r\n")
 
         out.append("\r\n")
         if self.mode == "nav":
             K = f"{RESET}\033[97m"  # bright white keys
             D = f"{RESET}"             # default descriptions
-            out.append(f"  {D}← → navigate   {K}f{D} fg   {K}b{D} bg   {K}a{D} attrs   {K}c{D} copy   {K}v{D} paste   {K}s{D} save   {K}r{D} reset   {K}q{D} quit{RESET}\r\n")
+            out.append(f"  {D}← → navigate   {K}f{D} fg   {K}b{D} bg   {K}a{D} attrs   {K}g{D} settings   {K}c{D} copy   {K}v{D} paste   {K}s{D} save   {K}r{D} reset   {K}q{D} quit{RESET}\r\n")
 
         if self.msg:
             out.append(f"\r\n  {self.msg}\r\n")
@@ -469,6 +825,8 @@ class Editor:
             self._handle_color(key)
         elif self.mode == "attr":
             self._handle_attr(key)
+        elif self.mode == "settings":
+            self._handle_settings(key)
 
     def _handle_nav(self, key: str):
         if key == "q":
@@ -488,8 +846,11 @@ class Editor:
         elif key == "a":
             self.mode = "attr"
             self.attr_cursor = 0
+        elif key == "g":
+            self.mode = "settings"
+            self.settings_cursor = 0
         elif key == "s":
-            path = save_theme(self.theme)
+            path = save_theme(self.theme, self.settings)
             self.msg = f"Saved → {path}"
         elif key == "r":
             k = ELEMENTS[self.cursor].key
@@ -569,6 +930,26 @@ class Editor:
             else:
                 entry.attrs.append(name)
 
+    def _handle_settings(self, key: str):
+        if key == ESC_KEY:
+            self.mode = "nav"
+        elif key == UP:
+            self.settings_cursor = (self.settings_cursor - 1) % len(SETTINGS_DEFS)
+        elif key == DOWN:
+            self.settings_cursor = (self.settings_cursor + 1) % len(SETTINGS_DEFS)
+        elif key in (LEFT, RIGHT):
+            sdef = SETTINGS_DEFS[self.settings_cursor]
+            cur_val = self.settings[sdef.key]
+            try:
+                idx = sdef.options.index(cur_val)
+            except ValueError:
+                idx = 0
+            if key == RIGHT:
+                idx = (idx + 1) % len(sdef.options)
+            else:
+                idx = (idx - 1) % len(sdef.options)
+            self.settings[sdef.key] = sdef.options[idx]
+
     # --- terminal I/O ---
 
     def read_key(self) -> str:
@@ -602,13 +983,49 @@ class Editor:
             ch += os.read(fd, need)
         return ch.decode()
 
+    # --- animation ---
+
+    _ANIM_STEP = 5.0       # pct per frame
+    _ANIM_INTERVAL = 0.067  # ~15 fps
+
+    def _is_anim_active(self) -> bool:
+        """Animate when settings cursor is on a ramp or display row."""
+        if self.mode != "settings":
+            return False
+        sdef = SETTINGS_DEFS[self.settings_cursor]
+        return sdef.key.endswith("_ramp") or sdef.key.endswith("_display")
+
+    def _advance_animation(self):
+        if self._anim_ascending:
+            self._anim_pct += self._ANIM_STEP
+            if self._anim_pct >= 100:
+                self._anim_pct = 100
+                self._anim_ascending = False
+        else:
+            self._anim_pct -= self._ANIM_STEP
+            if self._anim_pct <= 0:
+                self._anim_pct = 0
+                self._anim_ascending = True
+
+    def _read_key_timeout(self, timeout: float) -> str | None:
+        fd = sys.stdin.fileno()
+        if not select.select([fd], [], [], timeout)[0]:
+            return None
+        return self.read_key()
+
     def run(self):
         old = termios.tcgetattr(sys.stdin)
         try:
             tty.setraw(sys.stdin)
             while self.running:
                 self.render()
-                key = self.read_key()
+                if self._is_anim_active():
+                    key = self._read_key_timeout(self._ANIM_INTERVAL)
+                    if key is None:
+                        self._advance_animation()
+                        continue
+                else:
+                    key = self.read_key()
                 self.handle_key(key)
         finally:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
@@ -699,10 +1116,13 @@ ESC_KEY  = "\x1b"
 _CYRILLIC_MAP = {
     "й": "q", "а": "f", "и": "b", "ф": "a", "ы": "s",
     "к": "r", "К": "R", "в": "d", "с": "c", "м": "v",
+    "п": "g",
 }
 
 
 def main():
+    # validate config before tty check — show config errors even in non-interactive mode
+    _load_validated_config()
     if not sys.stdin.isatty():
         print("Error: theme editor requires an interactive terminal", file=sys.stderr)
         sys.exit(1)

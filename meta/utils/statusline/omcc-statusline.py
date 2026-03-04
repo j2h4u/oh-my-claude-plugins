@@ -5,7 +5,7 @@ Reads JSON from stdin (Claude Code statusline protocol), renders N lines
 via a slot system. Each slot is either a built-in provider (limits, git) or
 an external shell command. Slots are configured in config.json under "slots".
 
-Default (no config): line 1 = limits (5h/7d usage), line 2 = dir + git + CI + PR.
+Default (no config): single line = path · git · limits · vibes.
 
 Git status indicators:
   *  dirty (unstaged changes)   — yellow dim
@@ -95,17 +95,29 @@ RAMP_CYAN   = (23, 51)    # rgb_011 → rgb_055
 RAMP_ORANGE = (58, 202)   # rgb_110 → rgb_510
 # Pace delta: log scale, max delta for full brightness
 PACE_COLOR_MAX_DELTA = 40  # pp — above this = brightest
-# Context window: muted hue rotation cyan→amber→orange→red (RGB sum ~2, uniform low brightness)
-CTX_RAMP = [
-    (0,   23),   # rgb_011 — dim cyan
-    (40,  58),   # rgb_110 — dim amber
-    (70,  94),   # rgb_210 — dim orange
-    (100, 88),   # rgb_200 — dim red
-]
+# Named color ramp presets — waypoint lists for _multi_ramp() / _vbar(ramp=...).
+# Each preset: [(pct_threshold, 256color_index), ...].
+# Usable by any progress bar or color-changing element.
+RAMP_PRESETS = {
+    "aurora":    [(0, 44), (35, 33), (70, 127), (100, 160)],   # cyan→blue→magenta→red
+    "traffic":   [(0, 35), (50, 185), (100, 160)],              # green→yellow→red
+    "twilight":  [(0, 33), (50, 92), (100, 124)],               # blue→purple→red
+    "ember":     [(0, 37), (50, 143), (100, 131)],              # dim cyan→dim yellow→dim red
+    "spectrum":  [(0, 35), (25, 44), (50, 33), (75, 127), (100, 160)],  # green→cyan→blue→magenta→red
+    "heatmap":   [(0, 33), (25, 44), (50, 40), (75, 184), (100, 160)],  # blue→cyan→green→yellow→red
+}
+# Per-indicator configurable defaults (overridden by config.json)
+_5h_ramp = RAMP_PRESETS["spectrum"]
+_7d_ramp = RAMP_PRESETS["spectrum"]
+_ctx_ramp = RAMP_PRESETS["aurora"]
+_5h_display = "vertical"               # "number", "vertical", or "horizontal"
+_7d_display = "vertical"
+_ctx_display = "vertical"
 # Unicode block elements: index 0 = empty, 1..7 = 1/8..7/8, 8 = full
-_BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
+_BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"     # horizontal (left→right)
+_VBAR_EIGHTHS = " ▁▂▃▄▅▆▇█"    # vertical (bottom→up)
 
-DEFAULT_SLOTS = [{"provider": "limits"}, {"provider": "git"}]
+DEFAULT_SLOTS = [[{"provider": "path"}, {"provider": "git"}, {"provider": "limits"}, {"provider": "vibes"}]]
 
 
 # --- colors ------------------------------------------------------------------
@@ -197,8 +209,8 @@ class T:
     R              = Pal.R
 
 
-SEP2 = f" {T.sep}|{T.R} "
-SEP_DOT = f" {T.sep}·{T.R} "  # separator between limits sections
+SEP_INTRA = f" {T.sep}|{T.R} "    # within a provider (git | PR)
+SEP_EXTRA = f" {T.sep}·{T.R} "  # between providers (path · git · limits)
 
 
 # --- theme config loading ----------------------------------------------------
@@ -227,23 +239,190 @@ def _build_ansi(entry: dict) -> str:
     return "".join(parts)
 
 
+# --- config validation -------------------------------------------------------
+
+_VALID_THEME_TOKENS = frozenset(
+    k for k in T.__dict__ if not k.startswith("_") and k != "R"
+)
+_VALID_SETTINGS_KEYS = frozenset({
+    "5h_ramp", "7d_ramp", "ctx_ramp",
+    "5h_display", "7d_display", "ctx_display",
+    "separator", "separator_section",
+})
+_DEPRECATED_SETTINGS = {
+    "bar_ramp": "renamed to 5h_ramp and 7d_ramp",
+    "bar_style": "renamed to 5h_display, 7d_display, ctx_display",
+}
+_VALID_TOP_KEYS = frozenset({"slots", "settings", "theme"})
+_VALID_SLOT_KEYS = frozenset({"provider", "command", "ttl", "enabled"})
+_VALID_ATTRS = frozenset(_ATTR_SGR.keys())
+
+
+def _validate_config(config: dict) -> list[str]:
+    """Validate hierarchical config, return list of error strings."""
+    errors: list[str] = []
+
+    # top-level keys
+    for key in config:
+        if key not in _VALID_TOP_KEYS:
+            hint = ' (theme tokens go inside "theme")' if key in _VALID_THEME_TOKENS else ""
+            errors.append(f"unknown top-level key: '{key}'{hint}")
+
+    # theme section
+    theme = config.get("theme")
+    if theme is not None:
+        if not isinstance(theme, dict):
+            errors.append("theme: must be an object")
+        else:
+            for token, val in theme.items():
+                if token not in _VALID_THEME_TOKENS:
+                    errors.append(f"theme: unknown token '{token}'")
+                    continue
+                if not isinstance(val, dict):
+                    errors.append(f"theme.{token}: must be an object")
+                    continue
+                for field in val:
+                    if field not in ("fg", "bg", "attrs"):
+                        errors.append(f"theme.{token}: unknown field '{field}'")
+                fg = val.get("fg")
+                if fg is not None and (not isinstance(fg, int) or not 0 <= fg <= 255):
+                    errors.append(f"theme.{token}.fg: must be 0-255, got {fg!r}")
+                bg = val.get("bg")
+                if bg is not None and (not isinstance(bg, int) or not 0 <= bg <= 255):
+                    errors.append(f"theme.{token}.bg: must be 0-255, got {bg!r}")
+                attrs = val.get("attrs")
+                if attrs is not None:
+                    if not isinstance(attrs, list):
+                        errors.append(f"theme.{token}.attrs: must be a list")
+                    else:
+                        for a in attrs:
+                            if a not in _VALID_ATTRS:
+                                errors.append(f"theme.{token}.attrs: unknown attr '{a}'")
+
+    # settings section
+    settings = config.get("settings")
+    if settings is not None:
+        if not isinstance(settings, dict):
+            errors.append("settings: must be an object")
+        else:
+            ramp_names = set(RAMP_PRESETS.keys())
+            display_modes = {"number", "vertical", "horizontal"}
+            for key, val in settings.items():
+                if key in _DEPRECATED_SETTINGS:
+                    errors.append(f"settings.{key}: {_DEPRECATED_SETTINGS[key]}")
+                elif key not in _VALID_SETTINGS_KEYS:
+                    errors.append(f"settings: unknown key '{key}'")
+                elif key in ("5h_ramp", "7d_ramp", "ctx_ramp"):
+                    if val not in ramp_names:
+                        errors.append(
+                            f"settings.{key}: must be one of "
+                            f"[{', '.join(sorted(ramp_names))}], got {val!r}"
+                        )
+                elif key in ("5h_display", "7d_display", "ctx_display"):
+                    if val not in display_modes:
+                        errors.append(
+                            f"settings.{key}: must be one of "
+                            f"[number, vertical, horizontal], got {val!r}"
+                        )
+                elif key in ("separator", "separator_section"):
+                    if not isinstance(val, str) or not val:
+                        errors.append(f"settings.{key}: must be a non-empty string")
+
+    # slots section
+    slots = config.get("slots")
+    if slots is not None:
+        if not isinstance(slots, list):
+            errors.append("slots: must be an array")
+        else:
+            provider_names = set(PROVIDERS.keys())
+            for i, item in enumerate(slots):
+                items = item if isinstance(item, list) else [item]
+                for j, slot in enumerate(items):
+                    prefix = f"slots[{i}][{j}]" if isinstance(item, list) else f"slots[{i}]"
+                    if not isinstance(slot, dict):
+                        errors.append(f"{prefix}: must be an object")
+                        continue
+                    for field in slot:
+                        if field not in _VALID_SLOT_KEYS:
+                            errors.append(f"{prefix}: unknown field '{field}'")
+                    has_provider = "provider" in slot
+                    has_command = "command" in slot
+                    if not has_provider and not has_command:
+                        errors.append(f"{prefix}: must have 'provider' or 'command'")
+                    elif has_provider and has_command:
+                        errors.append(f"{prefix}: cannot have both 'provider' and 'command'")
+                    if has_provider and slot["provider"] not in provider_names:
+                        errors.append(
+                            f"{prefix}: unknown provider '{slot['provider']}', "
+                            f"valid: [{', '.join(sorted(provider_names))}]"
+                        )
+                    if has_command and not isinstance(slot["command"], str):
+                        errors.append(f"{prefix}.command: must be a string")
+                    ttl = slot.get("ttl")
+                    if ttl is not None and not isinstance(ttl, (int, float)):
+                        errors.append(f"{prefix}.ttl: must be a number")
+                    enabled = slot.get("enabled")
+                    if enabled is not None and not isinstance(enabled, bool):
+                        errors.append(f"{prefix}.enabled: must be a boolean")
+
+    return errors
+
+
 def _load_theme_config() -> list[dict]:
     """Load theme overrides from config file into T class. Return slots config."""
-    global SEP2, SEP_DOT
+    global SEP_INTRA, SEP_EXTRA
+    global _5h_ramp, _7d_ramp, _ctx_ramp, _5h_display, _7d_display, _ctx_display
 
     if not THEME_FILE.exists():
         return list(DEFAULT_SLOTS)
     try:
         config = json.loads(THEME_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
-        return list(DEFAULT_SLOTS)
-    for key, entry in config.items():
-        if key == "slots":
-            continue
-        if hasattr(T, key) and key != "R":
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"config: failed to parse JSON: {exc}", file=sys.stderr)
+        print(f"Fix: {THEME_FILE}", file=sys.stderr)
+        sys.exit(1)
+
+    errors = _validate_config(config)
+    if errors:
+        for e in errors:
+            print(f"config: {e}", file=sys.stderr)
+        print(f"Fix: {THEME_FILE}", file=sys.stderr)
+        sys.exit(1)
+
+    # apply theme token overrides
+    theme = config.get("theme", {})
+    for key, entry in theme.items():
+        if isinstance(entry, dict) and hasattr(T, key):
             setattr(T, key, _build_ansi(entry))
-    SEP2 = f" {T.sep}|{T.R} "
-    SEP_DOT = f" {T.sep}·{T.R} "
+
+    # read settings
+    settings = config.get("settings", {})
+
+    # per-indicator ramp presets
+    for prefix, default_name in (("5h", "spectrum"), ("7d", "spectrum"), ("ctx", "aurora")):
+        name = settings.get(f"{prefix}_ramp")
+        if name and name in RAMP_PRESETS:
+            globals()[f"_{prefix}_ramp"] = RAMP_PRESETS[name]
+
+    # per-indicator display modes
+    for prefix in ("5h", "7d", "ctx"):
+        mode = settings.get(f"{prefix}_display")
+        if mode in ("number", "vertical", "horizontal"):
+            globals()[f"_{prefix}_display"] = mode
+
+    # configurable separators
+    sep_char = settings.get("separator")
+    if isinstance(sep_char, str) and sep_char:
+        SEP_EXTRA = f" {T.sep}{sep_char}{T.R} "
+    else:
+        SEP_EXTRA = f" {T.sep}·{T.R} "
+
+    sep_section = settings.get("separator_section")
+    if isinstance(sep_section, str) and sep_section:
+        SEP_INTRA = f" {T.sep}{sep_section}{T.R} "
+    else:
+        SEP_INTRA = f" {T.sep}|{T.R} "
+
     return config.get("slots", list(DEFAULT_SLOTS))
 
 
@@ -838,6 +1017,16 @@ def _bar(pct: float, width: int = LIMITS_BAR_WIDTH, *,
     return f"{filled}{bg_empty}"
 
 
+def _vbar(pct: float, *, ramp: list | None = None,
+          color_range: tuple[float, float] = (0.0, 100.0)) -> str:
+    """Single-character vertical progress bar (bottom→up), colored."""
+    clamped = max(0.0, min(100.0, pct))
+    idx = round(clamped / 100 * 8)
+    idx = max(0, min(8, idx))
+    color = _multi_ramp(clamped, ramp) if ramp else _ramp_color(clamped, *color_range)
+    return f"\033[48;5;238m{color}{_VBAR_EIGHTHS[idx]}{T.R}"
+
+
 def _7d_pace_label(utilization: float, resets_at: str) -> str:
     """Return pace label for 7d window assuming 5-day (120h) working budget."""
     reset_epoch = _parse_iso_utc(resets_at)
@@ -854,10 +1043,16 @@ def _7d_pace_label(utilization: float, resets_at: str) -> str:
 
 
 def _format_limit_window(utilization: float, resets_at: str, label: str,
-                         show_pace: bool = False) -> str:
-    """Format one limit window: '5h ▋    '."""
+                         *, ramp: list, display: str) -> str:
+    """Format one limit window: '5h▅' (compact, no trailing separator)."""
     pct = max(0.0, min(100.0, utilization))
-    bar = _bar(pct)
+    if display == "horizontal":
+        indicator = _bar(pct, ramp=ramp)
+    elif display == "number":
+        color = _multi_ramp(pct, ramp)
+        indicator = f"{color}{pct:.0f}%{T.R}"
+    else:
+        indicator = _vbar(pct, ramp=ramp)
 
     # show reset countdown only when utilization >= 50%
     time_str = ""
@@ -865,12 +1060,8 @@ def _format_limit_window(utilization: float, resets_at: str, label: str,
         reset_epoch = _parse_iso_utc(resets_at)
         if reset_epoch is not None:
             remaining_min = max(0, int((reset_epoch - time.time()) / 60))
-            time_str = f" {T.lim_time}{_format_duration(remaining_min)}{T.R}"
-
-    pace_str = _7d_pace_label(utilization, resets_at) if show_pace else ""
-    if pace_str:
-        pace_str = f"{SEP_DOT}{pace_str}"
-    return f"{T.dir_parent}{label}{T.R} {bar}{time_str}{pace_str}"
+            time_str = f"{T.lim_time}{_format_duration(remaining_min)}{T.R}"
+    return f"{T.dir_parent}{label}{T.R} {indicator}{time_str}"
 
 
 def _refresh_limits_cache_subprocess() -> None:
@@ -894,9 +1085,12 @@ def _refresh_limits_cache_subprocess() -> None:
 
 
 def provider_limits(input_json: str, cwd: str) -> str:
-    """Built-in provider: API usage limits (5h/7d windows) + context window."""
+    """Built-in provider: API usage limits (5h/7d windows) + context window.
+
+    Layout: pace · 5h▅ 7d▅ ctx▅
+    """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    parts: list[str] = []
+    bars: list[str] = []
 
     data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
     if data:
@@ -905,13 +1099,16 @@ def provider_limits(input_json: str, cwd: str) -> str:
         u5 = five.get("utilization", 0)
         u7 = seven.get("utilization", 0)
         if u7 >= 100:
-            parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
-        elif u5 >= 100:
-            parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
-            parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
+            bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
+                                             ramp=_7d_ramp, display=_7d_display))
         else:
-            parts.append(_format_limit_window(u5, five.get("resets_at", ""), "5h"))
-            parts.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d", show_pace=True))
+            bars.append(_format_limit_window(u5, five.get("resets_at", ""), "5h",
+                                             ramp=_5h_ramp, display=_5h_display))
+            bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
+                                             ramp=_7d_ramp, display=_7d_display))
+    else:
+        bars.append(f"{T.dir_parent}5h{T.R} {T.dim}N/A{T.R}")
+        bars.append(f"{T.dir_parent}7d{T.R} {T.dim}N/A{T.R}")
 
     # context window from stdin JSON (no API call)
     try:
@@ -919,19 +1116,40 @@ def provider_limits(input_json: str, cwd: str) -> str:
         remaining = inp.get("context_window", {}).get("remaining_percentage")
         if remaining is not None:
             used = 100 - remaining
-            parts.append(f"{T.dir_parent}ctx{T.R} {_bar(used, ramp=CTX_RAMP)}")
+            if _ctx_display == "horizontal":
+                ctx_bar = _bar(used, ramp=_ctx_ramp)
+            elif _ctx_display == "number":
+                ctx_bar = f"{_multi_ramp(used, _ctx_ramp)}{used:.0f}%{T.R}"
+            else:
+                ctx_bar = _vbar(used, ramp=_ctx_ramp)
+            bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
+        else:
+            bars.append(f"{T.dir_parent}ctx{T.R} {T.dim}N/A{T.R}")
     except (json.JSONDecodeError, KeyError, TypeError):
-        pass
+        bars.append(f"{T.dir_parent}ctx{T.R} {T.dim}N/A{T.R}")
 
-    return SEP_DOT.join(parts)
+    return " ".join(bars)
+
+
+def provider_vibes(input_json: str, cwd: str) -> str:
+    """Built-in provider: 7d pace label (vibes indicator)."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
+    if not data:
+        return ""
+    seven = data.get("seven_day", {})
+    return _7d_pace_label(seven.get("utilization", 0), seven.get("resets_at", ""))
 
 
 # --- slot providers ----------------------------------------------------------
 
-def provider_git(input_json: str, cwd: str) -> str:
-    """Built-in provider: directory + git + CI + PR line."""
-    dir_name = get_dir_name(cwd)
+def provider_path(input_json: str, cwd: str) -> str:
+    """Built-in provider: directory name (parent/current/)."""
+    return get_dir_name(cwd)
 
+
+def provider_git(input_json: str, cwd: str) -> str:
+    """Built-in provider: git branch + status + CI + PR."""
     with ThreadPoolExecutor(max_workers=2) as pool:
         git_future = pool.submit(get_git_info, cwd)
         pr_future = pool.submit(get_pr_status)
@@ -954,22 +1172,25 @@ def provider_git(input_json: str, cwd: str) -> str:
         except Exception:
             ci_label = ""
 
+    if not branch:
+        return ""
+
     # assemble line
-    line = dir_name
-    if branch:
-        line += f" {T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
-        if git_status:
-            line += git_status
+    line = f"{T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
+    if git_status:
+        line += git_status
     if ci_label:
         line += f" {ci_label}"
     if pr_status:
-        line += f"{SEP2}{pr_status}"
+        line += f"{SEP_INTRA}{pr_status}"
     return line
 
 
 PROVIDERS: dict[str, callable] = {
+    "path": provider_path,
     "git": provider_git,
     "limits": provider_limits,
+    "vibes": provider_vibes,
 }
 
 
@@ -1015,9 +1236,28 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
 
 # --- slot orchestrator -------------------------------------------------------
 
-def execute_slots(slots: list[dict], input_json: str, cwd: str) -> list[str]:
-    """Execute all slots in parallel, return ordered list of non-empty lines."""
-    slots = [s for s in slots if s.get("enabled", True)]
+def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
+    """Execute all slots in parallel, return ordered list of non-empty lines.
+
+    Each slot is either:
+      - a dict  → one widget = one line  (backward compat)
+      - a list  → multiple widgets joined on one line with SEP_INTRA
+    """
+    # normalize: wrap bare dicts into single-element lists
+    lines: list[list[dict]] = []
+    for slot in slots:
+        if isinstance(slot, list):
+            enabled = [s for s in slot if s.get("enabled", True)]
+            if enabled:
+                lines.append(enabled)
+        elif slot.get("enabled", True):
+            lines.append([slot])
+
+    # flatten all widgets for parallel execution, track (line_idx, widget_idx)
+    all_widgets: list[tuple[int, int, dict]] = []
+    for li, widgets in enumerate(lines):
+        for wi, w in enumerate(widgets):
+            all_widgets.append((li, wi, w))
 
     def _run_slot(slot: dict) -> str:
         provider = slot.get("provider")
@@ -1032,17 +1272,25 @@ def execute_slots(slots: list[dict], input_json: str, cwd: str) -> list[str]:
             return run_external_slot(command, input_json, ttl)
         return ""
 
-    results = [""] * len(slots)
-    with ThreadPoolExecutor(max_workers=max(len(slots), 1)) as pool:
-        futures = {pool.submit(_run_slot, slot): i for i, slot in enumerate(slots)}
+    # run all widgets in parallel
+    grid: list[list[str]] = [[""] * len(ws) for ws in lines]
+    with ThreadPoolExecutor(max_workers=max(len(all_widgets), 1)) as pool:
+        futures = {pool.submit(_run_slot, w): (li, wi)
+                   for li, wi, w in all_widgets}
         for future in as_completed(futures):
-            idx = futures[future]
+            li, wi = futures[future]
             try:
-                results[idx] = future.result()
+                grid[li][wi] = future.result()
             except Exception:
-                results[idx] = ""
+                grid[li][wi] = ""
 
-    return [line for line in results if line]
+    # assemble: join widgets on same line with SEP_EXTRA
+    result: list[str] = []
+    for parts in grid:
+        joined = SEP_EXTRA.join(p for p in parts if p)
+        if joined:
+            result.append(joined)
+    return result
 
 
 # --- render ------------------------------------------------------------------
@@ -1058,29 +1306,50 @@ def demo() -> None:
     """Print demo scenarios for visual testing."""
     D = PR_DOT
 
+    def path_part() -> str:
+        """Directory name for demo display."""
+        return f"{T.dir_name}{DEMO_DIR_NAME}{T.R}"
+
     def git_line(branch: str, status: str = "", ci: str = "", pr: str = "") -> str:
         """Assemble a git-style line for demo display."""
-        line = f"{T.dir_name}{DEMO_DIR_NAME}{T.R}"
-        if branch:
-            line += f" {T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
-            if status:
-                line += status
+        if not branch:
+            return ""
+        line = f"{T.branch_sign}{BRANCH_LABEL}{T.R}{T.branch_name}{branch}{T.R}"
+        if status:
+            line += status
         if ci:
             line += f" {ci}"
         if pr:
-            line += f"{SEP2}{pr}"
+            line += f"{SEP_INTRA}{pr}"
         return line
 
-    def limits_line(u5: float, r5: str, u7: float, r7: str, ctx: int) -> str:
-        """Assemble a limits-style line for demo display."""
-        parts: list[str] = []
+    def limits_bars(u5: float, r5: str, u7: float, r7: str, ctx: int) -> str:
+        """Assemble limits bars: '5h ▅ 7d ▃ ctx ▂'."""
+        bars: list[str] = []
         if u7 >= 100:
-            parts.append(_format_limit_window(u7, r7, "7d", show_pace=True))
+            bars.append(_format_limit_window(u7, r7, "7d",
+                                             ramp=_7d_ramp, display=_7d_display))
         else:
-            parts.append(_format_limit_window(u5, r5, "5h"))
-            parts.append(_format_limit_window(u7, r7, "7d", show_pace=True))
-        parts.append(f"{T.dir_parent}ctx{T.R} {_bar(ctx, ramp=CTX_RAMP)}")
-        return SEP_DOT.join(parts)
+            bars.append(_format_limit_window(u5, r5, "5h",
+                                             ramp=_5h_ramp, display=_5h_display))
+            bars.append(_format_limit_window(u7, r7, "7d",
+                                             ramp=_7d_ramp, display=_7d_display))
+        if _ctx_display == "horizontal":
+            ctx_bar = _bar(ctx, ramp=_ctx_ramp)
+        elif _ctx_display == "number":
+            ctx_bar = f"{_multi_ramp(ctx, _ctx_ramp)}{ctx:.0f}%{T.R}"
+        else:
+            ctx_bar = _vbar(ctx, ramp=_ctx_ramp)
+        bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
+        return " ".join(bars)
+
+    def vibes_label(u7: float, r7: str) -> str:
+        """Pace label for demo."""
+        return _7d_pace_label(u7, r7)
+
+    def combined(path: str, git: str, limits: str, vibes: str) -> str:
+        """Join path · git · limits · vibes on one line."""
+        return SEP_EXTRA.join(p for p in [path, git, limits, vibes] if p)
 
     # demo reset times (relative to now for realistic display)
     from datetime import datetime, timezone, timedelta
@@ -1093,49 +1362,102 @@ def demo() -> None:
 
     gsd_line = f"⬆ /gsd:update {T.sep}│{T.R} Fixing auth bug {T.sep}│{T.R} █████░░░░░ 52%"
 
-    print("=== Demo: limits green — both windows low ===")
-    print(render([
-        limits_line(12, r5h, 35, r7d, 24),
+    pp = path_part()
+
+    print("\n=== Demo: limits green — both windows low ===\n")
+    print(combined(
+        pp,
         git_line(DEMO_BRANCH_MAIN, f"{T.git_staged}+{T.R}", "",
                  f"{T.pr_ok}{D}{D}{D}{T.R}"),
-    ]))
+        limits_bars(12, r5h, 35, r7d, 24),
+        vibes_label(35, r7d),
+    ))
 
-    print("=== Demo: limits yellow — 5h warn ===")
-    print(render([
-        limits_line(70, r5h, 45, r7d, 65),
+    print("\n=== Demo: limits yellow — 5h warn ===\n")
+    print(combined(
+        pp,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
                  f"{T.ci_fail}CI{T.R}",
                  f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬2{T.R}"),
-    ]))
+        limits_bars(70, r5h, 45, r7d, 65),
+        vibes_label(45, r7d),
+    ))
 
-    print("=== Demo: 5h exhausted (red), 7d for context ===")
-    print(render([
-        limits_line(100, r5h_low, 80, r7d_med, 80),
+    print("\n=== Demo: 5h exhausted (red), 7d for context ===\n")
+    print(combined(
+        pp,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}",
                  f"{T.ci_wait}CI{T.R}",
                  f"{T.pr_wait}{D}{T.R}{T.pr_ok}{D}{D}{T.R}"),
-    ]))
+        limits_bars(100, r5h_low, 80, r7d_med, 80),
+        vibes_label(80, r7d_med),
+    ))
 
-    print("=== Demo: 7d exhausted — only 7d shown ===")
-    print(render([
-        limits_line(100, r5h_low, 100, r7d_crit, 45),
+    print("\n=== Demo: 7d exhausted — only 7d shown ===\n")
+    print(combined(
+        pp,
         git_line(DEMO_BRANCH_DEV, f"{T.git_ahead}↑{T.R}"),
-    ]))
+        limits_bars(100, r5h_low, 100, r7d_crit, 45),
+        vibes_label(100, r7d_crit),
+    ))
 
-    print("=== Demo: 3-line with GSD slot ===")
+    print("\n=== Demo: 2-line with GSD slot ===\n")
     print(render([
-        limits_line(25, r5h, 18, r7d, 30),
+        combined(
+            pp,
+            git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
+                     f"{T.ci_fail}CI{T.R}",
+                     f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}"),
+            limits_bars(25, r5h, 18, r7d, 30),
+            vibes_label(18, r7d),
+        ),
         gsd_line,
-        git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
-                 f"{T.ci_fail}CI{T.R}",
-                 f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}"),
     ]))
 
-    print("=== Demo: gh not installed ===")
-    print(render([
-        limits_line(5, r5h, 10, r7d, 8),
+    print("\n=== Demo: gh not installed ===\n")
+    print(combined(
+        pp,
         git_line(DEMO_BRANCH_MAIN, "", "", f"{T.err}gh not installed{T.R}"),
-    ]))
+        limits_bars(5, r5h, 10, r7d, 8),
+        vibes_label(10, r7d),
+    ))
+
+    print("\n=== Color ramp presets ===\n")
+    for name, wp in RAMP_PRESETS.items():
+        vbars = ""
+        for p in range(0, 101, 5):
+            vbars += _vbar(p, ramp=wp)
+        print(f"  {name:10s} {vbars}")
+        print()
+
+
+# --- install -----------------------------------------------------------------
+
+SETTINGS_FILE = Path.home() / ".claude" / "settings.json"
+
+
+def install() -> None:
+    """Write this script as statusLine command in ~/.claude/settings.json."""
+    script_path = str(Path(__file__).resolve())
+    command = f"{sys.executable} {script_path}"
+
+    settings: dict = {}
+    if SETTINGS_FILE.exists():
+        try:
+            settings = json.loads(SETTINGS_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    old = settings.get("statusLine", {}).get("command", "")
+    settings["statusLine"] = {"type": "command", "command": command}
+
+    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n")
+
+    if old and old != command:
+        print(f"Replaced: {old}")
+    print(f"Installed: {command}")
+    print(f"Config:    {SETTINGS_FILE}")
 
 
 # --- main --------------------------------------------------------------------
@@ -1144,6 +1466,10 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "--theme":
         editor = Path(__file__).parent / "theme-editor.py"
         os.execvp(sys.executable, [sys.executable, str(editor)])
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--install":
+        install()
+        return
 
     slots = _load_theme_config()
 

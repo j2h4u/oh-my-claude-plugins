@@ -4,34 +4,20 @@ Enhanced statusline for Claude Code with a **slot system** — each line is a sl
 
 ## Preview
 
-**Default 2-line (limits + git):**
+**Default single-line (path · git · limits · vibes):**
 ```
-5h ▋     12% · 7d █▊    35% · vibing ↓11% · ctx 24%
-my-project/ ⑂feat/auth*+ CI · ⁕⁕⁕💬3
+my-project/ · ⑂feat/auth*+ · 5h ▁ 7d ▃ ctx ▂ · chill 1%
 ```
 
 **5h exhausted (red), 7d for context:**
 ```
-5h █████ 100% 23m · 7d ████  80% 1d 5h · vibing ↓20% · ctx 80%
-my-project/ ⑂main*+ CI · ⁕⁕
+my-project/ · ⑂feat/auth* CI | ⁕⁕ · 5h █22m 7d ▆1d 4h ctx ▆ · based 20%
 ```
 
-**7d exhausted — only 7d shown:**
+**2-line with GSD slot (external command):**
 ```
-7d █████ 100% 2d 4h · ok ↑3% · ctx 45%
-my-project/ ⑂develop ↑
-```
-
-**3-line with GSD slot (external command):**
-```
-5h ▏     5% · 7d ▉     18% · vibing ↓28% · ctx 30%
+my-project/ · ⑂feat/auth*+ CI | ⁕⁕⁕⁕ 💬3 · 5h ▂ 7d ▁ ctx ▂ · based 28%
 ⬆ /gsd:update │ Fixing auth bug │ █████░░░░░ 52%
-my-project/ ⑂main*+ CI · ⁕⁕💬2
-```
-
-**Format:**
-```
-Line N: each slot renders one line (empty slots are skipped)
 ```
 
 ### Slot System
@@ -39,24 +25,36 @@ Line N: each slot renders one line (empty slots are skipped)
 Each slot is either a **built-in provider** or an **external command**. Slots run in parallel for speed.
 
 **Built-in providers:**
-- `limits` — API usage limits (5h/7d windows with bar, percentage, pace, reset countdown) + context window utilization
-- `git` — Directory + branch + git status + CI + PR dots + notifications
+- `path` — Current directory (parent/current/)
+- `git` — Branch + git status + CI + PR dots + notifications
+- `limits` — API usage limits (5h/7d windows) + context window utilization
+- `vibes` — 7d pace indicator (vibing/chill/ok/easy/based/brake)
 
-**External commands:** Any shell command that reads JSON from stdin and outputs one line to stdout. Executed as fire-and-forget background subprocesses with flock — never blocks the statusline.
-
-### Limits Line Elements
-
+**Composable slots:** A slot can be a list of providers joined on one line:
+```json
+{"slots": [[{"provider": "path"}, {"provider": "git"}, {"provider": "limits"}]]}
 ```
-5h ▋     12% · 7d █▊    35% · vibing ↓11% · ctx 24%
-```
 
-- **`5h` / `7d`** — Window label (5-hour and 7-day rolling usage windows)
-- **`▋    `** — Progress bar (5 chars, Unicode block precision, dark gray background, color adaptive: green < 50% / orange 50–80% / red > 80%)
-- **`12%`** — Utilization percentage
-- **`4h26m`** — Reset countdown (only shown when utilization ≥ 50%)
-- **`·`** — Separator between sections
-- **`vibing ↓11%`** — Pace indicator (7d window only, see below)
-- **`ctx 24%`** — Context window utilization
+**External commands:** Any shell command that reads JSON from stdin and outputs one line to stdout. Executed as fire-and-forget background subprocesses with flock.
+
+### Limits Indicators
+
+Each indicator (5h, 7d, ctx) has independent **display mode** and **color ramp**:
+
+**Display modes** (`5h_display`, `7d_display`, `ctx_display`):
+- `vertical` (default) — Single vbar char: `5h ▅`
+- `horizontal` — 5-char progress bar: `5h ██▎  `
+- `number` — Colored percentage: `5h 42%`
+
+**Color ramp presets** (`5h_ramp`, `7d_ramp`, `ctx_ramp`):
+| Preset | Colors | Default for |
+|--------|--------|-------------|
+| `spectrum` | green→cyan→blue→magenta→red | 5h, 7d |
+| `aurora` | cyan→blue→magenta→red | ctx |
+| `traffic` | green→yellow→red | — |
+| `twilight` | blue→purple→red | — |
+| `ember` | dim cyan→dim yellow→dim red | — |
+| `heatmap` | blue→cyan→green→yellow→red | — |
 
 **Hierarchical display logic:**
 - Normal: both `5h` and `7d` shown
@@ -74,45 +72,38 @@ Compares actual 7d utilization against expected pace assuming a **5-day × 24h =
 | `easy` 🟡 | Slightly over | ≤ +25 pp |
 | `brake` 🔴 | Significantly over | > +25 pp |
 
-The **`↑` / `↓`** suffix shows how many percentage points above/below expected pace:
-- `vibing ↓11%` — 11% below expected pace (good)
-- `brake ↑35%` — 35% above expected pace (slow down)
+The **`↑` / `↓`** suffix shows how many percentage points above/below expected pace.
+Pace is hidden at session start when not enough time has elapsed.
 
-Pace is hidden at session start when not enough time has elapsed to compute a meaningful expected value.
-
-### Git Line Elements
+### Git Elements
 
 - **dir/** — Current directory (muted gray)
-- **⑂main** — Git branch indicator + branch name (dimmed)
-- **`* + ? ↑ ↓`** — Git status:
-  - `*` dirty (unstaged changes, yellow dim)
-  - `+` staged changes (green dim)
-  - `?` untracked files (gray)
-  - `↑` ahead of remote (cyan)
-  - `↓` behind remote (purple)
-- **CI** — Current branch CI status (color conveys result: 🟢 green | 🔴 red | 🔵 blue)
-- **⁕⁕⁕** — PR dots (one dot per open PR, color = CI state: red | blue | green | gray)
-- **💬3** — Unread notifications from participating PRs/issues (cyan, only shown when > 0)
+- **⑂main** — Git branch indicator + branch name
+- **`* + ? ↑ ↓`** — Git status: dirty, staged, untracked, ahead, behind
+- **CI** — Current branch CI status (color: 🟢 green | 🔴 red | 🔵 blue)
+- **⁕⁕⁕** — PR dots (one dot per open PR, color = CI state)
+- **💬3** — Unread notifications (cyan, only shown when > 0)
+
+### Separators
+
+Two separator types, both independently configurable:
+- **Sep extra** (`separator`) — Between providers: `path · git · limits`
+- **Sep intra** (`separator_section`) — Within a provider: `git | PR`
 
 ## Requirements
 
 - **Python 3.10+** — Runtime for statusline renderer
-- **Claude Code OAuth** — Limits provider reads token from `~/.claude/.credentials.json` (auto-created by Claude Code)
-- **`gh`** (optional) — GitHub CLI for PR indicators. If missing, shows error in red.
-
-### Install dependencies
-
-```bash
-# gh (optional)
-brew install gh   # or: apt install gh
-```
+- **Claude Code OAuth** — Limits provider reads token from `~/.claude/.credentials.json`
+- **`gh`** (optional) — GitHub CLI for PR indicators
 
 ## Installation
 
-1. The script deploys via marketplace to: `~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statusline/omcc-statusline.py`
+**Quick install** (writes to `~/.claude/settings.json`):
+```bash
+python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statusline/omcc-statusline.py --install
+```
 
-2. Add to `~/.claude/settings.json`:
-
+**Manual:** Add to `~/.claude/settings.json`:
 ```json
 {
   "statusLine": {
@@ -122,132 +113,109 @@ brew install gh   # or: apt install gh
 }
 ```
 
-3. (Optional) Customize theme by running the editor:
+### Configure
 
-```bash
-python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statusline/omcc-statusline.py --theme
-```
-
-4. (Optional) Configure slots in `~/.config/omcc-statusline/config.json`:
+Config file: `~/.config/omcc-statusline/config.json`
 
 ```json
 {
   "slots": [
-    {"provider": "limits"},
-    {"command": "node ~/.claude/hooks/gsd-statusline.js"},
-    {"provider": "git"}
+    [{"provider": "path"}, {"provider": "git"}, {"provider": "limits"}, {"provider": "vibes"}],
+    {"command": "node ~/.claude/hooks/gsd-statusline.js"}
   ],
-  "dir_parent": {"fg": 239}
+  "settings": {
+    "5h_ramp": "traffic",
+    "ctx_display": "horizontal"
+  }
 }
 ```
 
-Each slot: `{"command": "<shell cmd>"}` for external commands, or `{"provider": "limits"}` / `{"provider": "git"}` for built-in providers.
-Optional `"ttl": <seconds>` controls cache lifetime for commands (default: 60s). Commands run as background subprocesses with flock.
-Optional `"enabled": false` disables a slot without removing it from config (default: `true`).
+**Slot options:**
+- `{"provider": "<name>"}` — Built-in provider (path, git, limits, vibes)
+- `{"command": "<shell cmd>"}` — External command
+- `"ttl": <seconds>` — Cache lifetime for commands (default: 60s)
+- `"enabled": false` — Disable without removing
 
-**No `slots` key** = default `[limits (provider), git (provider)]`.
+**No `slots` key** = default single-line: `path · git · limits · vibes`.
 
-5. Restart Claude Code.
+**Settings keys:**
 
-### Test the statusline
+| Key | Options | Default |
+|-----|---------|---------|
+| `5h_ramp` | aurora/traffic/twilight/ember/spectrum/heatmap | spectrum |
+| `7d_ramp` | same | spectrum |
+| `ctx_ramp` | same | aurora |
+| `5h_display` | number/vertical/horizontal | vertical |
+| `7d_display` | same | vertical |
+| `ctx_display` | same | vertical |
+| `separator` | any string | · |
+| `separator_section` | any string | \| |
+
+### Test
 
 ```bash
-# Run demo (shows all scenarios)
-python3 omcc-statusline.py --demo
-
-# Test with real data
-echo '{"workspace":{"current_dir":"'"$(pwd)"'"}}' | python3 omcc-statusline.py
+python3 omcc-statusline.py --demo      # Show all scenarios + ramp presets
+echo '{}' | python3 omcc-statusline.py  # Test with real data
 ```
+
+## Theme Editor
+
+Interactive TUI for customizing colors, text attributes, and settings:
+
+```bash
+python3 omcc-statusline.py --theme
+```
+
+**Navigation mode:**
+- **← →** Navigate elements (dir, branch, git status, CI, PR, limits, etc.)
+- **f** Pick foreground color (256-color palette with live preview)
+- **b** Pick background color
+- **a** Toggle text attributes (dim, bold, italic, underline, etc.)
+- **g** Global settings (ramps, display modes, separators)
+- **c/v** Copy/paste element style
+- **s** Save config
+- **r/R** Reset element / all to defaults
+- **q** Quit
+
+**Settings panel** (`g`): Navigate ramp/display settings with ←→. When a ramp or display setting is focused, the limit bars in the preview animate 0%→100%→0% to show the color gradient in real time.
 
 ## How It Works
 
-1. **Reads JSON from Claude Code stdin** — Contains workspace directory, model, tokens, costs
-2. **Loads slot config** from `~/.config/omcc-statusline/config.json` (or defaults to `[limits, git]`)
-3. **Executes all slots in parallel** via thread pool — built-in providers and external commands run concurrently
+1. **Reads JSON from Claude Code stdin** — workspace directory, model, tokens, costs
+2. **Loads slot config** from `~/.config/omcc-statusline/config.json` (or defaults)
+3. **Executes all slots in parallel** via thread pool
 4. **Each slot produces one line** — empty lines are filtered out
 5. **Returns styled multi-line output** — ANSI colors based on theme config
 
-### Slot Execution
+### Caching
 
-All slots run concurrently in a thread pool. Built-in providers (`limits`, `git`) handle their own data fetching internally. External commands receive the full JSON on stdin and must output one line to stdout.
-
-**External command caching:** Output is cached in `/tmp/omcc-statusline/slots/` with configurable TTL (default 60s). On failure/timeout (5s limit), stale cache is used as fallback.
-
-### PR Status Caching
-
-PR data is cached to avoid blocking statusline render:
-
-- **Cache location:** `~/.config/omcc-statusline/` (config) + `/tmp/omcc-statusline/` (runtime cache)
-- **Theme config:** `~/.config/omcc-statusline/config.json`
 - **Limits cache TTL:** 2 minutes
 - **PR cache TTL:** 5 minutes
 - **CI cache TTL:** 2 minutes
 - **GH availability check TTL:** 30 minutes
 - **Background refresh:** When cache is stale, a detached subprocess fetches new data
-- **Lock file:** File-level lock prevents parallel refresh processes
-- **Atomic writes:** Temp file + `os.replace()` ensures no partial cache reads
-
-### Theme Editor
-
-Interactive TUI for customizing colors and text attributes:
-
-```bash
-python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statusline/omcc-statusline.py --theme
-```
-
-**In editor:**
-- **← →** Navigate elements (dir, branch, git status, CI, PR, notifications, etc.)
-- **f** Pick foreground color (256-color palette with live preview)
-- **b** Pick background color
-- **a** Toggle text attributes (dim, bold, italic, underline, etc.)
-- **c** Copy current element style
-- **v** Paste to current element
-- **s** Save config to `~/.config/omcc-statusline/config.json`
-- **r** Reset current element to default
-- **R** Reset all elements to defaults
-- **q** Quit
-
-**Colors:** Full 256-color ANSI palette + attributes (dim, bold, italic, underline variants, blink, strike, reverse, overline).
-
-**Defaults:** All elements already have sensible defaults. Edit theme only if you want custom colors.
+- **Lock file:** File-level lock prevents parallel refresh
+- **Atomic writes:** Temp file + `os.replace()` ensures no partial reads
 
 ## Troubleshooting
 
 **Statusline not showing:**
 - Check `~/.claude/settings.json` syntax (use absolute path)
-- Check Python version: `python3 --version` (needs 3.10+)
-- Test manually: `echo '{}' | python3 omcc-statusline.py --demo`
+- Run `python3 omcc-statusline.py --install` to auto-configure
+- Test: `echo '{}' | python3 omcc-statusline.py --demo`
 
-**Statusline shows error messages in red:**
-- `gh not installed` — Install gh (optional): https://cli.github.com/
-- `gh auth login` — Authenticate: `gh auth login`
-
-**Limits line not showing:**
-- First render is always empty (background fetch in progress) — appears on second render
-- Check credentials: `cat ~/.claude/.credentials.json | python3 -c "import json,sys; print(json.load(sys.stdin)['claudeAiOauth']['accessToken'][:20]+'...')"`
-- Test API manually: `python3 -c "from urllib.request import Request, urlopen; import json; from pathlib import Path; t=json.loads(Path.home().joinpath('.claude/.credentials.json').read_text())['claudeAiOauth']['accessToken']; r=Request('https://api.anthropic.com/api/oauth/usage'); r.add_header('Authorization',f'Bearer {t}'); r.add_header('anthropic-beta','oauth-2025-04-20'); print(json.dumps(json.loads(urlopen(r,timeout=5).read()),indent=2))"`
+**Limits not showing:**
+- First render is always empty (background fetch) — appears on second render
 - Force refresh: `rm /tmp/omcc-statusline/limits-cache.json`
 
 **Pace not showing:**
-- Hidden until enough time has elapsed in the 7d window (expected > 1%)
-- Only shown on the 7d window
-
-**Git branch not showing:**
-- Only displays when in a git repository
-- Check: `git branch --show-current`
+- Hidden until enough time elapsed in the 7d window (expected > 1%)
 
 **PR dots not showing:**
 - Requires `gh` CLI installed and authenticated
-- First render may show nothing (refreshes in background)
-- Subsequent renders show cached PR data
-- Check cache: `cat /tmp/omcc-statusline/pr-status.json | jq .prs.data.search.nodes`
 - Force refresh: `rm -rf /tmp/omcc-statusline/`
 
-**Theme not applying:**
-- Restart Claude Code after saving theme
-- Verify config exists: `cat ~/.config/omcc-statusline/config.json`
-
-**Performance issues:**
-- PR/CI fetches happen in background, shouldn't block statusline
-- First run may take up to 5s (all caches miss) — subsequent renders use cache
-- Limits API is cached for 2 minutes — should not cause slowness
+**Old config error** (`bar_ramp`, `bar_style`):
+- These keys were renamed. Migrate:
+  - `bar_ramp` → `5h_ramp` and `7d_ramp`
+  - `bar_style` → `5h_display`, `7d_display`, `ctx_display`
