@@ -84,6 +84,7 @@ LIMITS_CACHE_FILE = CACHE_DIR / "limits-cache.json"
 LIMITS_LOCK_FILE = CACHE_DIR / "limits-refresh.lock"
 LIMITS_CACHE_TTL = API_CACHE_TTL
 LIMITS_HTTP_TIMEOUT = 5
+LIMITS_COOLDOWN_DEFAULT = 300  # 5 min fallback when Retry-After is missing or 0
 LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
 LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
 LIMITS_BAR_WIDTH = 5
@@ -584,9 +585,22 @@ def _read_json(path: Path) -> dict | None:
         return None
 
 
+def _is_cooldown_active(path: Path) -> bool:
+    """Check if a cooldown file exists and hasn't expired yet."""
+    cd = Path(str(path) + '.cooldown')
+    try:
+        expires = float(cd.read_text().strip())
+        if time.time() < expires:
+            return True
+        cd.unlink(missing_ok=True)
+    except (OSError, ValueError):
+        pass
+    return False
+
+
 def _cached_json(path: Path, ttl: int, refresh: "callable") -> dict | None:
     """Return parsed JSON from cache, trigger background refresh if stale."""
-    if not is_cache_fresh(path, ttl):
+    if not is_cache_fresh(path, ttl) and not _is_cooldown_active(path):
         refresh()
     return _read_json(path)
 
@@ -828,6 +842,14 @@ def _w(data):
     with open(tmp, "w") as f:
         f.write(data)
     os.replace(tmp, str(CACHE))
+def _cooldown(seconds=0):
+    if seconds > 0:
+        ts = __import__('time').time() + seconds
+        Path(str(CACHE) + '.cooldown').write_text(str(ts))
+    if CACHE.exists():
+        os.utime(CACHE)
+    else:
+        _w('{}')
 fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
 try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -837,7 +859,7 @@ except (BlockingIOError, OSError):
 try:
 __PAYLOAD__
 except Exception:
-    pass
+    _cooldown()
 finally:
     fcntl.flock(fd, fcntl.LOCK_UN)
     os.close(fd)
@@ -1170,12 +1192,19 @@ def _refresh_limits_cache_subprocess() -> None:
     if not token:
         return
     _bg_refresh(
-        imports="import json\nfrom urllib.request import Request, urlopen",
+        imports="import json\nfrom urllib.request import Request, urlopen\nfrom urllib.error import HTTPError",
         payload=r"""
     req = Request(sys.argv[3])
     req.add_header("Authorization", f"Bearer {sys.argv[4]}")
     req.add_header("anthropic-beta", "oauth-2025-04-20")
-    resp = urlopen(req, timeout=""" + str(LIMITS_HTTP_TIMEOUT) + r""")
+    try:
+        resp = urlopen(req, timeout=""" + str(LIMITS_HTTP_TIMEOUT) + r""")
+    except HTTPError as e:
+        if e.code == 429:
+            retry = int(e.headers.get("Retry-After", 0))
+            _cooldown(retry if retry > 0 else """ + str(LIMITS_COOLDOWN_DEFAULT) + r""")
+            sys.exit(0)
+        raise
     _w(json.dumps(json.loads(resp.read())))
 """,
         cache_file=LIMITS_CACHE_FILE,
