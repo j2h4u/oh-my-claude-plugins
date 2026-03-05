@@ -1,6 +1,6 @@
 # OMCC Statusline
 
-Slot-based statusline for Claude Code — limits, git, PR dots, pace indicator. Each line is a slot: built-in provider or external command.
+Slot-based statusline for Claude Code — limits, git, PR dots, pace indicator.
 
 ## Preview
 
@@ -9,28 +9,7 @@ my-project/ ⋮ ⑂feat/auth*+ ⋮ 5h ▁ 7d ▃ ctx ▂ ⋮ chill 1%
 ```
 ```
 my-project/ ⋮ ⑂feat/auth*+ · CI · ⁕⁕⁕⁕ 💬3 ⋮ 5h ▂ 7d ▁ ctx ▂ ⋮ based 28%
-⬆ /gsd:update │ Fixing auth bug │ █████░░░░░ 52%
 ```
-
-## Vibe Pace
-
-If you never hit the 7-day limit, you can skip this section — vibe pace isn't for you.
-
-But if you regularly bump into the weekly cap and then sit waiting for the window to roll over, pace helps you spread your budget evenly instead of burning through it in the first couple of days.
-
-The idea is simple. The 7-day window is 168 hours, but nobody works all 168. Pace assumes a **120-hour working budget** (5 days x 24h) and draws a straight line from 0% to 100% across that budget. At any moment it knows where you *should* be on that line, and it compares that to where you *actually* are. The difference (in percentage points) is your delta.
-
-The `vibes` provider turns that delta into a single word in the statusline:
-
-- **based** — 20+ pp under expected. You're way ahead of schedule, plenty of runway left.
-- **hyped** — 5–20 pp under. Comfortable margin.
-- **chill** — within ±5 pp. Right on track.
-- **salty** — 5–20 pp over. You're burning faster than the budget allows.
-- **depresso** — 20+ pp over. At this rate you'll hit the wall well before the window resets.
-
-The number after the label (e.g. `chill 1%`, `based 28%`) is the absolute delta in percentage points. Color shifts from green (under budget) to red (over).
-
-Pace is hidden at the start of a new window when there isn't enough data to compute a meaningful expected value.
 
 ## Installation
 
@@ -40,45 +19,20 @@ python3 ~/.claude/plugins/marketplaces/oh-my-claude-plugins/meta/utils/statuslin
 
 Test: `python3 omcc-statusline.py --demo`
 
-## Providers
+## What You See
 
-- `path` — Current directory
-- `git` — Branch, status (`*+?↑↓`), CI, PR dots (`⁕`), notifications (`💬`)
-- `limits` — API usage (5h/7d/ctx bars with color ramps)
-- `vibes` — 7d pace (based/hyped/chill/salty/depresso)
+- **Directory** — current path
+- **Git** — branch, dirty/staged/untracked indicators, CI status, PR dots, notifications
+- **Limits** — 5h / 7d / context usage bars with color ramps
+- **Vibe Pace** — are you burning your 7-day budget too fast or staying on track?
+
+Pace labels: **based** (way under) → **hyped** → **chill** (on track) → **salty** → **depresso** (way over). Hidden at the start of a new window.
 
 ## Configuration
 
-`~/.config/omcc-statusline/config.json` — see `config.example.json` for a starting point.
+Copy `config.example.json` to `~/.config/omcc-statusline/config.json` and edit. Without config — defaults work out of the box.
 
-Without config — default single-line: `path ⋮ git ⋮ limits ⋮ vibes`.
-
-### Slots
-
-- `{"provider": "<name>"}` — built-in (path, git, limits, vibes)
-- `{"command": "<shell>"}` — external command (reads JSON stdin, outputs one line)
-- `"ttl": <seconds>` — cache lifetime (default: 60s)
-- `"enabled": false` — disable without removing
-- `"show": [...]` — render only specific sub-sections (omit for all)
-- Array slot = multiple providers joined on one line
-
-If an external command's executable is not found, a dim placeholder is shown instead (e.g. `[ccusage: not found]`).
-
-**Sub-sections** (`show`):
-- **git**: `branch`, `ci`, `pr`, `notif` — e.g. `{"provider": "git", "show": ["branch", "ci"]}`
-- **limits**: `5h`, `7d`, `ctx` — e.g. `{"provider": "limits", "show": ["7d", "ctx"]}`
-
-### Settings
-
-| Key | Options | Default |
-|-----|---------|---------|
-| `5h_ramp`, `7d_ramp`, `ctx_ramp` | aurora, traffic, twilight, ember, spectrum, heatmap | spectrum, spectrum, aurora |
-| `5h_display`, `7d_display`, `ctx_display` | number, vertical, horizontal | vertical |
-| `separator` | any string | ⋮ |
-| `git_separator` | any string | · |
-| `limits_separator` | any string | (empty) |
-
-`separator` — between providers. `git_separator` — within git provider. `limits_separator` — within limits provider.
+External commands that aren't installed show a dim placeholder (e.g. `[ccusage: not found]`).
 
 ## Theme Editor
 
@@ -86,11 +40,10 @@ If an external command's executable is not found, a dim placeholder is shown ins
 python3 omcc-statusline.py --theme
 ```
 
-`←→` navigate elements, `f`/`b`/`a` edit fg/bg/attrs, `g` settings panel, `c`/`v` copy/paste, `s` save, `q` quit. Ramp/display settings animate the preview bars.
+Navigate elements, tweak colors, adjust separators and ramp styles — all with live preview.
 
 ## Troubleshooting
 
-- **Not showing** — `python3 omcc-statusline.py --install`, restart Claude Code
-- **Limits empty** — first render fetches in background, appears on second render
-- **Old config error** — `bar_ramp` → `5h_ramp`/`7d_ramp`, `bar_style` → `*_display`
+- **Not showing** — run `--install`, restart Claude Code
+- **Limits empty** — fetched in background, appears on next render
 - **PR dots missing** — install and auth `gh` CLI
