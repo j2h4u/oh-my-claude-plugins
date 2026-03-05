@@ -26,8 +26,8 @@ Requirements for v1.0 Code Quality milestone. Each maps to roadmap phases.
 - [x] **DRY-02**: Consolidate config file loading into single `_load_json_file()` helper (4 sites)
 - [x] **DRY-03**: Extract `_load_separator()` helper for triple if/else pattern
 - [x] **DRY-04**: Extract `_get_setting()` with auto-fallback to `_SETTINGS_DEFAULTS` (6 sites)
-- [ ] **DRY-05**: Extract `_format_limit_window_for_prefix()` to internalize INDICATOR_CONFIG lookup (4 sites)
-- [ ] **DRY-06**: Extract `_render_indicator_for_prefix()` wrapper (3 sites)
+- [x] **DRY-05**: Extract `_format_limit_window_for_prefix()` to internalize INDICATOR_CONFIG lookup (4 sites)
+- [x] **DRY-06**: Extract `_render_indicator_for_prefix()` wrapper (3 sites)
 - [x] **DRY-07**: Extract `_safe_json_loads()` for JSON parse with error handling (3 sites)
 - [ ] **DRY-08**: Add `ThemeEntry.from_dict()` classmethod for consistent construction (4 sites)
 - [ ] **DRY-09**: Consolidate separator display mapping into helper (3 sites)
@@ -71,8 +71,8 @@ None currently deferred.
 | DRY-02 | Phase 3 | Complete |
 | DRY-03 | Phase 3 | Complete |
 | DRY-04 | Phase 3 | Complete |
-| DRY-05 | Phase 3 | Pending |
-| DRY-06 | Phase 3 | Pending |
+| DRY-05 | Phase 3 | Complete |
+| DRY-06 | Phase 3 | Complete |
 | DRY-07 | Phase 3 | Complete |
 | DRY-08 | Phase 4 | Pending |
 | DRY-09 | Phase 4 | Pending |
