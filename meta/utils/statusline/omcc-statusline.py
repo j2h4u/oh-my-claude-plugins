@@ -31,6 +31,7 @@ import sys
 import subprocess
 import tempfile
 import termios
+import threading
 import time
 import tty
 import unicodedata
@@ -64,6 +65,7 @@ CACHE_DB = CACHE_DIR / "cache.db"
 
 # Cache TTLs (seconds)
 API_CACHE_TTL = 300      # 5 min — CI, PR, limits (anything that hits an API)
+GIT_CACHE_TTL = 5        # 5 sec — local git status (changes frequently)
 GH_CHECK_TTL = 1800      # 30 min — gh CLI availability (rarely changes)
 
 # Timeouts (seconds)
@@ -588,6 +590,7 @@ def osc8_link(url: str, text: str) -> str:
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
+_DB_LOCK = threading.Lock()
 _CON: sqlite3.Connection | None = None
 
 
@@ -609,15 +612,16 @@ def _db() -> sqlite3.Connection:
 
 def cache_get(key: str) -> tuple[str | None, float, float]:
     """Return (data, updated_at, cooldown_until) for a cache key."""
-    try:
-        con = _db()
-        row = con.execute(
-            "SELECT data, updated_at, cooldown_until FROM cache WHERE key = ?", (key,)
-        ).fetchone()
-        if row:
-            return row[0], row[1], row[2]
-    except sqlite3.Error:
-        pass
+    with _DB_LOCK:
+        try:
+            con = _db()
+            row = con.execute(
+                "SELECT data, updated_at, cooldown_until FROM cache WHERE key = ?", (key,)
+            ).fetchone()
+            if row:
+                return row[0], row[1], row[2]
+        except sqlite3.Error:
+            pass
     return None, 0.0, 0.0
 
 
@@ -656,20 +660,26 @@ def _try_claim_refresh(key: str, ttl: int) -> bool:
     Returns False if cache is fresh, cooldown is active, or another
     process claimed first (race-free via single UPDATE with WHERE).
     """
-    try:
-        con = _db()
-        now = time.time()
-        con.execute(
-            "INSERT OR IGNORE INTO cache (key, data, updated_at, cooldown_until) "
-            "VALUES (?, '{}', 0, 0)", (key,))
-        cur = con.execute(
-            "UPDATE cache SET cooldown_until = ? "
-            "WHERE key = ? AND (? - updated_at) >= ? AND cooldown_until <= ?",
-            (now + ERROR_COOLDOWN_DEFAULT, key, now, ttl, now))
-        con.commit()
-        return cur.rowcount > 0
-    except sqlite3.Error:
-        return False
+    with _DB_LOCK:
+        try:
+            con = _db()
+            now = time.time()
+            con.execute(
+                "INSERT OR IGNORE INTO cache (key, data, updated_at, cooldown_until) "
+                "VALUES (?, '{}', 0, 0)", (key,))
+            cur = con.execute(
+                "UPDATE cache SET cooldown_until = ? "
+                "WHERE key = ? AND (? - updated_at) >= ? AND cooldown_until <= ?",
+                (now + ERROR_COOLDOWN_DEFAULT, key, now, ttl, now))
+            con.commit()
+            return cur.rowcount > 0
+        except sqlite3.Error:
+            if _CON is not None:
+                try:
+                    _CON.rollback()
+                except sqlite3.Error:
+                    pass
+            return False
 
 
 def _cached_json(key: str, ttl: int, refresh: "callable") -> dict | None:
@@ -854,42 +864,42 @@ def get_dir_name(current_dir: str) -> str:
 
 # --- git info ----------------------------------------------------------------
 
-def get_git_info(cwd: str) -> tuple[str, str]:
-    """Return (branch, status_indicators). Both may be empty."""
+def _refresh_git_cache_subprocess(cwd: str, git_key: str) -> None:
+    """Fire-and-forget background refresh of git status cache."""
+    _bg_refresh(
+        imports="import json, subprocess, re",
+        payload=r"""
+    CWD = sys.argv[3]
+    TIMEOUT = """ + str(TIMEOUT_GIT) + r"""
+    out = subprocess.run(
+        ["git", "-C", CWD, "--no-optional-locks", "status", "--porcelain=v1", "--branch"],
+        capture_output=True, text=True, timeout=TIMEOUT,
+    )
+    if out.returncode != 0:
+        _w('{"branch": ""}')
+        sys.exit(0)
+    lines = out.stdout.split("\n")
     branch = ""
-    indicators = ""
-
-    out = run(["git", "-C", cwd, "--no-optional-locks", "status", "--porcelain=v1", "--branch"], timeout=TIMEOUT_GIT)
-    if out is None:
-        return branch, indicators
-
-    lines = out.split("\n")
-    if not lines:
-        return branch, indicators
-
-    header = lines[0]
-
-    if header.startswith("## "):
-        branch_part = header[3:]
-        if "..." in branch_part:
-            branch = branch_part.split("...")[0]
-        elif " " in branch_part:
-            branch = branch_part.split(" ")[0]
-        else:
-            branch = branch_part
-        if branch in ("HEAD", "No"):
-            branch = ""
-
     ahead = ""
     behind = ""
-    m = re.search(r"ahead (\d+)", header)
-    if m:
-        ahead = m.group(1)
-    m = re.search(r"behind (\d+)", header)
-    if m:
-        behind = m.group(1)
-
     dirty = staged = untracked = False
+    if lines and lines[0].startswith("## "):
+        header = lines[0]
+        bp = header[3:]
+        if "..." in bp:
+            branch = bp.split("...")[0]
+        elif " " in bp:
+            branch = bp.split(" ")[0]
+        else:
+            branch = bp
+        if branch in ("HEAD", "No"):
+            branch = ""
+        m = re.search(r"ahead (\d+)", header)
+        if m:
+            ahead = m.group(1)
+        m = re.search(r"behind (\d+)", header)
+        if m:
+            behind = m.group(1)
     for line in lines[1:]:
         if len(line) < 2:
             continue
@@ -900,21 +910,39 @@ def get_git_info(cwd: str) -> tuple[str, str]:
             dirty = True
         if x == "?" and y == "?":
             untracked = True
+    _w(json.dumps({"branch": branch, "dirty": dirty, "staged": staged,
+                    "untracked": untracked, "ahead": ahead, "behind": behind}))
+""",
+        cache_key=git_key,
+        extra_argv=(cwd,),
+    )
 
+
+def get_git_info(cwd: str) -> tuple[str, str]:
+    """Return (branch, status_indicators) from cache, trigger bg refresh if stale."""
+    git_key = f"git:{cwd}"
+
+    def _refresh():
+        _refresh_git_cache_subprocess(cwd, git_key)
+
+    data = _cached_json(git_key, GIT_CACHE_TTL, _refresh)
+    if not data or not data.get("branch"):
+        return "", ""
+
+    branch = data["branch"]
     parts: list[str] = []
-    if dirty:
+    if data.get("dirty"):
         parts.append(f"{T.git_dirty}*{T.R}")
-    if staged:
+    if data.get("staged"):
         parts.append(f"{T.git_staged}+{T.R}")
-    if untracked:
+    if data.get("untracked"):
         parts.append(f"{T.git_untracked}?{T.R}")
-    if ahead:
+    if data.get("ahead"):
         parts.append(f"{T.git_ahead}↑{T.R}")
-    if behind:
+    if data.get("behind"):
         parts.append(f"{T.git_behind}↓{T.R}")
-    indicators = "".join(parts)
 
-    return branch, indicators
+    return branch, "".join(parts)
 
 
 # --- background refresh ------------------------------------------------------
@@ -1437,36 +1465,17 @@ def provider_git(input_json: str, cwd: str, show: list[str] | None = None) -> st
         return ""
     sections = set(show) if show else {"branch", "ci", "pr", "notif"}
 
-    need_branch = "branch" in sections or "ci" in sections
-    need_pr = "pr" in sections or "notif" in sections
+    branch, git_status = "", ""
+    if "branch" in sections or "ci" in sections:
+        branch, git_status = get_git_info(cwd)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        git_future = pool.submit(get_git_info, cwd) if need_branch else None
-        pr_future = pool.submit(get_pr_status) if need_pr else None
-
-        branch, git_status = "", ""
-        if git_future:
-            try:
-                branch, git_status = git_future.result()
-            except Exception:
-                pass
-
-        pr_data = None
-        if pr_future:
-            try:
-                pr_data = pr_future.result()
-            except Exception:
-                pass
+    pr_data = None
+    if "pr" in sections or "notif" in sections:
+        pr_data = get_pr_status()
 
     ci_label = ""
     if branch and "ci" in sections:
-        try:
-            ci_label = get_ci_status(cwd, branch)
-        except Exception:
-            ci_label = ""
-
-    if need_branch and not branch:
-        return ""
+        ci_label = get_ci_status(cwd, branch)
 
     line = ""
     if "branch" in sections and branch:
