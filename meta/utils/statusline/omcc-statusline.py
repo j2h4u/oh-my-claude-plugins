@@ -36,6 +36,7 @@ import tty
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from typing import NamedTuple
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -239,6 +240,26 @@ class ThemeEntry:
     @classmethod
     def from_dict(cls, d: dict) -> "ThemeEntry":
         return cls(fg=d.get("fg"), bg=d.get("bg"), attrs=d.get("attrs", []))
+
+    def to_dict(self) -> dict:
+        """Serialize to config dict, omitting None/empty fields."""
+        d: dict = {}
+        if self.fg is not None:
+            d["fg"] = self.fg
+        if self.bg is not None:
+            d["bg"] = self.bg
+        if self.attrs:
+            d["attrs"] = self.attrs
+        return d
+
+
+class PrStatus(NamedTuple):
+    """Structured PR status data: dots grouped by CI state + unread count."""
+    dots_red: list[str]      # FAILURE/ERROR PR dots (may contain OSC8 links)
+    dots_pending: list[str]  # PENDING/EXPECTED PR dots
+    dots_green: list[str]    # SUCCESS PR dots
+    dots_gray: list[str]     # UNKNOWN state PR dots
+    unread_count: int        # Unread notification count
 
 
 DEFAULTS: dict[str, ThemeEntry] = {
@@ -1006,21 +1027,19 @@ def _refresh_pr_cache_subprocess() -> None:
     )
 
 
-def get_pr_status() -> str:
-    """Return formatted PR dot string from cache, trigger refresh if stale."""
+def get_pr_status() -> "PrStatus | None":
+    """Return structured PR status data from cache, trigger refresh if stale."""
     gh = check_gh_available()
-    if gh == "no-gh":
-        return f"{T.err}gh not installed{T.R}"
-    if gh == "no-auth":
-        return f"{T.err}gh auth login{T.R}"
+    if gh in ("no-gh", "no-auth"):
+        return None
 
     cache = _cached_json("pr", API_CACHE_TTL, _refresh_pr_cache_subprocess)
     if not cache:
-        return ""
+        return None
 
     nodes = cache.get("prs", {}).get("data", {}).get("search", {}).get("nodes", [])
     if not nodes:
-        return ""
+        return None
 
     dots_red: list[str] = []
     dots_pending: list[str] = []
@@ -1046,23 +1065,28 @@ def get_pr_status() -> str:
         else:
             dots_gray.append(dot)
 
-    parts: list[str] = []
-    if dots_red:
-        parts.append(f"{T.err}{''.join(dots_red)}{T.R}")
-    if dots_pending:
-        parts.append(f"{T.wait}{''.join(dots_pending)}{T.R}")
-    if dots_green:
-        parts.append(f"{T.ok}{''.join(dots_green)}{T.R}")
-    if dots_gray:
-        parts.append(f"{T.none}{''.join(dots_gray)}{T.R}")
-
-    output = "".join(parts)
-
     unread = cache.get("unread_count", 0)
-    if unread > 0:
-        output += f" {T.notif}💬{unread}{T.R}"
+    return PrStatus(dots_red, dots_pending, dots_green, dots_gray, unread)
 
-    return output
+
+def _format_pr_dots(status: "PrStatus", include_pr: bool, include_notif: bool) -> str:
+    """Format PrStatus into a colored ANSI string based on requested sections."""
+    parts: list[str] = []
+
+    if include_pr:
+        if status.dots_red:
+            parts.append(f"{T.err}{''.join(status.dots_red)}{T.R}")
+        if status.dots_pending:
+            parts.append(f"{T.wait}{''.join(status.dots_pending)}{T.R}")
+        if status.dots_green:
+            parts.append(f"{T.ok}{''.join(status.dots_green)}{T.R}")
+        if status.dots_gray:
+            parts.append(f"{T.none}{''.join(status.dots_gray)}{T.R}")
+
+    if include_notif and status.unread_count > 0:
+        parts.append(f" {T.notif}\U0001f4ac{status.unread_count}{T.R}")
+
+    return "".join(parts)
 
 
 # --- CI status ---------------------------------------------------------------
@@ -1273,6 +1297,40 @@ def _refresh_limits_cache_subprocess() -> None:
     )
 
 
+def _build_limits_bars(data: dict, sections: set[str]) -> list[str]:
+    """Build limit bars from cached data."""
+    bars: list[str] = []
+    five = data.get("five_hour", {})
+    seven = data.get("seven_day", {})
+    now = time.time()
+    r5 = _parse_iso_utc(five.get("resets_at", ""))
+    r7 = _parse_iso_utc(seven.get("resets_at", ""))
+    stale5 = r5 is not None and now > r5
+    stale7 = r7 is not None and now > r7
+    u5 = five.get("utilization", 0)
+    u7 = seven.get("utilization", 0)
+
+    # When 7d is maxed and not stale, only show 7d (5h is irrelevant)
+    if u7 >= 100 and not stale7:
+        if "7d" in sections:
+            bars.append(_format_limit_window_for_prefix(u7, seven.get("resets_at", ""), "7d"))
+        return bars
+
+    if "5h" in sections:
+        if stale5:
+            bars.append(f"{T.dir_parent}5h{T.R} {T.warn}stale{T.R}")
+        else:
+            bars.append(_format_limit_window_for_prefix(u5, five.get("resets_at", ""), "5h"))
+
+    if "7d" in sections:
+        if stale7:
+            bars.append(f"{T.dir_parent}7d{T.R} {T.warn}stale{T.R}")
+        else:
+            bars.append(_format_limit_window_for_prefix(u7, seven.get("resets_at", ""), "7d"))
+
+    return bars
+
+
 def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) -> str:
     """Built-in provider: API usage limits (5h/7d windows) + context window."""
     if show is not None and not show:
@@ -1284,37 +1342,12 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
         data = _cached_json("limits", LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
         has_data = data and "five_hour" in data
         if has_data:
-            five = data.get("five_hour", {})
-            seven = data.get("seven_day", {})
-            now = time.time()
-            r5 = _parse_iso_utc(five.get("resets_at", ""))
-            r7 = _parse_iso_utc(seven.get("resets_at", ""))
-            stale5 = r5 is not None and now > r5
-            stale7 = r7 is not None and now > r7
-            u5 = five.get("utilization", 0)
-            u7 = seven.get("utilization", 0)
-            if u7 >= 100 and not stale7:
-                if "7d" in sections:
-                    bars.append(_format_limit_window_for_prefix(u7, seven.get("resets_at", ""), "7d"))
-            else:
-                if "5h" in sections:
-                    if stale5:
-                        bars.append(f"{T.dir_parent}5h{T.R} {T.warn}stale{T.R}")
-                    else:
-                        bars.append(_format_limit_window_for_prefix(u5, five.get("resets_at", ""), "5h"))
-                if "7d" in sections:
-                    if stale7:
-                        bars.append(f"{T.dir_parent}7d{T.R} {T.warn}stale{T.R}")
-                    else:
-                        bars.append(_format_limit_window_for_prefix(u7, seven.get("resets_at", ""), "7d"))
+            bars.extend(_build_limits_bars(data, sections))
 
         cooldown_until = cache_get("limits")[2]
         remaining = cooldown_until - time.time() if cooldown_until else 0
         if remaining > 0:
-            if remaining >= 60:
-                eta = _format_duration(int(remaining / 60))
-            else:
-                eta = f"{int(remaining)}s"
+            eta = _format_duration(int(remaining / 60)) if remaining >= 60 else f"{int(remaining)}s"
             bars.append(f"{T.warn}retry in {eta}{T.R}")
         elif not has_data:
             if "5h" in sections:
@@ -1377,10 +1410,10 @@ def provider_git(input_json: str, cwd: str, show: list[str] | None = None) -> st
             except Exception:
                 pass
 
-        pr_status = ""
+        pr_data = None
         if pr_future:
             try:
-                pr_status = pr_future.result()
+                pr_data = pr_future.result()
             except Exception:
                 pass
 
@@ -1401,12 +1434,10 @@ def provider_git(input_json: str, cwd: str, show: list[str] | None = None) -> st
             line += git_status
     if ci_label:
         line += f"{SEP_GIT}{ci_label}" if line else ci_label
-    if pr_status:
-        if "notif" not in sections:
-            pr_status = re.sub(r"\s*\x1b\[[^m]*m💬\d+\x1b\[0m$", "", pr_status)
-        if "pr" not in sections:
-            m = re.search(r"(\x1b\[[^m]*m💬\d+\x1b\[0m)$", pr_status)
-            pr_status = m.group(1) if m else ""
+    if pr_data:
+        include_pr = "pr" in sections
+        include_notif = "notif" in sections
+        pr_status = _format_pr_dots(pr_data, include_pr, include_notif)
         if pr_status:
             line += f"{SEP_GIT}{pr_status}" if line else pr_status
     return line
@@ -1481,8 +1512,8 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
 
 # --- slot orchestrator -------------------------------------------------------
 
-def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
-    """Execute all slots in parallel, return ordered list of non-empty lines."""
+def _build_slot_grid(slots: list) -> tuple[list[list[dict]], list[tuple[int, int, dict]]]:
+    """Parse slot config into grid layout. Returns (lines, all_widgets)."""
     lines: list[list[dict]] = []
     for slot in slots:
         if isinstance(slot, list):
@@ -1496,6 +1527,13 @@ def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
     for li, widgets in enumerate(lines):
         for wi, w in enumerate(widgets):
             all_widgets.append((li, wi, w))
+
+    return lines, all_widgets
+
+
+def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
+    """Execute all slots in parallel, return ordered list of non-empty lines."""
+    lines, all_widgets = _build_slot_grid(slots)
 
     def _run_slot(slot: dict) -> str:
         provider = slot.get("provider")
@@ -1590,16 +1628,7 @@ def save_theme(theme: dict[str, ThemeEntry],
     if settings_out:
         data["settings"] = settings_out
 
-    theme_out: dict = {}
-    for key, entry in theme.items():
-        d: dict = {}
-        if entry.fg is not None:
-            d["fg"] = entry.fg
-        if entry.bg is not None:
-            d["bg"] = entry.bg
-        if entry.attrs:
-            d["attrs"] = entry.attrs
-        theme_out[key] = d
+    theme_out = {key: entry.to_dict() for key, entry in theme.items()}
     data["theme"] = theme_out
 
     tmp_fd, tmp_path = tempfile.mkstemp(dir=str(CONFIG_DIR), prefix=".theme.", suffix=".json")
