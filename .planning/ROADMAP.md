@@ -62,7 +62,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Extract cache access, JSON file loading, separator loader, settings getter, and safe JSON parse helpers (DRY-01, DRY-02, DRY-03, DRY-04, DRY-07)
+- [x] 03-01-PLAN.md — Extract cache access, JSON file loading, separator loader, settings getter, and safe JSON parse helpers (DRY-01, DRY-02, DRY-03, DRY-04, DRY-07)
 - [ ] 03-02-PLAN.md — Extract indicator rendering wrappers that internalize INDICATOR_CONFIG lookup (DRY-05, DRY-06)
 
 ### Phase 4: DRY Editor Helpers
