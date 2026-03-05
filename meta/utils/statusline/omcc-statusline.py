@@ -586,15 +586,10 @@ def _read_json(path: Path) -> dict | None:
 
 
 def _is_cooldown_active(path: Path) -> bool:
-    """Check if a cooldown file exists and hasn't expired yet."""
-    cd = Path(str(path) + '.cooldown')
-    try:
-        expires = float(cd.read_text().strip())
-        if time.time() < expires:
-            return True
-        cd.unlink(missing_ok=True)
-    except (OSError, ValueError):
-        pass
+    """Check if cache JSON contains an active _cooldown_until timestamp."""
+    data = _read_json(path)
+    if data and "_cooldown_until" in data:
+        return time.time() < data["_cooldown_until"]
     return False
 
 
@@ -843,13 +838,15 @@ def _w(data):
         f.write(data)
     os.replace(tmp, str(CACHE))
 def _cooldown(seconds=0):
+    _j = __import__('json')
+    old = {}
+    try:
+        old = _j.loads(CACHE.read_text())
+    except Exception:
+        pass
     if seconds > 0:
-        ts = __import__('time').time() + seconds
-        Path(str(CACHE) + '.cooldown').write_text(str(ts))
-    if CACHE.exists():
-        os.utime(CACHE)
-    else:
-        _w('{}')
+        old['_cooldown_until'] = __import__('time').time() + seconds
+    _w(_j.dumps(old))
 fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
 try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -1222,7 +1219,7 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
 
     if "5h" in sections or "7d" in sections:
         data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
-        if data:
+        if data and "five_hour" in data:
             five = data.get("five_hour", {})
             seven = data.get("seven_day", {})
             u5 = five.get("utilization", 0)
@@ -1264,9 +1261,9 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
 def provider_vibes(input_json: str, cwd: str, *, show=None) -> str:
     """Built-in provider: 7d pace label (vibes indicator)."""
     data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
-    if not data:
+    if not data or "seven_day" not in data:
         return ""
-    seven = data.get("seven_day", {})
+    seven = data["seven_day"]
     return _7d_pace_label(seven.get("utilization", 0), seven.get("resets_at", ""))
 
 
