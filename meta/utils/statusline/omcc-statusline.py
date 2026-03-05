@@ -65,9 +65,8 @@ CI_CACHE_DIR = CACHE_DIR / "ci"
 SLOT_CACHE_DIR = CACHE_DIR / "slots"
 
 # Cache TTLs (seconds)
-PR_CACHE_TTL = 300       # 5 min
-CI_CACHE_TTL = 120       # 2 min
-GH_CHECK_TTL = 1800      # 30 min
+API_CACHE_TTL = 120      # 2 min — CI, PR, limits (anything that hits an API)
+GH_CHECK_TTL = 1800      # 30 min — gh CLI availability (rarely changes)
 
 # Timeouts (seconds)
 TIMEOUT_SUBPROCESS = 5
@@ -83,7 +82,7 @@ SLOT_CACHE_TTL = 60
 # Limits provider
 LIMITS_CACHE_FILE = CACHE_DIR / "limits-cache.json"
 LIMITS_LOCK_FILE = CACHE_DIR / "limits-refresh.lock"
-LIMITS_CACHE_TTL = 120
+LIMITS_CACHE_TTL = API_CACHE_TTL
 LIMITS_HTTP_TIMEOUT = 5
 LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
 LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
@@ -940,7 +939,7 @@ def get_pr_status() -> str:
     if gh == "no-auth":
         return f"{T.err}gh auth login{T.R}"
 
-    cache = _cached_json(PR_CACHE_FILE, PR_CACHE_TTL, _refresh_pr_cache_subprocess)
+    cache = _cached_json(PR_CACHE_FILE, API_CACHE_TTL, _refresh_pr_cache_subprocess)
     if not cache:
         return ""
 
@@ -1050,7 +1049,7 @@ def get_ci_status(cwd: str, branch: str) -> str:
 
     cache_file = CI_CACHE_DIR / f"{owner}_{repo}_{branch}.json"
 
-    if is_cache_fresh(cache_file, CI_CACHE_TTL):
+    if is_cache_fresh(cache_file, API_CACHE_TTL):
         data = _read_json(cache_file)
         if data:
             return _format_ci_label(data.get("conclusion"))
