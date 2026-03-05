@@ -1276,8 +1276,12 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
         else:
             _, _, cooldown_until = cache_get("limits")
             remaining = cooldown_until - time.time() if cooldown_until else 0
-            if remaining > 60:
-                bars.append(f"{DIM}retry in {_format_duration(int(remaining / 60))}{T.R}")
+            if remaining > 0:
+                if remaining >= 60:
+                    eta = _format_duration(int(remaining / 60))
+                else:
+                    eta = f"{int(remaining)}s"
+                bars.append(f"{DIM}retry in {eta}{T.R}")
             else:
                 if "5h" in sections:
                     bars.append(f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}")
