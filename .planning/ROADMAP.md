@@ -47,7 +47,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md — Implement singleton connection with init-time PRAGMA/DDL and subprocess isolation
+- [x] 02-01-PLAN.md — Implement singleton connection with init-time PRAGMA/DDL and subprocess isolation
 
 ### Phase 3: DRY Core Helpers
 **Goal**: Repeated patterns in the runtime statusline path are consolidated into named helpers with single call sites replacing duplicated logic

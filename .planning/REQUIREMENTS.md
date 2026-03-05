@@ -16,9 +16,9 @@ Requirements for v1.0 Code Quality milestone. Each maps to roadmap phases.
 
 ### SQLite Optimization
 
-- [ ] **SQL-01**: Replace per-call `_db()` with singleton connection (eliminate 8-12 opens per render)
-- [ ] **SQL-02**: Run PRAGMA and DDL only once at connection init, not per call
-- [ ] **SQL-03**: Ensure singleton works safely with background subprocess isolation
+- [x] **SQL-01**: Replace per-call `_db()` with singleton connection (eliminate 8-12 opens per render)
+- [x] **SQL-02**: Run PRAGMA and DDL only once at connection init, not per call
+- [x] **SQL-03**: Ensure singleton works safely with background subprocess isolation
 
 ### DRY Consolidation
 
@@ -64,9 +64,9 @@ None currently deferred.
 | DEAD-02 | Phase 1 | Complete |
 | DEAD-03 | Phase 1 | Complete |
 | DEAD-04 | Phase 1 | Complete |
-| SQL-01 | Phase 2 | Pending |
-| SQL-02 | Phase 2 | Pending |
-| SQL-03 | Phase 2 | Pending |
+| SQL-01 | Phase 2 | Complete |
+| SQL-02 | Phase 2 | Complete |
+| SQL-03 | Phase 2 | Complete |
 | DRY-01 | Phase 3 | Pending |
 | DRY-02 | Phase 3 | Pending |
 | DRY-03 | Phase 3 | Pending |
