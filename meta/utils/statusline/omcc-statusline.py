@@ -1702,9 +1702,14 @@ class Editor:
         return preview, carets
 
     def _themed_bar_bg(self) -> str:
-        """Resolve bar background ANSI from current theme."""
+        """Resolve bar background ANSI from current theme (with live preview)."""
         entry = self.theme.get("lim_bar_bg")
-        return bg256(entry.bg) if entry and entry.bg is not None else T.lim_bar_bg
+        if entry is None:
+            return T.lim_bar_bg
+        bg_val = entry.bg
+        if ELEMENTS[self.cursor].key == "lim_bar_bg" and self.mode == "bg":
+            bg_val = self.color_cursor if self.color_cursor >= 0 else None
+        return bg256(bg_val) if bg_val is not None else T.lim_bar_bg
 
     def _append_limits_demo(self, parts: list[str], carets: list[str], cur: str):
         bar_bg = self._themed_bar_bg()
