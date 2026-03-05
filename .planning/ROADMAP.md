@@ -90,11 +90,11 @@ Plans:
   2. `provider_limits()` uses early returns instead of nested if/else chains
   3. `execute_slots()` has separated concerns: grid layout logic is distinct from threading and error handling
   4. Theme serialization logic is shared between `save_theme()` and `_settings_from_config()` instead of duplicated
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Refactor get_pr_status to return structured data (STR-01)
-- [ ] 05-02: Flatten provider_limits, separate execute_slots concerns, extract save_theme serialization (STR-02, STR-03, STR-04)
+- [ ] 05-01-PLAN.md — Refactor get_pr_status to return PrStatus NamedTuple with structured data (STR-01)
+- [ ] 05-02-PLAN.md — Flatten provider_limits, extract _build_slot_grid, add ThemeEntry.to_dict (STR-02, STR-03, STR-04)
 
 ## Progress
 
