@@ -78,7 +78,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Extract ThemeEntry.from_dict classmethod and consolidate .copy() usage (DRY-08, DRY-12)
+- [x] 04-01-PLAN.md — Extract ThemeEntry.from_dict classmethod and consolidate .copy() usage (DRY-08, DRY-12)
 - [ ] 04-02-PLAN.md — Extract separator display label helper, preview segment assembly, and color cell rendering (DRY-09, DRY-10, DRY-11)
 
 ### Phase 5: Structural Improvements
