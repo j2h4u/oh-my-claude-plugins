@@ -60,35 +60,35 @@ None currently deferred.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEAD-01 | — | Pending |
-| DEAD-02 | — | Pending |
-| DEAD-03 | — | Pending |
-| DEAD-04 | — | Pending |
-| SQL-01 | — | Pending |
-| SQL-02 | — | Pending |
-| SQL-03 | — | Pending |
-| DRY-01 | — | Pending |
-| DRY-02 | — | Pending |
-| DRY-03 | — | Pending |
-| DRY-04 | — | Pending |
-| DRY-05 | — | Pending |
-| DRY-06 | — | Pending |
-| DRY-07 | — | Pending |
-| DRY-08 | — | Pending |
-| DRY-09 | — | Pending |
-| DRY-10 | — | Pending |
-| DRY-11 | — | Pending |
-| DRY-12 | — | Pending |
-| STR-01 | — | Pending |
-| STR-02 | — | Pending |
-| STR-03 | — | Pending |
-| STR-04 | — | Pending |
+| DEAD-01 | Phase 1 | Pending |
+| DEAD-02 | Phase 1 | Pending |
+| DEAD-03 | Phase 1 | Pending |
+| DEAD-04 | Phase 1 | Pending |
+| SQL-01 | Phase 2 | Pending |
+| SQL-02 | Phase 2 | Pending |
+| SQL-03 | Phase 2 | Pending |
+| DRY-01 | Phase 3 | Pending |
+| DRY-02 | Phase 3 | Pending |
+| DRY-03 | Phase 3 | Pending |
+| DRY-04 | Phase 3 | Pending |
+| DRY-05 | Phase 3 | Pending |
+| DRY-06 | Phase 3 | Pending |
+| DRY-07 | Phase 3 | Pending |
+| DRY-08 | Phase 4 | Pending |
+| DRY-09 | Phase 4 | Pending |
+| DRY-10 | Phase 4 | Pending |
+| DRY-11 | Phase 4 | Pending |
+| DRY-12 | Phase 4 | Pending |
+| STR-01 | Phase 5 | Pending |
+| STR-02 | Phase 5 | Pending |
+| STR-03 | Phase 5 | Pending |
+| STR-04 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 22 total
-- Mapped to phases: 0
-- Unmapped: 22
+- v1 requirements: 23 total
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2025-07-14*
-*Last updated: 2025-07-14 after initial definition*
+*Last updated: 2025-07-14 after roadmap creation*
