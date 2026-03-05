@@ -80,10 +80,6 @@ If an external command's executable is not found, a dim placeholder is shown ins
 
 `separator` — between providers. `git_separator` — within git provider. `limits_separator` — within limits provider.
 
-### Theme Tokens
-
-CI labels and PR dots share unified status colors (`st_ok`, `st_fail`, `st_wait`, `st_none`). When CI has no checks configured, a dim gray `CI` placeholder is shown.
-
 ## Theme Editor
 
 ```bash
