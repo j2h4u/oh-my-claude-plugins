@@ -59,11 +59,11 @@ Plans:
   3. Settings retrieval uses `_get_setting()` with auto-fallback at all 6 sites instead of inline `dict.get(..., default)` chains
   4. Indicator formatting uses `_format_limit_window_for_prefix()` and `_render_indicator_for_prefix()` instead of duplicated lookup+format code
   5. Statusline renders identically before and after (no behavior change)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Extract cache access and JSON/config helpers (DRY-01, DRY-02, DRY-03, DRY-04, DRY-07)
-- [ ] 03-02: Extract indicator rendering helpers (DRY-05, DRY-06)
+- [ ] 03-01-PLAN.md — Extract cache access, JSON file loading, separator loader, settings getter, and safe JSON parse helpers (DRY-01, DRY-02, DRY-03, DRY-04, DRY-07)
+- [ ] 03-02-PLAN.md — Extract indicator rendering wrappers that internalize INDICATOR_CONFIG lookup (DRY-05, DRY-06)
 
 ### Phase 4: DRY Editor Helpers
 **Goal**: Repeated patterns in the theme editor TUI are consolidated into named helpers
