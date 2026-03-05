@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Remove all dead code items (ul_color, STDERR_MAX_LEN, unused provider params)
+- [x] 01-01-PLAN.md — Remove all dead code items (ul_color, STDERR_MAX_LEN, unused provider params)
 
 ### Phase 2: SQLite Connection Optimization
 **Goal**: Database opens once per process lifetime instead of per-call, eliminating redundant PRAGMA/DDL overhead on every render

@@ -9,10 +9,10 @@ Requirements for v1.0 Code Quality milestone. Each maps to roadmap phases.
 
 ### Dead Code
 
-- [ ] **DEAD-01**: Remove unused `ul_color` function (line 126)
-- [ ] **DEAD-02**: Remove unused `STDERR_MAX_LEN` constant (line 75)
-- [ ] **DEAD-03**: Remove unused `input_json` parameter from `provider_path`
-- [ ] **DEAD-04**: Remove unused `cwd`/`show` parameters from `provider_vibes`
+- [x] **DEAD-01**: Remove unused `ul_color` function (line 126)
+- [x] **DEAD-02**: Remove unused `STDERR_MAX_LEN` constant (line 75)
+- [x] **DEAD-03**: Remove unused `input_json` parameter from `provider_path`
+- [x] **DEAD-04**: Remove unused `cwd`/`show` parameters from `provider_vibes`
 
 ### SQLite Optimization
 
@@ -60,10 +60,10 @@ None currently deferred.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEAD-01 | Phase 1 | Pending |
-| DEAD-02 | Phase 1 | Pending |
-| DEAD-03 | Phase 1 | Pending |
-| DEAD-04 | Phase 1 | Pending |
+| DEAD-01 | Phase 1 | Complete |
+| DEAD-02 | Phase 1 | Complete |
+| DEAD-03 | Phase 1 | Complete |
+| DEAD-04 | Phase 1 | Complete |
 | SQL-01 | Phase 2 | Pending |
 | SQL-02 | Phase 2 | Pending |
 | SQL-03 | Phase 2 | Pending |
