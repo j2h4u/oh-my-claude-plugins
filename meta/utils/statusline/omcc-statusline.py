@@ -561,18 +561,23 @@ def osc8_link(url: str, text: str) -> str:
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
+_CON: sqlite3.Connection | None = None
+
+
 def _db() -> sqlite3.Connection:
-    """Open cache DB (WAL mode, short busy timeout for readers)."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(str(CACHE_DB), timeout=2)
-    con.execute("PRAGMA journal_mode=WAL")
-    con.execute(
-        "CREATE TABLE IF NOT EXISTS cache "
-        "(key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}',"
-        " updated_at REAL NOT NULL DEFAULT 0,"
-        " cooldown_until REAL NOT NULL DEFAULT 0)"
-    )
-    return con
+    """Return singleton cache DB connection (lazy init, WAL mode)."""
+    global _CON
+    if _CON is None:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _CON = sqlite3.connect(str(CACHE_DB), timeout=2)
+        _CON.execute("PRAGMA journal_mode=WAL")
+        _CON.execute(
+            "CREATE TABLE IF NOT EXISTS cache "
+            "(key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}',"
+            " updated_at REAL NOT NULL DEFAULT 0,"
+            " cooldown_until REAL NOT NULL DEFAULT 0)"
+        )
+    return _CON
 
 
 def cache_get(key: str) -> tuple[str | None, float, float]:
@@ -582,7 +587,6 @@ def cache_get(key: str) -> tuple[str | None, float, float]:
         row = con.execute(
             "SELECT data, updated_at, cooldown_until FROM cache WHERE key = ?", (key,)
         ).fetchone()
-        con.close()
         if row:
             return row[0], row[1], row[2]
     except sqlite3.Error:
@@ -600,7 +604,6 @@ def cache_put(key: str, data: str, cooldown_until: float = 0.0) -> None:
             (key, data, time.time(), cooldown_until),
         )
         con.commit()
-        con.close()
     except sqlite3.Error:
         pass
 
@@ -2559,16 +2562,9 @@ def editor_main() -> None:
     Editor().run()
 
 
-def _ensure_cache_db() -> None:
-    """Create cache directory and initialize SQLite DB at startup."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    _db().close()
-
-
 def statusline_main() -> None:
     """Normal statusline mode: read stdin JSON, execute slots, output lines."""
     slots = _load_theme_config()
-    _ensure_cache_db()
 
     def _stdin_timeout(signum, frame):
         raise TimeoutError
