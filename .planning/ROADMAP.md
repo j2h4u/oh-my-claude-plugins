@@ -93,7 +93,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Refactor get_pr_status to return PrStatus NamedTuple with structured data (STR-01)
+- [x] 05-01-PLAN.md — Refactor get_pr_status to return PrStatus NamedTuple with structured data (STR-01)
 - [x] 05-02-PLAN.md — Flatten provider_limits, extract _build_slot_grid, add ThemeEntry.to_dict (STR-02, STR-03, STR-04)
 
 ## Progress
