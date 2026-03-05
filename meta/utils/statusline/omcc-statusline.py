@@ -764,6 +764,19 @@ def _render_indicator(pct: float, ramp: list, display: str, *, bar_bg: str | Non
     return _vbar(pct, ramp=ramp, bar_bg=bar_bg)
 
 
+def _render_indicator_for_prefix(pct: float, prefix: str) -> str:
+    """Render indicator using INDICATOR_CONFIG for the given prefix (5h/7d/ctx)."""
+    cfg = INDICATOR_CONFIG[prefix]
+    return _render_indicator(pct, cfg["ramp"], cfg["display"])
+
+
+def _format_limit_window_for_prefix(utilization: float, resets_at: str, prefix: str) -> str:
+    """Format one limit window using INDICATOR_CONFIG for the given prefix."""
+    cfg = INDICATOR_CONFIG[prefix]
+    return _format_limit_window(utilization, resets_at, prefix,
+                                ramp=cfg["ramp"], display=cfg["display"])
+
+
 # --- gh availability ---------------------------------------------------------
 
 def check_gh_available() -> str:
@@ -1272,21 +1285,18 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
             u7 = seven.get("utilization", 0)
             if u7 >= 100 and not stale7:
                 if "7d" in sections:
-                    bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
-                                                     ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
+                    bars.append(_format_limit_window_for_prefix(u7, seven.get("resets_at", ""), "7d"))
             else:
                 if "5h" in sections:
                     if stale5:
                         bars.append(f"{T.dir_parent}5h{T.R} {T.warn}stale{T.R}")
                     else:
-                        bars.append(_format_limit_window(u5, five.get("resets_at", ""), "5h",
-                                                         ramp=INDICATOR_CONFIG["5h"]["ramp"], display=INDICATOR_CONFIG["5h"]["display"]))
+                        bars.append(_format_limit_window_for_prefix(u5, five.get("resets_at", ""), "5h"))
                 if "7d" in sections:
                     if stale7:
                         bars.append(f"{T.dir_parent}7d{T.R} {T.warn}stale{T.R}")
                     else:
-                        bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
-                                                         ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
+                        bars.append(_format_limit_window_for_prefix(u7, seven.get("resets_at", ""), "7d"))
 
         cooldown_until = cache_get("limits")[2]
         remaining = cooldown_until - time.time() if cooldown_until else 0
@@ -1308,8 +1318,7 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
             remaining = inp.get("context_window", {}).get("remaining_percentage")
             if remaining is not None:
                 used = 100 - remaining
-                ctx_bar = _render_indicator(used, INDICATOR_CONFIG["ctx"]["ramp"],
-                                            INDICATOR_CONFIG["ctx"]["display"])
+                ctx_bar = _render_indicator_for_prefix(used, "ctx")
                 bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
             else:
                 bars.append(f"{T.dir_parent}ctx{T.R} {DIM}N/A{T.R}")
@@ -2429,15 +2438,11 @@ def demo() -> None:
     def limits_bars(u5: float, r5: str, u7: float, r7: str, ctx: int) -> str:
         bars: list[str] = []
         if u7 >= 100:
-            bars.append(_format_limit_window(u7, r7, "7d",
-                                             ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
+            bars.append(_format_limit_window_for_prefix(u7, r7, "7d"))
         else:
-            bars.append(_format_limit_window(u5, r5, "5h",
-                                             ramp=INDICATOR_CONFIG["5h"]["ramp"], display=INDICATOR_CONFIG["5h"]["display"]))
-            bars.append(_format_limit_window(u7, r7, "7d",
-                                             ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
-        ctx_bar = _render_indicator(ctx, INDICATOR_CONFIG["ctx"]["ramp"],
-                                    INDICATOR_CONFIG["ctx"]["display"])
+            bars.append(_format_limit_window_for_prefix(u5, r5, "5h"))
+            bars.append(_format_limit_window_for_prefix(u7, r7, "7d"))
+        ctx_bar = _render_indicator_for_prefix(ctx, "ctx")
         bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
         return SEP_LIMITS.join(bars)
 
