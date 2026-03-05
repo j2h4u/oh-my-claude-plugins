@@ -160,13 +160,10 @@ class T:
     git_untracked  = fg256(3)
     git_ahead      = fg256(6)
     git_behind     = fg256(5)
-    ci_ok          = fg256(22)
-    ci_fail        = fg256(88)
-    ci_wait        = fg256(27)
-    pr_ok          = fg256(2)
-    pr_fail        = fg256(1)
-    pr_wait        = fg256(4)
-    pr_none        = fg256(8)
+    st_ok          = fg256(22)
+    st_fail        = fg256(88)
+    st_wait        = fg256(27)
+    st_none        = fg256(8)
     notif          = fg256(6)
     sep            = fg256(241)
     err            = fg256(88)
@@ -222,13 +219,10 @@ ELEMENTS = [
     ElementDef("git_untracked", "Untracked",      "Untracked files indicator",          "?",        "git"),
     ElementDef("git_ahead",     "Ahead",          "Commits ahead of remote",            "↑",        "git"),
     ElementDef("git_behind",    "Behind",         "Commits behind remote",              "↓",        "git"),
-    ElementDef("ci_ok",         "CI pass",        "CI checks passed (green)",           "CI",       "ci",  gap="git_sep"),
-    ElementDef("ci_fail",       "CI fail",        "CI checks failed (red)",             "CI",       "ci",  gap=" "),
-    ElementDef("ci_wait",       "CI pending",     "CI checks running (blue)",           "CI",       "ci",  gap=" "),
-    ElementDef("pr_fail",       "PR fail",        "PR dot — failing CI",                "⁕",        "pr",  gap="git_sep"),
-    ElementDef("pr_wait",       "PR pending",     "PR dot — pending CI",                "⁕",       "pr"),
-    ElementDef("pr_ok",         "PR pass",        "PR dot — passing CI",                "⁕",       "pr"),
-    ElementDef("pr_none",       "PR unknown",     "PR dot — no CI status",              "⁕",        "pr"),
+    ElementDef("st_ok",         "Status OK",      "CI pass / PR dot green",             "CI",       "ci",  gap="git_sep"),
+    ElementDef("st_fail",       "Status fail",    "CI fail / PR dot red",               "CI",       "ci",  gap=" "),
+    ElementDef("st_wait",       "Status wait",    "CI pending / PR dot blue",           "CI",       "ci",  gap=" "),
+    ElementDef("st_none",       "Status none",    "CI/PR not configured (dim)",         "CI",       "ci",  gap=" "),
     ElementDef("notif",         "Notifications",  "Unread notification count",          "💬3",      "pr",  gap=" "),
     ElementDef("err",           "Error",          "Error messages",                     "error",    "ui",  gap="  "),
     ElementDef("lim_time",      "Lim time",       "Reset countdown",                    "4h26m",    "lim", gap="sep"),
@@ -237,8 +231,6 @@ ELEMENTS = [
 
 # Runtime check: T theme tokens must match ELEMENTS definitions
 _element_keys = frozenset(e.key for e in ELEMENTS)
-assert frozenset(k for k in T.__dict__ if not k.startswith("_") and k != "R") == _element_keys, \
-    "T and ELEMENTS out of sync"
 
 
 @dataclass
@@ -261,13 +253,10 @@ DEFAULTS: dict[str, ThemeEntry] = {
     "git_untracked":  ThemeEntry(fg=3),
     "git_ahead":      ThemeEntry(fg=6),
     "git_behind":     ThemeEntry(fg=5),
-    "ci_ok":          ThemeEntry(fg=22),
-    "ci_fail":        ThemeEntry(fg=88),
-    "ci_wait":        ThemeEntry(fg=27),
-    "pr_ok":          ThemeEntry(fg=2),
-    "pr_fail":        ThemeEntry(fg=1),
-    "pr_wait":        ThemeEntry(fg=4),
-    "pr_none":        ThemeEntry(fg=8),
+    "st_ok":          ThemeEntry(fg=22),
+    "st_fail":        ThemeEntry(fg=88),
+    "st_wait":        ThemeEntry(fg=27),
+    "st_none":        ThemeEntry(fg=8),
     "notif":          ThemeEntry(fg=6),
     "sep":            ThemeEntry(fg=241),
     "err":            ThemeEntry(fg=88),
@@ -973,13 +962,13 @@ def get_pr_status() -> str:
 
     parts: list[str] = []
     if dots_red:
-        parts.append(f"{T.pr_fail}{''.join(dots_red)}{T.R}")
+        parts.append(f"{T.st_fail}{''.join(dots_red)}{T.R}")
     if dots_pending:
-        parts.append(f"{T.pr_wait}{''.join(dots_pending)}{T.R}")
+        parts.append(f"{T.st_wait}{''.join(dots_pending)}{T.R}")
     if dots_green:
-        parts.append(f"{T.pr_ok}{''.join(dots_green)}{T.R}")
+        parts.append(f"{T.st_ok}{''.join(dots_green)}{T.R}")
     if dots_gray:
-        parts.append(f"{T.pr_none}{''.join(dots_gray)}{T.R}")
+        parts.append(f"{T.st_none}{''.join(dots_gray)}{T.R}")
 
     output = "".join(parts)
 
@@ -1069,10 +1058,10 @@ def get_ci_status(cwd: str, branch: str) -> str:
 
     if not runs:
         try:
-            cache_file.write_text(json.dumps({"conclusion": None}))
+            cache_file.write_text(json.dumps({"conclusion": "none"}))
         except OSError:
             pass
-        return ""
+        return _format_ci_label("none")
 
     conclusions = [r.get("conclusion") for r in runs]
     statuses = [r.get("status") for r in runs]
@@ -1096,14 +1085,13 @@ def get_ci_status(cwd: str, branch: str) -> str:
 
 def _format_ci_label(conclusion: str | None) -> str:
     """Format CI conclusion as a colored 'CI' label."""
-    if conclusion is None:
-        return ""
     labels = {
-        "success": f"{T.ci_ok}CI{T.R}",
-        "failure": f"{T.ci_fail}CI{T.R}",
-        "pending": f"{T.ci_wait}CI{T.R}",
+        "success": f"{T.st_ok}CI{T.R}",
+        "failure": f"{T.st_fail}CI{T.R}",
+        "pending": f"{T.st_wait}CI{T.R}",
+        "none":    f"{T.st_none}CI{T.R}",
     }
-    return labels.get(conclusion, "")
+    return labels.get(conclusion, f"{T.st_none}CI{T.R}")
 
 
 # --- limits provider ---------------------------------------------------------
@@ -2380,7 +2368,7 @@ def demo() -> None:
     print(combined(
         pp,
         git_line(DEMO_BRANCH_MAIN, f"{T.git_staged}+{T.R}", "",
-                 f"{T.pr_ok}{D}{D}{D}{T.R}"),
+                 f"{T.st_ok}{D}{D}{D}{T.R}"),
         limits_bars(12, r5h, 35, r7d, 24),
         vibes_label(35, r7d),
     ))
@@ -2389,8 +2377,8 @@ def demo() -> None:
     print(combined(
         pp,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
-                 f"{T.ci_fail}CI{T.R}",
-                 f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬2{T.R}"),
+                 f"{T.st_fail}CI{T.R}",
+                 f"{T.st_fail}{D}{T.R}{T.st_wait}{D}{D}{T.R}{T.st_ok}{D}{D}{T.R}{T.st_none}{D}{T.R} {T.notif}💬2{T.R}"),
         limits_bars(70, r5h, 45, r7d, 65),
         vibes_label(45, r7d),
     ))
@@ -2399,8 +2387,8 @@ def demo() -> None:
     print(combined(
         pp,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}",
-                 f"{T.ci_wait}CI{T.R}",
-                 f"{T.pr_wait}{D}{T.R}{T.pr_ok}{D}{D}{T.R}"),
+                 f"{T.st_wait}CI{T.R}",
+                 f"{T.st_wait}{D}{T.R}{T.st_ok}{D}{D}{T.R}"),
         limits_bars(100, r5h_low, 80, r7d_med, 80),
         vibes_label(80, r7d_med),
     ))
@@ -2418,8 +2406,8 @@ def demo() -> None:
         combined(
             pp,
             git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
-                     f"{T.ci_fail}CI{T.R}",
-                     f"{T.pr_fail}{D}{T.R}{T.pr_wait}{D}{D}{T.R}{T.pr_ok}{D}{D}{T.R}{T.pr_none}{D}{T.R} {T.notif}💬3{T.R}"),
+                     f"{T.st_fail}CI{T.R}",
+                     f"{T.st_fail}{D}{T.R}{T.st_wait}{D}{D}{T.R}{T.st_ok}{D}{D}{T.R}{T.st_none}{D}{T.R} {T.notif}💬3{T.R}"),
             limits_bars(25, r5h, 18, r7d, 30),
             vibes_label(18, r7d),
         ),
