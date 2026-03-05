@@ -304,6 +304,18 @@ def _sep_ansi(char: str) -> str:
     """Build separator ANSI string: ' sep_colorCHARreset ' or just ' '."""
     return f" {T.sep}{char}{T.R} " if char else " "
 
+
+def _load_separator(settings: dict, key: str) -> str:
+    """Load a separator from settings dict, falling back to _SETTINGS_DEFAULTS."""
+    val = settings.get(key)
+    return _sep_ansi(val) if isinstance(val, str) else _sep_ansi(_SETTINGS_DEFAULTS[key])
+
+
+def _get_setting(settings_dict: dict, key: str) -> str:
+    """Return setting value with auto-fallback to _SETTINGS_DEFAULTS."""
+    return settings_dict.get(key, _SETTINGS_DEFAULTS[key])
+
+
 SEP_EXTRA = _sep_ansi(_SETTINGS_DEFAULTS["separator"])
 SEP_GIT = _sep_ansi(_SETTINGS_DEFAULTS["git_separator"])
 SEP_LIMITS = _sep_ansi(_SETTINGS_DEFAULTS["limits_separator"])
@@ -515,23 +527,9 @@ def _load_theme_config() -> list[dict]:
         if mode in ("number", "vertical", "horizontal"):
             INDICATOR_CONFIG[prefix]["display"] = mode
 
-    sep_char = settings.get("separator")
-    if isinstance(sep_char, str):
-        SEP_EXTRA = _sep_ansi(sep_char)
-    else:
-        SEP_EXTRA = _sep_ansi(_SETTINGS_DEFAULTS["separator"])
-
-    git_sep = settings.get("git_separator")
-    if isinstance(git_sep, str):
-        SEP_GIT = _sep_ansi(git_sep)
-    else:
-        SEP_GIT = _sep_ansi(_SETTINGS_DEFAULTS["git_separator"])
-
-    lim_sep = settings.get("limits_separator")
-    if isinstance(lim_sep, str):
-        SEP_LIMITS = _sep_ansi(lim_sep)
-    else:
-        SEP_LIMITS = _sep_ansi(_SETTINGS_DEFAULTS["limits_separator"])
+    SEP_EXTRA = _load_separator(settings, "separator")
+    SEP_GIT = _load_separator(settings, "git_separator")
+    SEP_LIMITS = _load_separator(settings, "limits_separator")
 
     return config.get("slots", list(DEFAULT_SLOTS))
 
@@ -1805,7 +1803,7 @@ class Editor:
             ("7d", p if anim else 55, None),
             ("ctx", p if anim else 40, None),
         ]
-        lim_sep = self.settings.get("limits_separator", "")
+        lim_sep = _get_setting(self.settings, "limits_separator")
         lim_sep_text = f" {lim_sep} " if lim_sep else " "
         for i, (label, pct, time_text) in enumerate(demos):
             if i > 0:
@@ -1816,8 +1814,8 @@ class Editor:
             parts.append(self._styled("lim_time", lbl))
             carets.extend(["^" if cur == "lim_time" else " "] * self._visual_len(lbl))
 
-            ramp_name = self.settings.get(f"{label}_ramp", _SETTINGS_DEFAULTS[f"{label}_ramp"])
-            display = self.settings.get(f"{label}_display", _SETTINGS_DEFAULTS[f"{label}_display"])
+            ramp_name = _get_setting(self.settings, f"{label}_ramp")
+            display = _get_setting(self.settings, f"{label}_display")
             if display == "number":
                 bar_text = _render_demo_number(pct, ramp_name, width=4)
                 bar_vlen = 4
@@ -1929,7 +1927,7 @@ class Editor:
 
         if sdef.key in ("5h_ramp", "7d_ramp", "ctx_ramp"):
             prefix = sdef.key.split("_")[0]
-            display = self.settings.get(f"{prefix}_display", _SETTINGS_DEFAULTS[f"{prefix}_display"])
+            display = _get_setting(self.settings, f"{prefix}_display")
             if display == "number":
                 bars = " ".join(_render_demo_number(p, val) for p in range(10, 100, 10))
             elif display == "horizontal":
@@ -1939,7 +1937,7 @@ class Editor:
             return f"  {bars}"
         elif sdef.key in ("5h_display", "7d_display", "ctx_display"):
             prefix = sdef.key.split("_")[0]
-            ramp = self.settings.get(f"{prefix}_ramp", _SETTINGS_DEFAULTS[f"{prefix}_ramp"])
+            ramp = _get_setting(self.settings, f"{prefix}_ramp")
             if val == "number":
                 return f"  {_render_demo_number(60, ramp)}"
             elif val == "horizontal":
