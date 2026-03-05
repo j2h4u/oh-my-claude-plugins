@@ -79,7 +79,7 @@ SLOT_CACHE_TTL = 60
 # Limits provider
 LIMITS_CACHE_TTL = API_CACHE_TTL
 LIMITS_HTTP_TIMEOUT = 5
-LIMITS_COOLDOWN_DEFAULT = 300  # 5 min fallback when Retry-After is missing or 0
+LIMITS_COOLDOWN_DEFAULT = 60  # 1 min fallback when Retry-After is missing or 0
 LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
 LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
 LIMITS_BAR_WIDTH = 5
@@ -156,10 +156,10 @@ class T:
     git_untracked  = fg256(3)
     git_ahead      = fg256(6)
     git_behind     = fg256(5)
-    st_ok          = fg256(22)
-    st_fail        = fg256(88)
-    st_wait        = fg256(27)
-    st_none        = fg256(8)
+    ok             = fg256(22)
+    warn           = fg256(94)
+    wait           = fg256(27)
+    none           = fg256(237)
     notif          = fg256(6)
     sep            = fg256(241)
     err            = fg256(88)
@@ -215,12 +215,12 @@ ELEMENTS = [
     ElementDef("git_untracked", "Untracked",      "Untracked files indicator",          "?",        "git"),
     ElementDef("git_ahead",     "Ahead",          "Commits ahead of remote",            "↑",        "git"),
     ElementDef("git_behind",    "Behind",         "Commits behind remote",              "↓",        "git"),
-    ElementDef("st_ok",         "Status OK",      "CI pass / PR dot green",             "CI",       "ci",  gap="git_sep"),
-    ElementDef("st_fail",       "Status fail",    "CI fail / PR dot red",               "CI",       "ci",  gap=" "),
-    ElementDef("st_wait",       "Status wait",    "CI pending / PR dot blue",           "CI",       "ci",  gap=" "),
-    ElementDef("st_none",       "Status none",    "CI/PR not configured (dim)",         "CI",       "ci",  gap=" "),
+    ElementDef("ok",            "OK",             "Success: CI pass, PR approved",      "CI",       "ci",  gap="git_sep"),
+    ElementDef("err",           "Error",          "Failure: CI fail, PR rejected",      "CI",       "ci",  gap=" "),
+    ElementDef("wait",          "Wait",           "CI pending / PR dot blue",           "CI",       "ci",  gap=" "),
+    ElementDef("none",          "None",           "CI/PR not configured (dim)",         "CI",       "ci",  gap=" "),
     ElementDef("notif",         "Notifications",  "Unread notification count",          "💬3",      "pr",  gap=" "),
-    ElementDef("err",           "Error",          "Error messages",                     "error",    "ui",  gap="  "),
+    ElementDef("warn",          "Warning",        "Stale data / retry countdown",       "WARN",     "ui",  gap="  "),
     ElementDef("lim_time",      "Lim time",       "Reset countdown",                    "4h26m",    "lim", gap="sep"),
     ElementDef("lim_bar_bg",    "Bar bg",         "Progress bar background (fg = ramp)", "▁▂▃",      "lim", frozenset({"bg"})),
 ]
@@ -249,10 +249,10 @@ DEFAULTS: dict[str, ThemeEntry] = {
     "git_untracked":  ThemeEntry(fg=3),
     "git_ahead":      ThemeEntry(fg=6),
     "git_behind":     ThemeEntry(fg=5),
-    "st_ok":          ThemeEntry(fg=22),
-    "st_fail":        ThemeEntry(fg=88),
-    "st_wait":        ThemeEntry(fg=27),
-    "st_none":        ThemeEntry(fg=8),
+    "ok":             ThemeEntry(fg=22),
+    "warn":           ThemeEntry(fg=94),
+    "wait":           ThemeEntry(fg=27),
+    "none":           ThemeEntry(fg=237),
     "notif":          ThemeEntry(fg=6),
     "sep":            ThemeEntry(fg=241),
     "err":            ThemeEntry(fg=88),
@@ -1010,13 +1010,13 @@ def get_pr_status() -> str:
 
     parts: list[str] = []
     if dots_red:
-        parts.append(f"{T.st_fail}{''.join(dots_red)}{T.R}")
+        parts.append(f"{T.err}{''.join(dots_red)}{T.R}")
     if dots_pending:
-        parts.append(f"{T.st_wait}{''.join(dots_pending)}{T.R}")
+        parts.append(f"{T.wait}{''.join(dots_pending)}{T.R}")
     if dots_green:
-        parts.append(f"{T.st_ok}{''.join(dots_green)}{T.R}")
+        parts.append(f"{T.ok}{''.join(dots_green)}{T.R}")
     if dots_gray:
-        parts.append(f"{T.st_none}{''.join(dots_gray)}{T.R}")
+        parts.append(f"{T.none}{''.join(dots_gray)}{T.R}")
 
     output = "".join(parts)
 
@@ -1132,12 +1132,12 @@ def get_ci_status(cwd: str, branch: str) -> str:
 def _format_ci_label(conclusion: str | None) -> str:
     """Format CI conclusion as a colored 'CI' label."""
     labels = {
-        "success": f"{T.st_ok}CI{T.R}",
-        "failure": f"{T.st_fail}CI{T.R}",
-        "pending": f"{T.st_wait}CI{T.R}",
-        "none":    f"{T.st_none}CI{T.R}",
+        "success": f"{T.ok}CI{T.R}",
+        "failure": f"{T.err}CI{T.R}",
+        "pending": f"{T.wait}CI{T.R}",
+        "none":    f"{T.none}CI{T.R}",
     }
-    return labels.get(conclusion, f"{T.st_none}CI{T.R}")
+    return labels.get(conclusion, f"{T.none}CI{T.R}")
 
 
 # --- limits provider ---------------------------------------------------------
@@ -1177,7 +1177,7 @@ def _format_duration(minutes: int) -> str:
         return f"{hours}h{mins:02d}m" if mins else f"{hours}h"
     days = hours // 24
     rem_hours = hours % 24
-    return f"{days}d {rem_hours}h" if rem_hours else f"{days}d"
+    return f"{days}d{rem_hours}h" if rem_hours else f"{days}d"
 
 
 def _7d_pace_label(utilization: float, resets_at: str) -> str:
@@ -1263,30 +1263,30 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
             else:
                 if "5h" in sections:
                     if stale5:
-                        bars.append(f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}")
+                        bars.append(f"{T.dir_parent}5h{T.R} {T.warn}stale{T.R}")
                     else:
                         bars.append(_format_limit_window(u5, five.get("resets_at", ""), "5h",
                                                          ramp=INDICATOR_CONFIG["5h"]["ramp"], display=INDICATOR_CONFIG["5h"]["display"]))
                 if "7d" in sections:
                     if stale7:
-                        bars.append(f"{T.dir_parent}7d{T.R} {DIM}N/A{T.R}")
+                        bars.append(f"{T.dir_parent}7d{T.R} {T.warn}stale{T.R}")
                     else:
                         bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
                                                          ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
-        else:
-            _, _, cooldown_until = cache_get("limits")
-            remaining = cooldown_until - time.time() if cooldown_until else 0
-            if remaining > 0:
-                if remaining >= 60:
-                    eta = _format_duration(int(remaining / 60))
-                else:
-                    eta = f"{int(remaining)}s"
-                bars.append(f"{DIM}retry in {eta}{T.R}")
+
+        _, _, cooldown_until = cache_get("limits")
+        remaining = cooldown_until - time.time() if cooldown_until else 0
+        if remaining > 0:
+            if remaining >= 60:
+                eta = _format_duration(int(remaining / 60))
             else:
-                if "5h" in sections:
-                    bars.append(f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}")
-                if "7d" in sections:
-                    bars.append(f"{T.dir_parent}7d{T.R} {DIM}N/A{T.R}")
+                eta = f"{int(remaining)}s"
+            bars.append(f"{T.warn}retry in {eta}{T.R}")
+        elif not has_data:
+            if "5h" in sections:
+                bars.append(f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}")
+            if "7d" in sections:
+                bars.append(f"{T.dir_parent}7d{T.R} {DIM}N/A{T.R}")
 
     if "ctx" in sections:
         try:
@@ -1428,7 +1428,7 @@ def _check_command_available(command: str) -> str | None:
         return None
     # Prefer basename of first arg (script) over the interpreter itself
     label = os.path.basename(parts[1]) if len(parts) > 1 else os.path.basename(exe)
-    return f"{T.sep}{DIM}[{label}: not found]{RESET}"
+    return f"{T.warn}[{label}: not found]{T.R}"
 
 
 def run_external_slot(command: str, input_json: str, ttl: int) -> str:
@@ -1745,12 +1745,19 @@ class Editor:
             # After CI group ends, inject PR dots block
             if prev_group == "ci" and elem.group != "ci":
                 segments.append(_sep_segment("git_sep"))
-                for dot_key, dot_text in [("st_ok", "⁕⁕⁕"), ("st_fail", "⁕"), ("st_wait", "⁕⁕"), ("st_none", "⁕")]:
+                for dot_key, dot_text in [("ok", "⁕⁕⁕"), ("err", "⁕"), ("wait", "⁕⁕"), ("none", "⁕")]:
                     segments.append((dot_key, dot_text))
             prev_group = elem.group
             # Sep element renders as the configured separator character
             if elem.key == "sep":
                 segments.append(_sep_segment("sep"))
+            # warn element: sandwich between OK and ERR semantic labels
+            elif elem.key == "warn":
+                segments.append(("ok", "OK"))
+                segments.append((None, " "))
+                segments.append(("err", "ERR"))
+                segments.append((None, " "))
+                segments.append((elem.key, elem.sample))
             else:
                 segments.append((elem.key, elem.sample))
 
@@ -2451,7 +2458,7 @@ def demo() -> None:
     print(combined(
         pp,
         git_line(DEMO_BRANCH_MAIN, f"{T.git_staged}+{T.R}", "",
-                 f"{T.st_ok}{D}{D}{D}{T.R}"),
+                 f"{T.ok}{D}{D}{D}{T.R}"),
         limits_bars(12, r5h, 35, r7d, 24),
         vibes_label(35, r7d),
     ))
@@ -2460,8 +2467,8 @@ def demo() -> None:
     print(combined(
         pp,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
-                 f"{T.st_fail}CI{T.R}",
-                 f"{T.st_fail}{D}{T.R}{T.st_wait}{D}{D}{T.R}{T.st_ok}{D}{D}{T.R}{T.st_none}{D}{T.R} {T.notif}💬2{T.R}"),
+                 f"{T.err}CI{T.R}",
+                 f"{T.err}{D}{T.R}{T.wait}{D}{D}{T.R}{T.ok}{D}{D}{T.R}{T.none}{D}{T.R} {T.notif}💬2{T.R}"),
         limits_bars(70, r5h, 45, r7d, 65),
         vibes_label(45, r7d),
     ))
@@ -2470,8 +2477,8 @@ def demo() -> None:
     print(combined(
         pp,
         git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}",
-                 f"{T.st_wait}CI{T.R}",
-                 f"{T.st_wait}{D}{T.R}{T.st_ok}{D}{D}{T.R}"),
+                 f"{T.wait}CI{T.R}",
+                 f"{T.wait}{D}{T.R}{T.ok}{D}{D}{T.R}"),
         limits_bars(100, r5h_low, 80, r7d_med, 80),
         vibes_label(80, r7d_med),
     ))
@@ -2489,8 +2496,8 @@ def demo() -> None:
         combined(
             pp,
             git_line(DEMO_BRANCH_FEATURE, f"{T.git_dirty}*{T.R}{T.git_staged}+{T.R}",
-                     f"{T.st_fail}CI{T.R}",
-                     f"{T.st_fail}{D}{T.R}{T.st_wait}{D}{D}{T.R}{T.st_ok}{D}{D}{T.R}{T.st_none}{D}{T.R} {T.notif}💬3{T.R}"),
+                     f"{T.err}CI{T.R}",
+                     f"{T.err}{D}{T.R}{T.wait}{D}{D}{T.R}{T.ok}{D}{D}{T.R}{T.none}{D}{T.R} {T.notif}💬3{T.R}"),
             limits_bars(25, r5h, 18, r7d, 30),
             vibes_label(18, r7d),
         ),
