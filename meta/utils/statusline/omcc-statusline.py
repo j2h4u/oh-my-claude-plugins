@@ -114,11 +114,7 @@ RAMP_PRESETS = {
     "heatmap":   [(0, 33), (25, 44), (50, 40), (75, 184), (100, 160)],
 }
 
-INDICATOR_CONFIG = {
-    "5h":  {"ramp": RAMP_PRESETS["spectrum"], "display": "vertical"},
-    "7d":  {"ramp": RAMP_PRESETS["spectrum"], "display": "vertical"},
-    "ctx": {"ramp": RAMP_PRESETS["aurora"],   "display": "vertical"},
-}
+# INDICATOR_CONFIG — built from SETTINGS_DEFS after it's defined (see below)
 
 _BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"
 _VBAR_EIGHTHS = " ▁▂▃▄▅▆▇█"
@@ -157,25 +153,25 @@ CLEAR_LINE    = f"{CSI}2K"
 class T:
     """Semantic theme tokens — the only colors render code should reference."""
     dir_parent     = fg256(239)
-    dir_name       = fg256(238)
-    branch_sign    = fg256(238)
-    branch_name    = fg256(238)
+    dir_name       = fg256(243)
+    branch_sign    = fg256(66)
+    branch_name    = fg256(66)
     git_dirty      = DIM + fg256(3)
     git_staged     = DIM + fg256(2)
-    git_untracked  = fg256(235)
+    git_untracked  = fg256(3)
     git_ahead      = fg256(6)
     git_behind     = fg256(5)
-    ci_ok          = fg256(2)
-    ci_fail        = fg256(1)
-    ci_wait        = fg256(4)
+    ci_ok          = fg256(22)
+    ci_fail        = fg256(88)
+    ci_wait        = fg256(27)
     pr_ok          = fg256(2)
     pr_fail        = fg256(1)
     pr_wait        = fg256(4)
     pr_none        = fg256(8)
     notif          = fg256(6)
-    sep            = fg256(8)
-    err            = fg256(1)
-    lim_time       = fg256(238)
+    sep            = fg256(241)
+    err            = fg256(88)
+    lim_time       = fg256(239)
     lim_bar_bg     = bg256(236)
     R              = RESET
 
@@ -198,9 +194,7 @@ ATTRS_AVAILABLE = [
 
 ATTR_SGR = {name: sgr for name, sgr, _ in ATTRS_AVAILABLE}
 
-SEP_GIT = f" {T.sep}|{T.R} "
-SEP_LIMITS = " "
-SEP_EXTRA = f" {T.sep}·{T.R} "
+# SEP_GIT, SEP_LIMITS, SEP_EXTRA — built from SETTINGS_DEFS below
 
 # --- theme editor data model ------------------------------------------------
 
@@ -285,6 +279,16 @@ DEFAULTS: dict[str, ThemeEntry] = {
 assert frozenset(DEFAULTS.keys()) == _element_keys, "DEFAULTS and ELEMENTS out of sync"
 del _element_keys
 
+# Build T from DEFAULTS (single source of truth for colors)
+for _k, _d in DEFAULTS.items():
+    _parts = [ATTR_SGR[a] for a in _d.attrs if a in ATTR_SGR]
+    if _d.fg is not None:
+        _parts.append(fg256(_d.fg))
+    if _d.bg is not None:
+        _parts.append(bg256(_d.bg))
+    setattr(T, _k, "".join(_parts))
+del _k, _d, _parts
+
 RAMP_NAMES = ["aurora", "traffic", "twilight", "ember", "spectrum", "heatmap"]
 DISPLAY_MODES = ["number", "vertical", "horizontal"]
 SEP_OPTIONS = ["·", "•", "│", "─", "⋮", "|", "║", "┃", "❘", ""]
@@ -310,6 +314,26 @@ SETTINGS_DEFS = [
     SettingDef("git_separator",     "Sep git",          SEP_OPTIONS, "·"),
     SettingDef("limits_separator",  "Sep limits",       SEP_OPTIONS, ""),
 ]
+
+# Build SEP_* from SETTINGS_DEFS (single source of truth for separators)
+_SETTINGS_DEFAULTS = {s.key: s.default for s in SETTINGS_DEFS}
+
+def _sep_ansi(char: str) -> str:
+    """Build separator ANSI string: ' sep_colorCHARreset ' or just ' '."""
+    return f" {T.sep}{char}{T.R} " if char else " "
+
+SEP_EXTRA = _sep_ansi(_SETTINGS_DEFAULTS["separator"])
+SEP_GIT = _sep_ansi(_SETTINGS_DEFAULTS["git_separator"])
+SEP_LIMITS = _sep_ansi(_SETTINGS_DEFAULTS["limits_separator"])
+
+# Build INDICATOR_CONFIG from SETTINGS_DEFS (single source of truth for ramp/display)
+INDICATOR_CONFIG = {
+    prefix: {
+        "ramp": RAMP_PRESETS[_SETTINGS_DEFAULTS[f"{prefix}_ramp"]],
+        "display": _SETTINGS_DEFAULTS[f"{prefix}_display"],
+    }
+    for prefix in ("5h", "7d", "ctx")
+}
 
 # --- config validation -------------------------------------------------------
 
@@ -455,10 +479,10 @@ def _build_ansi(entry: dict) -> str:
             parts.append(sgr)
     fg = entry.get("fg")
     if fg is not None:
-        parts.append(f"\033[38;5;{fg}m")
+        parts.append(fg256(fg))
     bg = entry.get("bg")
     if bg is not None:
-        parts.append(f"\033[48;5;{bg}m")
+        parts.append(bg256(bg))
     return "".join(parts)
 
 
@@ -516,21 +540,21 @@ def _load_theme_config() -> list[dict]:
 
     sep_char = settings.get("separator")
     if isinstance(sep_char, str):
-        SEP_EXTRA = f" {T.sep}{sep_char}{T.R} " if sep_char else " "
+        SEP_EXTRA = _sep_ansi(sep_char)
     else:
-        SEP_EXTRA = f" {T.sep}·{T.R} "
+        SEP_EXTRA = _sep_ansi(_SETTINGS_DEFAULTS["separator"])
 
     git_sep = settings.get("git_separator")
     if isinstance(git_sep, str):
-        SEP_GIT = f" {T.sep}{git_sep}{T.R} " if git_sep else " "
+        SEP_GIT = _sep_ansi(git_sep)
     else:
-        SEP_GIT = f" {T.sep}|{T.R} "
+        SEP_GIT = _sep_ansi(_SETTINGS_DEFAULTS["git_separator"])
 
     lim_sep = settings.get("limits_separator")
     if isinstance(lim_sep, str):
-        SEP_LIMITS = f" {T.sep}{lim_sep}{T.R} " if lim_sep else " "
+        SEP_LIMITS = _sep_ansi(lim_sep)
     else:
-        SEP_LIMITS = " "
+        SEP_LIMITS = _sep_ansi(_SETTINGS_DEFAULTS["limits_separator"])
 
     return config.get("slots", list(DEFAULT_SLOTS))
 
@@ -607,6 +631,11 @@ def read_remote_url(cwd: str) -> str | None:
 
 # --- color ramp --------------------------------------------------------------
 
+def _rgb_cube(r: int, g: int, b: int) -> int:
+    """Convert RGB cube coords (0-5 each) to 256-color index."""
+    return 16 + 36 * r + 6 * g + b
+
+
 def _ramp_lerp(t: float, c_lo: int, c_hi: int) -> int:
     """Interpolate between two 256-color RGB cube indices. Returns color index."""
     t = max(0.0, min(1.0, t))
@@ -615,12 +644,12 @@ def _ramp_lerp(t: float, c_lo: int, c_hi: int) -> int:
     r = max(0, min(5, round(lr + t * (hr - lr))))
     g = max(0, min(5, round(lg + t * (hg - lg))))
     b = max(0, min(5, round(lb + t * (hb - lb))))
-    return 16 + 36 * r + 6 * g + b
+    return _rgb_cube(r, g, b)
 
 
 def _ramp(t: float, endpoints: tuple[int, int]) -> str:
     """Interpolate between two 256-color indices, return ANSI fg escape."""
-    return f"\033[38;5;{_ramp_lerp(t, *endpoints)}m"
+    return fg256(_ramp_lerp(t, *endpoints))
 
 
 def _multi_ramp_color(pct: float, waypoints: list[tuple[float, int]]) -> int:
@@ -640,7 +669,7 @@ def _multi_ramp_color(pct: float, waypoints: list[tuple[float, int]]) -> int:
 
 def _multi_ramp(pct: float, waypoints: list[tuple[float, int]]) -> str:
     """Piecewise-linear color ramp, returns ANSI fg escape."""
-    return f"\033[38;5;{_multi_ramp_color(pct, waypoints)}m"
+    return fg256(_multi_ramp_color(pct, waypoints))
 
 
 def _pace_delta_color(delta: float) -> str:
@@ -1337,7 +1366,7 @@ def _check_command_available(command: str) -> str | None:
         return None
     # Prefer basename of first arg (script) over the interpreter itself
     label = os.path.basename(parts[1]) if len(parts) > 1 else os.path.basename(exe)
-    return f"{fg256(241)}{DIM}[{label}: not found]{RESET}"
+    return f"{T.sep}{DIM}[{label}: not found]{RESET}"
 
 
 def run_external_slot(command: str, input_json: str, ttl: int) -> str:
@@ -1527,7 +1556,7 @@ def _render_ramp_strip(ramp_name: str, width: int = 20) -> str:
 
 def _render_demo_number(pct: float, ramp_name: str, width: int = 0) -> str:
     """Render a colored percentage number for demo. Pad to width if given."""
-    waypoints = RAMP_PRESETS.get(ramp_name, RAMP_PRESETS["spectrum"])
+    waypoints = RAMP_PRESETS.get(ramp_name, RAMP_PRESETS[_SETTINGS_DEFAULTS["5h_ramp"]])
     c = _multi_ramp_color(pct, waypoints)
     text = f"{pct:.0f}%"
     if width:
@@ -1681,7 +1710,7 @@ class Editor:
     def _themed_bar_bg(self) -> str:
         """Resolve bar background ANSI from current theme."""
         entry = self.theme.get("lim_bar_bg")
-        return bg256(entry.bg) if entry and entry.bg is not None else bg256(236)
+        return bg256(entry.bg) if entry and entry.bg is not None else T.lim_bar_bg
 
     def _append_limits_demo(self, parts: list[str], carets: list[str], cur: str):
         bar_bg = self._themed_bar_bg()
@@ -1704,8 +1733,8 @@ class Editor:
             parts.append(self._styled("lim_time", lbl))
             carets.extend(["^" if cur == "lim_time" else " "] * self._visual_len(lbl))
 
-            ramp_name = self.settings.get(f"{label}_ramp", "spectrum")
-            display = self.settings.get(f"{label}_display", "vertical")
+            ramp_name = self.settings.get(f"{label}_ramp", _SETTINGS_DEFAULTS[f"{label}_ramp"])
+            display = self.settings.get(f"{label}_display", _SETTINGS_DEFAULTS[f"{label}_display"])
             if display == "number":
                 bar_text = _render_demo_number(pct, ramp_name, width=4)
                 bar_vlen = 4
@@ -1780,7 +1809,7 @@ class Editor:
             row_cells = []
             for r in range(6):
                 for b in range(6):
-                    row_cells.append(cell(16 + 36 * r + 6 * g + b))
+                    row_cells.append(cell(_rgb_cube(r, g, b)))
                 if r < 5:
                     row_cells.append(" ")
             lines.append("  " + "".join(row_cells))
@@ -1817,7 +1846,7 @@ class Editor:
 
         if sdef.key in ("5h_ramp", "7d_ramp", "ctx_ramp"):
             prefix = sdef.key.split("_")[0]
-            display = self.settings.get(f"{prefix}_display", "vertical")
+            display = self.settings.get(f"{prefix}_display", _SETTINGS_DEFAULTS[f"{prefix}_display"])
             if display == "number":
                 bars = " ".join(_render_demo_number(p, val) for p in range(10, 100, 10))
             elif display == "horizontal":
@@ -1827,7 +1856,7 @@ class Editor:
             return f"  {bars}"
         elif sdef.key in ("5h_display", "7d_display", "ctx_display"):
             prefix = sdef.key.split("_")[0]
-            ramp = self.settings.get(f"{prefix}_ramp", "spectrum")
+            ramp = self.settings.get(f"{prefix}_ramp", _SETTINGS_DEFAULTS[f"{prefix}_ramp"])
             if val == "number":
                 return f"  {_render_demo_number(60, ramp)}"
             elif val == "horizontal":
@@ -1941,7 +1970,7 @@ class Editor:
         if self.mode == "nav":
             K = f"{RESET}\033[97m"
             D = f"{RESET}"
-            X = f"{RESET}\033[38;5;239m"
+            X = f"{RESET}{fg256(239)}"
             props = ELEMENTS[self.cursor].props
             has_changes = self._has_changes()
             def _k(key: str, label: str, active: bool) -> str:
@@ -2223,7 +2252,7 @@ for _g in range(6):
     _row = []
     for _r in range(6):
         for _b in range(6):
-            _row.append(16 + 36 * _r + 6 * _g + _b)
+            _row.append(_rgb_cube(_r, _g, _b))
     _GRID_ROWS.append(_row)
 _GRID_ROWS.append(list(range(232, 256)))
 del _g, _r, _b, _row
