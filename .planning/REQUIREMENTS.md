@@ -38,9 +38,9 @@ Requirements for v1.0 Code Quality milestone. Each maps to roadmap phases.
 ### Structural
 
 - [ ] **STR-01**: Return structured data from `get_pr_status()` instead of formatted string (eliminate ANSI regex)
-- [ ] **STR-02**: Flatten `provider_limits()` conditionals with early returns
-- [ ] **STR-03**: Simplify `execute_slots()` mixed concerns (grid layout, threading, error handling)
-- [ ] **STR-04**: Extract serialization logic from `save_theme()` to reduce duplication with `_settings_from_config()`
+- [x] **STR-02**: Flatten `provider_limits()` conditionals with early returns
+- [x] **STR-03**: Simplify `execute_slots()` mixed concerns (grid layout, threading, error handling)
+- [x] **STR-04**: Extract serialization logic from `save_theme()` to reduce duplication with `_settings_from_config()`
 
 ## Future Requirements
 
@@ -80,9 +80,9 @@ None currently deferred.
 | DRY-11 | Phase 4 | Complete |
 | DRY-12 | Phase 4 | Complete |
 | STR-01 | Phase 5 | Pending |
-| STR-02 | Phase 5 | Pending |
-| STR-03 | Phase 5 | Pending |
-| STR-04 | Phase 5 | Pending |
+| STR-02 | Phase 5 | Complete |
+| STR-03 | Phase 5 | Complete |
+| STR-04 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 23 total
