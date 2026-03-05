@@ -75,11 +75,11 @@ Plans:
   3. Preview parts building uses a shared helper instead of duplicated assembly at 5 sites
   4. Color block rendering uses a shared helper instead of duplicated grid logic at 5 sites
   5. Theme editor TUI behavior is identical before and after (preview, color picker, save all work unchanged)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Extract ThemeEntry helpers (DRY-08, DRY-12)
-- [ ] 04-02: Extract editor display helpers (DRY-09, DRY-10, DRY-11)
+- [ ] 04-01-PLAN.md — Extract ThemeEntry.from_dict classmethod and consolidate .copy() usage (DRY-08, DRY-12)
+- [ ] 04-02-PLAN.md — Extract separator display label helper, preview segment assembly, and color cell rendering (DRY-09, DRY-10, DRY-11)
 
 ### Phase 5: Structural Improvements
 **Goal**: Providers return structured data instead of pre-formatted strings, conditionals are flattened, and mixed concerns are separated
