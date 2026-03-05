@@ -489,12 +489,7 @@ def _load_theme_config() -> list[dict]:
 
     if not CONFIG_FILE.exists():
         return list(DEFAULT_SLOTS)
-    try:
-        config = json.loads(CONFIG_FILE.read_text())
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"config: failed to parse JSON: {exc}", file=sys.stderr)
-        print(f"Fix: {CONFIG_FILE}", file=sys.stderr)
-        sys.exit(1)
+    config = _load_json_file(CONFIG_FILE, fatal=True)
 
     errors = _validate_config(config)
     if errors:
@@ -620,17 +615,38 @@ def _is_cooldown_active(key: str) -> bool:
     return time.time() < cooldown_until if cooldown_until else False
 
 
+def cache_get_raw(key: str) -> str | None:
+    """Return just the data string for a cache key (first element of cache_get tuple)."""
+    raw, _, _ = cache_get(key)
+    return raw
+
+
+def _safe_json_loads(raw: str, default=None):
+    """Parse JSON string, returning default on failure."""
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return default
+
+
+def _load_json_file(path: Path, *, fatal: bool = False) -> dict | None:
+    """Read and parse a JSON file. If fatal=True, print error and exit(1). Otherwise return None on error."""
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        if fatal:
+            print(f"config: failed to parse JSON: {exc}", file=sys.stderr)
+            print(f"Fix: {path}", file=sys.stderr)
+            sys.exit(1)
+        return None
+
+
 def _cached_json(key: str, ttl: int, refresh: "callable") -> dict | None:
     """Return parsed JSON from cache, trigger background refresh if stale."""
     if not is_cache_fresh(key, ttl) and not _is_cooldown_active(key):
         refresh()
-    raw, _, _ = cache_get(key)
-    if raw:
-        try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return None
+    raw = cache_get_raw(key)
+    return _safe_json_loads(raw) if raw else None
 
 
 def read_remote_url(cwd: str) -> str | None:
@@ -755,7 +771,7 @@ def _render_indicator(pct: float, ramp: list, display: str, *, bar_bg: str | Non
 def check_gh_available() -> str:
     """Return 'ok', 'no-gh', or 'no-auth'. Result is cached in SQLite."""
     if is_cache_fresh("gh_available", GH_CHECK_TTL):
-        raw, _, _ = cache_get("gh_available")
+        raw = cache_get_raw("gh_available")
         if raw:
             return raw
 
@@ -1032,8 +1048,8 @@ def get_pr_status() -> str:
 
 def _ci_from_pr_cache(branch: str) -> str | None:
     """Try to get CI status from PR cache if branch matches an open PR."""
-    raw, _, _ = cache_get("pr")
-    cache = json.loads(raw) if raw else None
+    raw = cache_get_raw("pr")
+    cache = _safe_json_loads(raw) if raw else None
     if not cache:
         return None
 
@@ -1089,12 +1105,9 @@ def get_ci_status(cwd: str, branch: str) -> str:
     ci_key = f"ci:{owner}_{repo}_{branch}"
 
     if is_cache_fresh(ci_key, API_CACHE_TTL):
-        raw, _, _ = cache_get(ci_key)
+        raw = cache_get_raw(ci_key)
         if raw:
-            try:
-                return _format_ci_label(json.loads(raw).get("conclusion"))
-            except (json.JSONDecodeError, TypeError):
-                pass
+            return _format_ci_label((_safe_json_loads(raw) or {}).get("conclusion"))
 
     out = run(
         ["gh", "api", f"repos/{owner}/{repo}/commits/{branch}/check-runs",
@@ -1146,9 +1159,11 @@ def _format_ci_label(conclusion: str | None) -> str:
 def _read_oauth_token() -> str | None:
     """Read OAuth access token from Claude credentials file."""
     try:
-        data = json.loads(LIMITS_CREDS_FILE.read_text())
+        data = _load_json_file(LIMITS_CREDS_FILE)
+        if data is None:
+            return None
         return data["claudeAiOauth"]["accessToken"]
-    except (OSError, json.JSONDecodeError, KeyError):
+    except KeyError:
         return None
 
 
@@ -1275,7 +1290,7 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
                         bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
                                                          ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
 
-        _, _, cooldown_until = cache_get("limits")
+        cooldown_until = cache_get("limits")[2]
         remaining = cooldown_until - time.time() if cooldown_until else 0
         if remaining > 0:
             if remaining >= 60:
@@ -1443,7 +1458,7 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
     if not is_cache_fresh(slot_key, ttl):
         _refresh_external_slot_subprocess(expanded, input_json, slot_key)
 
-    raw, _, _ = cache_get(slot_key)
+    raw = cache_get_raw(slot_key)
     return raw.strip() if raw else ""
 
 
@@ -1508,12 +1523,7 @@ def _load_validated_config() -> dict:
     """Read config.json, validate, exit(1) on errors. Return parsed dict."""
     if not CONFIG_FILE.exists():
         return {}
-    try:
-        config = json.loads(CONFIG_FILE.read_text())
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"config: failed to parse JSON: {exc}", file=sys.stderr)
-        print(f"Fix: {CONFIG_FILE}", file=sys.stderr)
-        sys.exit(1)
+    config = _load_json_file(CONFIG_FILE, fatal=True)
 
     errors = _validate_config(config)
     if errors:
@@ -1550,12 +1560,7 @@ def _settings_from_config(config: dict) -> dict[str, str]:
 def save_theme(theme: dict[str, ThemeEntry],
                settings: dict[str, str] | None = None) -> str:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    existing = {}
-    if CONFIG_FILE.exists():
-        try:
-            existing = json.loads(CONFIG_FILE.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
+    existing = _load_json_file(CONFIG_FILE) or {} if CONFIG_FILE.exists() else {}
 
     data: dict = {}
 
@@ -2532,12 +2537,7 @@ def install() -> None:
     script_path = str(Path(__file__).resolve())
     command = f"{sys.executable} {script_path}"
 
-    settings: dict = {}
-    if SETTINGS_FILE.exists():
-        try:
-            settings = json.loads(SETTINGS_FILE.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
+    settings: dict = _load_json_file(SETTINGS_FILE) or {} if SETTINGS_FILE.exists() else {}
 
     old = settings.get("statusLine", {}).get("command", "")
     settings["statusLine"] = {"type": "command", "command": command}
