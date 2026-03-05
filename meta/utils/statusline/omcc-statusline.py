@@ -279,6 +279,12 @@ RAMP_NAMES = ["aurora", "traffic", "twilight", "ember", "spectrum", "heatmap"]
 DISPLAY_MODES = ["number", "vertical", "horizontal"]
 SEP_OPTIONS = ["·", "•", "│", "─", "⋮", "|", "║", "┃", "❘", ""]
 _SEP_DISPLAY = {"": "∅"}
+_SEP_KEYS = frozenset(("separator", "git_separator", "limits_separator"))
+
+
+def _sep_display_label(sdef_key: str, val: str) -> str:
+    """Map separator value to display label (empty string -> null symbol)."""
+    return _SEP_DISPLAY.get(val, val) if sdef_key in _SEP_KEYS else val
 
 
 @dataclass
@@ -1690,8 +1696,8 @@ class Editor:
             cur_val = self.settings.get(sdef.key, sdef.default)
             saved_val = self._saved_settings.get(sdef.key, sdef.default)
             if cur_val != saved_val:
-                cur_display = _SEP_DISPLAY.get(cur_val, cur_val) if sdef.key in ("separator", "git_separator", "limits_separator") else cur_val
-                saved_display = _SEP_DISPLAY.get(saved_val, saved_val) if sdef.key in ("separator", "git_separator", "limits_separator") else saved_val
+                cur_display = _sep_display_label(sdef.key, cur_val)
+                saved_display = _sep_display_label(sdef.key, saved_val)
                 lines.append(f"  {sdef.label}: {saved_display}→{cur_display}")
         return lines
 
@@ -1735,6 +1741,20 @@ class Editor:
                 n += 1
         return n
 
+    def _build_preview_line(self, segments: list[tuple[str | None, str]], highlight_key: str) -> tuple[list[str], list[str]]:
+        """Build styled preview line and caret indicator from segment list."""
+        parts: list[str] = []
+        carets: list[str] = []
+        for key, text in segments:
+            vlen = self._visual_len(text)
+            if key is not None:
+                parts.append(self._styled(key, text))
+                carets.extend(["^" if key == highlight_key else " "] * vlen)
+            else:
+                parts.append(text)
+                carets.extend([" "] * vlen)
+        return parts, carets
+
     def render_preview(self) -> tuple[str, str]:
         cur = ELEMENTS[self.cursor].key
         sep_char = self.settings["separator"]
@@ -1775,18 +1795,7 @@ class Editor:
             else:
                 segments.append((elem.key, elem.sample))
 
-        preview_parts: list[str] = []
-        caret_chars: list[str] = []
-
-        for key, text in segments:
-            vlen = self._visual_len(text)
-            if key is not None:
-                preview_parts.append(self._styled(key, text))
-                caret_chars.extend(["^" if key == cur else " "] * vlen)
-            else:
-                preview_parts.append(text)
-                caret_chars.extend([" "] * vlen)
-
+        preview_parts, caret_chars = self._build_preview_line(segments, cur)
         self._append_limits_demo(preview_parts, caret_chars, cur)
 
         preview = "".join(preview_parts)
@@ -1867,6 +1876,18 @@ class Editor:
 
     # --- color picker ---
 
+    def _color_cell(self, n: int, is_bg: bool, sel: int, active: int | None, elem_bg: str) -> str:
+        """Render a single color cell with selection and active markers."""
+        if is_bg:
+            block = f"{bg256(n)}  {RESET}"
+        else:
+            block = f"{elem_bg}{fg256(n)}[]{RESET}"
+        if n == sel:
+            return f"{BLINK}{REVERSE}{block}{RESET}"
+        if n == active:
+            return f"{UNDERLINE}{block}{RESET}"
+        return block
+
     def render_color_grid(self, is_bg: bool) -> list[str]:
         lines: list[str] = []
         sel = self.color_cursor
@@ -1876,15 +1897,7 @@ class Editor:
         elem_bg = bg256(entry.bg) if entry.bg is not None else ""
 
         def cell(n: int) -> str:
-            if is_bg:
-                block = f"{bg256(n)}  {RESET}"
-            else:
-                block = f"{elem_bg}{fg256(n)}[]{RESET}"
-            if n == sel:
-                return f"{BLINK}{REVERSE}{block}{RESET}"
-            if n == active:
-                return f"{UNDERLINE}{block}{RESET}"
-            return block
+            return self._color_cell(n, is_bg, sel, active, elem_bg)
 
         is_default = active is None
         dflt_arrow = f"{BLINK}{REVERSE}▸{RESET}" if sel == -1 else " "
@@ -1973,7 +1986,7 @@ class Editor:
             val = self.settings[sdef.key]
             opt_parts: list[str] = []
             for opt in sdef.options:
-                label = _SEP_DISPLAY.get(opt, opt) if sdef.key in ("separator", "git_separator", "limits_separator") else opt
+                label = _sep_display_label(sdef.key, opt)
                 if opt == val:
                     opt_parts.append(f"{BOLD}{REVERSE} {label} {RESET}")
                 else:
