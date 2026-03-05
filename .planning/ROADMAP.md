@@ -30,10 +30,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `provider_path` signature has no `input_json` parameter; callers unchanged
   4. `provider_vibes` signature has no `cwd` or `show` parameters; callers unchanged
   5. Statusline renders identically before and after (no behavior change)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: Remove all dead code items and verify no callers break
+- [ ] 01-01-PLAN.md — Remove all dead code items (ul_color, STDERR_MAX_LEN, unused provider params)
 
 ### Phase 2: SQLite Connection Optimization
 **Goal**: Database opens once per process lifetime instead of per-call, eliminating redundant PRAGMA/DDL overhead on every render
