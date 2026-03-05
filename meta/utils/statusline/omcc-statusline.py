@@ -1661,6 +1661,7 @@ class Editor:
 
         # Build segments from ELEMENTS order — single source of truth
         segments: list[tuple[str | None, str]] = []
+        prev_group = None
         for elem in ELEMENTS:
             # Insert gap before element
             if elem.gap in ("sep", "git_sep"):
@@ -1670,6 +1671,12 @@ class Editor:
             # Lim group content rendered by _append_limits_demo
             if elem.group == "lim":
                 continue
+            # After CI group ends, inject PR dots block
+            if prev_group == "ci" and elem.group != "ci":
+                segments.append(_sep_segment("git_sep"))
+                for dot_key, dot_text in [("st_ok", "⁕⁕⁕"), ("st_fail", "⁕"), ("st_wait", "⁕⁕"), ("st_none", "⁕")]:
+                    segments.append((dot_key, dot_text))
+            prev_group = elem.group
             # Sep element renders as the configured separator character
             if elem.key == "sep":
                 segments.append(_sep_segment("sep"))

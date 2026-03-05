@@ -5,10 +5,10 @@ Slot-based statusline for Claude Code — limits, git, PR dots, pace indicator. 
 ## Preview
 
 ```
-my-project/ · ⑂feat/auth*+ · 5h ▁ 7d ▃ ctx ▂ · chill 1%
+my-project/ ⋮ ⑂feat/auth*+ ⋮ 5h ▁ 7d ▃ ctx ▂ ⋮ chill 1%
 ```
 ```
-my-project/ · ⑂feat/auth*+ CI | ⁕⁕⁕⁕ 💬3 · 5h ▂ 7d ▁ ctx ▂ · based 28%
+my-project/ ⋮ ⑂feat/auth*+ · CI · ⁕⁕⁕⁕ 💬3 ⋮ 5h ▂ 7d ▁ ctx ▂ ⋮ based 28%
 ⬆ /gsd:update │ Fixing auth bug │ █████░░░░░ 52%
 ```
 
@@ -79,6 +79,10 @@ If an external command's executable is not found, a dim placeholder is shown ins
 | `limits_separator` | any string | (empty) |
 
 `separator` — between providers. `git_separator` — within git provider. `limits_separator` — within limits provider.
+
+### Theme Tokens
+
+CI labels and PR dots share unified status colors (`st_ok`, `st_fail`, `st_wait`, `st_none`). When CI has no checks configured, a dim gray `CI` placeholder is shown.
 
 ## Theme Editor
 
