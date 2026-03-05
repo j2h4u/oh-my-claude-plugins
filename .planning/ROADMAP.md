@@ -44,10 +44,10 @@ Plans:
   2. PRAGMA statements (journal_mode, synchronous) and CREATE TABLE execute exactly once at connection init
   3. Background subprocesses create their own independent connection (no shared state across process boundary)
   4. Statusline renders identically before and after (cache hit/miss behavior unchanged)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 02-01: Implement singleton connection with init-time PRAGMA/DDL and subprocess isolation
+- [ ] 02-01-PLAN.md — Implement singleton connection with init-time PRAGMA/DDL and subprocess isolation
 
 ### Phase 3: DRY Core Helpers
 **Goal**: Repeated patterns in the runtime statusline path are consolidated into named helpers with single call sites replacing duplicated logic
