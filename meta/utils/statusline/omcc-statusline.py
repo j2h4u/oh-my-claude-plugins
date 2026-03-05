@@ -1306,7 +1306,7 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
     return SEP_LIMITS.join(bars)
 
 
-def provider_vibes(_input_json: str, _cwd: str, *, _show=None) -> str:
+def provider_vibes(_input_json: str, _cwd: str, *, show=None) -> str:
     """Built-in provider: 7d pace label (vibes indicator)."""
     data = _cached_json("limits", LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
     if not data or "seven_day" not in data:
@@ -1320,7 +1320,7 @@ def provider_vibes(_input_json: str, _cwd: str, *, _show=None) -> str:
 
 # --- slot providers ----------------------------------------------------------
 
-def provider_path(_input_json: str, cwd: str, *, _show=None) -> str:
+def provider_path(_input_json: str, cwd: str, *, show=None) -> str:
     """Built-in provider: directory name (parent/current/)."""
     return get_dir_name(cwd)
 
