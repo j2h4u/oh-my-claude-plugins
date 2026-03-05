@@ -26,6 +26,7 @@ import re
 import select
 import shutil
 import signal
+import sqlite3
 import sys
 import subprocess
 import tempfile
@@ -58,11 +59,7 @@ DEMO_CURRENT_DIR = "my-project/"
 CONFIG_DIR = Path.home() / ".config" / "omcc-statusline"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 CACHE_DIR = Path("/tmp") / "omcc-statusline"
-PR_CACHE_FILE = CACHE_DIR / "pr-status.json"
-PR_LOCK_FILE = CACHE_DIR / "refresh.lock"
-GH_AVAILABLE_FILE = CACHE_DIR / "gh-available"
-CI_CACHE_DIR = CACHE_DIR / "ci"
-SLOT_CACHE_DIR = CACHE_DIR / "slots"
+CACHE_DB = CACHE_DIR / "cache.db"
 
 # Cache TTLs (seconds)
 API_CACHE_TTL = 120      # 2 min — CI, PR, limits (anything that hits an API)
@@ -80,8 +77,6 @@ SLOT_TIMEOUT = 120
 SLOT_CACHE_TTL = 60
 
 # Limits provider
-LIMITS_CACHE_FILE = CACHE_DIR / "limits-cache.json"
-LIMITS_LOCK_FILE = CACHE_DIR / "limits-refresh.lock"
 LIMITS_CACHE_TTL = API_CACHE_TTL
 LIMITS_HTTP_TIMEOUT = 5
 LIMITS_COOLDOWN_DEFAULT = 300  # 5 min fallback when Retry-After is missing or 0
@@ -568,36 +563,73 @@ def osc8_link(url: str, text: str) -> str:
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
-def is_cache_fresh(path: Path, ttl: int) -> bool:
-    """Check if a cache file exists and is younger than *ttl* seconds."""
+def _db() -> sqlite3.Connection:
+    """Open cache DB (WAL mode, short busy timeout for readers)."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(CACHE_DB), timeout=2)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS cache "
+        "(key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}',"
+        " updated_at REAL NOT NULL DEFAULT 0,"
+        " cooldown_until REAL NOT NULL DEFAULT 0)"
+    )
+    return con
+
+
+def cache_get(key: str) -> tuple[str | None, float, float]:
+    """Return (data, updated_at, cooldown_until) for a cache key."""
     try:
-        age = time.time() - path.stat().st_mtime
-        return age < ttl
-    except OSError:
-        return False
+        con = _db()
+        row = con.execute(
+            "SELECT data, updated_at, cooldown_until FROM cache WHERE key = ?", (key,)
+        ).fetchone()
+        con.close()
+        if row:
+            return row[0], row[1], row[2]
+    except sqlite3.Error:
+        pass
+    return None, 0.0, 0.0
 
 
-def _read_json(path: Path) -> dict | None:
-    """Read and parse a JSON cache file, return None on any error."""
+def cache_put(key: str, data: str, cooldown_until: float = 0.0) -> None:
+    """Write data to cache (from main process)."""
     try:
-        return json.loads(path.read_text())
-    except (json.JSONDecodeError, OSError):
-        return None
+        con = _db()
+        con.execute(
+            "INSERT OR REPLACE INTO cache (key, data, updated_at, cooldown_until)"
+            " VALUES (?, ?, ?, ?)",
+            (key, data, time.time(), cooldown_until),
+        )
+        con.commit()
+        con.close()
+    except sqlite3.Error:
+        pass
 
 
-def _is_cooldown_active(path: Path) -> bool:
-    """Check if cache JSON contains an active _cooldown_until timestamp."""
-    data = _read_json(path)
-    if data and "_cooldown_until" in data:
-        return time.time() < data["_cooldown_until"]
-    return False
+def is_cache_fresh(key: str, ttl: int) -> bool:
+    """Check if a cache key exists and is younger than *ttl* seconds."""
+    _, updated_at, _ = cache_get(key)
+    return (time.time() - updated_at) < ttl if updated_at else False
 
 
-def _cached_json(path: Path, ttl: int, refresh: "callable") -> dict | None:
+def _is_cooldown_active(key: str) -> bool:
+    """Check if cache key has an active cooldown."""
+    _, _, cooldown_until = cache_get(key)
+    return time.time() < cooldown_until if cooldown_until else False
+
+
+def _cached_json(key: str, ttl: int, refresh: "callable") -> dict | None:
     """Return parsed JSON from cache, trigger background refresh if stale."""
-    if not is_cache_fresh(path, ttl) and not _is_cooldown_active(path):
+    if not is_cache_fresh(key, ttl) and not _is_cooldown_active(key):
         refresh()
-    return _read_json(path)
+    raw, _, _ = cache_get(key)
+    if raw:
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return None
 
 
 def read_remote_url(cwd: str) -> str | None:
@@ -720,28 +752,21 @@ def _render_indicator(pct: float, ramp: list, display: str, *, bar_bg: str | Non
 # --- gh availability ---------------------------------------------------------
 
 def check_gh_available() -> str:
-    """Return 'ok', 'no-gh', or 'no-auth'. Result is cached on disk."""
-    if GH_AVAILABLE_FILE.exists():
-        try:
-            age = time.time() - GH_AVAILABLE_FILE.stat().st_mtime
-            if age < GH_CHECK_TTL:
-                cached = GH_AVAILABLE_FILE.read_text().strip()
-                if cached:
-                    return cached
-        except OSError:
-            pass
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    """Return 'ok', 'no-gh', or 'no-auth'. Result is cached in SQLite."""
+    if is_cache_fresh("gh_available", GH_CHECK_TTL):
+        raw, _, _ = cache_get("gh_available")
+        if raw:
+            return raw
 
     if shutil.which("gh") is None:
-        GH_AVAILABLE_FILE.write_text("no-gh")
+        cache_put("gh_available", "no-gh")
         return "no-gh"
 
     if run(["gh", "auth", "status"]) is None:
-        GH_AVAILABLE_FILE.write_text("no-auth")
+        cache_put("gh_available", "no-auth")
         return "no-auth"
 
-    GH_AVAILABLE_FILE.write_text("ok")
+    cache_put("gh_available", "ok")
     return "ok"
 
 
@@ -827,48 +852,53 @@ def get_git_info(cwd: str) -> tuple[str, str]:
 # --- background refresh ------------------------------------------------------
 
 _BG_SCRIPT = r"""
-import fcntl, os, sys
+import os, sys, sqlite3, time
 from pathlib import Path
 __IMPORTS__
-CACHE, LOCK = Path(sys.argv[1]), Path(sys.argv[2])
-CACHE.parent.mkdir(parents=True, exist_ok=True)
-def _w(data):
-    tmp = str(CACHE) + f".tmp.{os.getpid()}"
-    with open(tmp, "w") as f:
-        f.write(data)
-    os.replace(tmp, str(CACHE))
-def _cooldown(seconds=0):
-    _j = __import__('json')
-    old = {}
-    try:
-        old = _j.loads(CACHE.read_text())
-    except Exception:
-        pass
-    if seconds > 0:
-        old['_cooldown_until'] = __import__('time').time() + seconds
-    _w(_j.dumps(old))
-fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT)
+DB = Path(sys.argv[1])
+KEY = sys.argv[2]
+DB.parent.mkdir(parents=True, exist_ok=True)
+con = sqlite3.connect(str(DB), timeout=0)
+con.execute("PRAGMA journal_mode=WAL")
+con.execute(
+    "CREATE TABLE IF NOT EXISTS cache "
+    "(key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}',"
+    " updated_at REAL NOT NULL DEFAULT 0,"
+    " cooldown_until REAL NOT NULL DEFAULT 0)")
+con.commit()
 try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except (BlockingIOError, OSError):
-    os.close(fd)
+    con.execute("BEGIN EXCLUSIVE")
+except sqlite3.OperationalError:
+    con.close()
     sys.exit(0)
+def _w(data):
+    con.execute(
+        "INSERT OR REPLACE INTO cache (key, data, updated_at, cooldown_until)"
+        " VALUES (?, ?, ?, 0)", (KEY, data, time.time()))
+def _cooldown(seconds=0):
+    now = time.time()
+    cd = now + seconds if seconds > 0 else 0
+    row = con.execute("SELECT 1 FROM cache WHERE key = ?", (KEY,)).fetchone()
+    if row:
+        con.execute("UPDATE cache SET updated_at = ?, cooldown_until = ? WHERE key = ?", (now, cd, KEY))
+    else:
+        con.execute("INSERT INTO cache (key, data, updated_at, cooldown_until) VALUES (?, '{}', ?, ?)", (KEY, now, cd))
 try:
 __PAYLOAD__
 except Exception:
     _cooldown()
 finally:
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    os.close(fd)
+    con.commit()
+    con.close()
 """
 
 
-def _bg_refresh(*, imports: str, payload: str, cache_file: Path, lock_file: Path,
+def _bg_refresh(*, imports: str, payload: str, cache_key: str,
                 extra_argv: tuple = (), stdin_data: str | None = None) -> None:
-    """Fire-and-forget background subprocess with flock + atomic write."""
+    """Fire-and-forget background subprocess with SQLite-based locking."""
     script = _BG_SCRIPT.replace("__IMPORTS__", imports).replace("__PAYLOAD__", payload)
     proc = subprocess.Popen(
-        [sys.executable, "-c", script, str(cache_file), str(lock_file), *extra_argv],
+        [sys.executable, "-c", script, str(CACHE_DB), cache_key, *extra_argv],
         start_new_session=True,
         stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -934,8 +964,7 @@ def _refresh_pr_cache_subprocess() -> None:
                 unread += 1
     _w(json.dumps({"prs": prs, "unread_count": unread, "updated_at": int(time.time())}))
 """,
-        cache_file=PR_CACHE_FILE,
-        lock_file=PR_LOCK_FILE,
+        cache_key="pr",
     )
 
 
@@ -947,7 +976,7 @@ def get_pr_status() -> str:
     if gh == "no-auth":
         return f"{T.err}gh auth login{T.R}"
 
-    cache = _cached_json(PR_CACHE_FILE, API_CACHE_TTL, _refresh_pr_cache_subprocess)
+    cache = _cached_json("pr", API_CACHE_TTL, _refresh_pr_cache_subprocess)
     if not cache:
         return ""
 
@@ -1002,7 +1031,8 @@ def get_pr_status() -> str:
 
 def _ci_from_pr_cache(branch: str) -> str | None:
     """Try to get CI status from PR cache if branch matches an open PR."""
-    cache = _read_json(PR_CACHE_FILE)
+    raw, _, _ = cache_get("pr")
+    cache = json.loads(raw) if raw else None
     if not cache:
         return None
 
@@ -1055,12 +1085,15 @@ def get_ci_status(cwd: str, branch: str) -> str:
         return ""
     owner, repo = parsed
 
-    cache_file = CI_CACHE_DIR / f"{owner}_{repo}_{branch}.json"
+    ci_key = f"ci:{owner}_{repo}_{branch}"
 
-    if is_cache_fresh(cache_file, API_CACHE_TTL):
-        data = _read_json(cache_file)
-        if data:
-            return _format_ci_label(data.get("conclusion"))
+    if is_cache_fresh(ci_key, API_CACHE_TTL):
+        raw, _, _ = cache_get(ci_key)
+        if raw:
+            try:
+                return _format_ci_label(json.loads(raw).get("conclusion"))
+            except (json.JSONDecodeError, TypeError):
+                pass
 
     out = run(
         ["gh", "api", f"repos/{owner}/{repo}/commits/{branch}/check-runs",
@@ -1076,10 +1109,7 @@ def get_ci_status(cwd: str, branch: str) -> str:
         return ""
 
     if not runs:
-        try:
-            cache_file.write_text(json.dumps({"conclusion": "none"}))
-        except OSError:
-            pass
+        cache_put(ci_key, json.dumps({"conclusion": "none"}))
         return _format_ci_label("none")
 
     conclusions = [r.get("conclusion") for r in runs]
@@ -1094,10 +1124,7 @@ def get_ci_status(cwd: str, branch: str) -> str:
     else:
         result = "unknown"
 
-    try:
-        cache_file.write_text(json.dumps({"conclusion": result}))
-    except OSError:
-        pass
+    cache_put(ci_key, json.dumps({"conclusion": result}))
 
     return _format_ci_label(result)
 
@@ -1204,8 +1231,7 @@ def _refresh_limits_cache_subprocess() -> None:
         raise
     _w(json.dumps(json.loads(resp.read())))
 """,
-        cache_file=LIMITS_CACHE_FILE,
-        lock_file=LIMITS_LOCK_FILE,
+        cache_key="limits",
         extra_argv=(LIMITS_API_URL, token),
     )
 
@@ -1218,7 +1244,7 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
     bars: list[str] = []
 
     if "5h" in sections or "7d" in sections:
-        data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
+        data = _cached_json("limits", LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
         if data and "five_hour" in data:
             five = data.get("five_hour", {})
             seven = data.get("seven_day", {})
@@ -1260,7 +1286,7 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
 
 def provider_vibes(input_json: str, cwd: str, *, show=None) -> str:
     """Built-in provider: 7d pace label (vibes indicator)."""
-    data = _cached_json(LIMITS_CACHE_FILE, LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
+    data = _cached_json("limits", LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
     if not data or "seven_day" not in data:
         return ""
     seven = data["seven_day"]
@@ -1345,7 +1371,7 @@ PROVIDER_SECTIONS: dict[str, tuple[str, ...]] = {
 # --- external slot executor --------------------------------------------------
 
 def _refresh_external_slot_subprocess(command: str, input_json: str,
-                                      cache_file: Path, lock_file: Path) -> None:
+                                      cache_key: str) -> None:
     """Fire-and-forget background refresh of an external slot cache."""
     _bg_refresh(
         imports="import subprocess",
@@ -1358,8 +1384,7 @@ def _refresh_external_slot_subprocess(command: str, input_json: str,
     if r.returncode == 0 and r.stdout.strip():
         _w(r.stdout.strip())
 """,
-        cache_file=cache_file,
-        lock_file=lock_file,
+        cache_key=cache_key,
         extra_argv=(command,),
         stdin_data=input_json,
     )
@@ -1388,17 +1413,13 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
     placeholder = _check_command_available(expanded)
     if placeholder is not None:
         return placeholder
-    cache_key = hashlib.md5(expanded.encode()).hexdigest()
-    cache_file = SLOT_CACHE_DIR / cache_key
-    lock_file = SLOT_CACHE_DIR / f"{cache_key}.lock"
+    slot_key = f"slot:{hashlib.md5(expanded.encode()).hexdigest()}"
 
-    if not is_cache_fresh(cache_file, ttl):
-        _refresh_external_slot_subprocess(expanded, input_json, cache_file, lock_file)
+    if not is_cache_fresh(slot_key, ttl):
+        _refresh_external_slot_subprocess(expanded, input_json, slot_key)
 
-    try:
-        return cache_file.read_text().strip()
-    except OSError:
-        return ""
+    raw, _, _ = cache_get(slot_key)
+    return raw.strip() if raw else ""
 
 
 # --- slot orchestrator -------------------------------------------------------
@@ -2509,17 +2530,16 @@ def editor_main() -> None:
     Editor().run()
 
 
-def _ensure_cache_dirs() -> None:
-    """Create all cache directories once at startup."""
+def _ensure_cache_db() -> None:
+    """Create cache directory and initialize SQLite DB at startup."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    CI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    SLOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _db().close()
 
 
 def statusline_main() -> None:
     """Normal statusline mode: read stdin JSON, execute slots, output lines."""
     slots = _load_theme_config()
-    _ensure_cache_dirs()
+    _ensure_cache_db()
 
     def _stdin_timeout(signum, frame):
         raise TimeoutError
