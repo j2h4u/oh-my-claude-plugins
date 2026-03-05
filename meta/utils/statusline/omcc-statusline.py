@@ -694,7 +694,7 @@ def _vbar(pct: float, *, ramp: list, bar_bg: str | None = None) -> str:
     bg = _resolve_bar_bg(bar_bg)
     clamped = max(0.0, min(100.0, pct))
     idx = round(clamped / 100 * 8)
-    idx = max(0, min(8, idx))
+    idx = max(1 if clamped > 0 else 0, min(8, idx))
     color = _multi_ramp(clamped, ramp)
     return f"{bg}{color}{_VBAR_EIGHTHS[idx]}{T.R}"
 
