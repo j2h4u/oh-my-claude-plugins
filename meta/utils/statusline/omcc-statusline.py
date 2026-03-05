@@ -94,11 +94,11 @@ LIMITS_COUNTDOWN_THRESHOLD = 50
 LIMITS_PACE_MIN_EXPECTED = 1
 
 PACE_SCALE = [
-    (-20, "based"),
-    ( -5, "hyped"),
+    (-20, "depresso"),
+    ( -5, "salty"),
     (  5, "chill"),
-    ( 20, "salty"),
-    (float("inf"), "depresso"),
+    ( 20, "hyped"),
+    (float("inf"), "based"),
 ]
 
 RAMP_CYAN   = (23, 51)
@@ -763,7 +763,7 @@ def _pace_delta_color(delta: float) -> str:
     """Pace delta color: log-scaled cyan (under budget) or orange (over budget)."""
     magnitude = min(abs(delta), PACE_COLOR_MAX_DELTA)
     t = math.log1p(magnitude) / math.log1p(PACE_COLOR_MAX_DELTA)
-    return _ramp(t, RAMP_CYAN if delta < 0 else RAMP_ORANGE)
+    return _ramp(t, RAMP_CYAN if delta > 0 else RAMP_ORANGE)
 
 
 # --- bar rendering -----------------------------------------------------------
@@ -1298,10 +1298,10 @@ def _7d_pace_label(utilization: float, resets_at: str) -> str:
     expected = min(hours_elapsed / LIMITS_PACE_BUDGET_HOURS * 100.0, 100.0)
     if expected < LIMITS_PACE_MIN_EXPECTED:
         return ""
-    delta = utilization - expected
+    delta = expected - utilization
     dc = _pace_delta_color(delta)
     label = next(name for threshold, name in PACE_SCALE if delta <= threshold)
-    return f"{dc}{label} {abs(delta):.0f}%{T.R}"
+    return f"{dc}{label} {delta:+.0f}%{T.R}"
 
 
 def _format_limit_window(utilization: float, resets_at: str, label: str,
