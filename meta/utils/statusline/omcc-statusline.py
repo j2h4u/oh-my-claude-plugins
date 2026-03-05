@@ -1245,27 +1245,40 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
 
     if "5h" in sections or "7d" in sections:
         data = _cached_json("limits", LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
+        na5 = f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}"
+        na7 = f"{T.dir_parent}7d{T.R} {DIM}N/A{T.R}"
         if data and "five_hour" in data:
             five = data.get("five_hour", {})
             seven = data.get("seven_day", {})
+            now = time.time()
+            r5 = _parse_iso_utc(five.get("resets_at", ""))
+            r7 = _parse_iso_utc(seven.get("resets_at", ""))
+            stale5 = r5 is not None and now > r5
+            stale7 = r7 is not None and now > r7
             u5 = five.get("utilization", 0)
             u7 = seven.get("utilization", 0)
-            if u7 >= 100:
+            if u7 >= 100 and not stale7:
                 if "7d" in sections:
                     bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
                                                      ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
             else:
                 if "5h" in sections:
-                    bars.append(_format_limit_window(u5, five.get("resets_at", ""), "5h",
-                                                     ramp=INDICATOR_CONFIG["5h"]["ramp"], display=INDICATOR_CONFIG["5h"]["display"]))
+                    if stale5:
+                        bars.append(na5)
+                    else:
+                        bars.append(_format_limit_window(u5, five.get("resets_at", ""), "5h",
+                                                         ramp=INDICATOR_CONFIG["5h"]["ramp"], display=INDICATOR_CONFIG["5h"]["display"]))
                 if "7d" in sections:
-                    bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
-                                                     ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
+                    if stale7:
+                        bars.append(na7)
+                    else:
+                        bars.append(_format_limit_window(u7, seven.get("resets_at", ""), "7d",
+                                                         ramp=INDICATOR_CONFIG["7d"]["ramp"], display=INDICATOR_CONFIG["7d"]["display"]))
         else:
             if "5h" in sections:
-                bars.append(f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}")
+                bars.append(na5)
             if "7d" in sections:
-                bars.append(f"{T.dir_parent}7d{T.R} {DIM}N/A{T.R}")
+                bars.append(na7)
 
     if "ctx" in sections:
         try:
@@ -1290,6 +1303,9 @@ def provider_vibes(input_json: str, cwd: str, *, show=None) -> str:
     if not data or "seven_day" not in data:
         return ""
     seven = data["seven_day"]
+    r7 = _parse_iso_utc(seven.get("resets_at", ""))
+    if r7 is not None and time.time() > r7:
+        return ""
     return _7d_pace_label(seven.get("utilization", 0), seven.get("resets_at", ""))
 
 
