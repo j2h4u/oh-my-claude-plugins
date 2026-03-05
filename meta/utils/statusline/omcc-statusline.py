@@ -63,7 +63,7 @@ CACHE_DIR = Path("/tmp") / "omcc-statusline"
 CACHE_DB = CACHE_DIR / "cache.db"
 
 # Cache TTLs (seconds)
-API_CACHE_TTL = 120      # 2 min — CI, PR, limits (anything that hits an API)
+API_CACHE_TTL = 300      # 5 min — CI, PR, limits (anything that hits an API)
 GH_CHECK_TTL = 1800      # 30 min — gh CLI availability (rarely changes)
 
 # Timeouts (seconds)
@@ -75,11 +75,14 @@ GH_PR_FETCH_LIMIT = 20
 # Error/slot
 SLOT_TIMEOUT = 120
 SLOT_CACHE_TTL = 60
+ERROR_COOLDOWN_DEFAULT = 30   # generic error backoff (seconds)
+VIBES_MAX_DATA_AGE = 600      # 10 min — don't show vibes from older data
 
 # Limits provider
 LIMITS_CACHE_TTL = API_CACHE_TTL
 LIMITS_HTTP_TIMEOUT = 5
-LIMITS_COOLDOWN_DEFAULT = 60  # 1 min fallback when Retry-After is missing or 0
+LIMITS_COOLDOWN_MIN = 300       # 5 min — minimum backoff on 429
+LIMITS_COOLDOWN_MAX = 3600      # 1 hour — maximum backoff cap
 LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
 LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
 LIMITS_BAR_WIDTH = 5
@@ -593,7 +596,7 @@ def _db() -> sqlite3.Connection:
     global _CON
     if _CON is None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        _CON = sqlite3.connect(str(CACHE_DB), timeout=2)
+        _CON = sqlite3.connect(str(CACHE_DB), timeout=2, check_same_thread=False)
         _CON.execute("PRAGMA journal_mode=WAL")
         _CON.execute(
             "CREATE TABLE IF NOT EXISTS cache "
@@ -618,30 +621,6 @@ def cache_get(key: str) -> tuple[str | None, float, float]:
     return None, 0.0, 0.0
 
 
-def cache_put(key: str, data: str, cooldown_until: float = 0.0) -> None:
-    """Write data to cache (from main process)."""
-    try:
-        con = _db()
-        con.execute(
-            "INSERT OR REPLACE INTO cache (key, data, updated_at, cooldown_until)"
-            " VALUES (?, ?, ?, ?)",
-            (key, data, time.time(), cooldown_until),
-        )
-        con.commit()
-    except sqlite3.Error:
-        pass
-
-
-def is_cache_fresh(key: str, ttl: int) -> bool:
-    """Check if a cache key exists and is younger than *ttl* seconds."""
-    _, updated_at, _ = cache_get(key)
-    return (time.time() - updated_at) < ttl if updated_at else False
-
-
-def _is_cooldown_active(key: str) -> bool:
-    """Check if cache key has an active cooldown."""
-    _, _, cooldown_until = cache_get(key)
-    return time.time() < cooldown_until if cooldown_until else False
 
 
 def cache_get_raw(key: str) -> str | None:
@@ -670,9 +649,32 @@ def _load_json_file(path: Path, *, fatal: bool = False) -> dict | None:
         return None
 
 
+def _try_claim_refresh(key: str, ttl: int) -> bool:
+    """Atomically check staleness + cooldown and claim refresh if needed.
+
+    Returns True if this caller won the claim (should fire bg refresh).
+    Returns False if cache is fresh, cooldown is active, or another
+    process claimed first (race-free via single UPDATE with WHERE).
+    """
+    try:
+        con = _db()
+        now = time.time()
+        con.execute(
+            "INSERT OR IGNORE INTO cache (key, data, updated_at, cooldown_until) "
+            "VALUES (?, '{}', 0, 0)", (key,))
+        cur = con.execute(
+            "UPDATE cache SET cooldown_until = ? "
+            "WHERE key = ? AND (? - updated_at) >= ? AND cooldown_until <= ?",
+            (now + ERROR_COOLDOWN_DEFAULT, key, now, ttl, now))
+        con.commit()
+        return cur.rowcount > 0
+    except sqlite3.Error:
+        return False
+
+
 def _cached_json(key: str, ttl: int, refresh: "callable") -> dict | None:
     """Return parsed JSON from cache, trigger background refresh if stale."""
-    if not is_cache_fresh(key, ttl) and not _is_cooldown_active(key):
+    if _try_claim_refresh(key, ttl):
         refresh()
     raw = cache_get_raw(key)
     return _safe_json_loads(raw) if raw else None
@@ -810,23 +812,30 @@ def _format_limit_window_for_prefix(utilization: float, resets_at: str, prefix: 
 
 # --- gh availability ---------------------------------------------------------
 
-def check_gh_available() -> str:
-    """Return 'ok', 'no-gh', or 'no-auth'. Result is cached in SQLite."""
-    if is_cache_fresh("gh_available", GH_CHECK_TTL):
-        raw = cache_get_raw("gh_available")
-        if raw:
-            return raw
-
+def _refresh_gh_available_subprocess() -> None:
+    """Fire-and-forget background refresh of gh availability."""
+    _bg_refresh(
+        imports="import shutil, subprocess",
+        payload=r"""
     if shutil.which("gh") is None:
-        cache_put("gh_available", "no-gh")
-        return "no-gh"
+        _w('{"status": "no-gh"}')
+        sys.exit(0)
+    result = subprocess.run(
+        ["gh", "auth", "status"],
+        capture_output=True, text=True, timeout=5,
+    )
+    _w('{"status": "ok"}' if result.returncode == 0 else '{"status": "no-auth"}')
+""",
+        cache_key="gh_available",
+    )
 
-    if run(["gh", "auth", "status"]) is None:
-        cache_put("gh_available", "no-auth")
-        return "no-auth"
 
-    cache_put("gh_available", "ok")
-    return "ok"
+def check_gh_available() -> str:
+    """Return 'ok', 'no-gh', 'no-auth', or 'unknown'. Never blocks on network."""
+    cache = _cached_json("gh_available", GH_CHECK_TTL, _refresh_gh_available_subprocess)
+    if not cache:
+        return "unknown"
+    return cache.get("status", "unknown")
 
 
 # --- directory name ----------------------------------------------------------
@@ -917,7 +926,7 @@ __IMPORTS__
 DB = Path(sys.argv[1])
 KEY = sys.argv[2]
 DB.parent.mkdir(parents=True, exist_ok=True)
-con = sqlite3.connect(str(DB), timeout=0)
+con = sqlite3.connect(str(DB), timeout=5)
 con.execute("PRAGMA journal_mode=WAL")
 con.execute(
     "CREATE TABLE IF NOT EXISTS cache "
@@ -925,29 +934,28 @@ con.execute(
     " updated_at REAL NOT NULL DEFAULT 0,"
     " cooldown_until REAL NOT NULL DEFAULT 0)")
 con.commit()
-try:
-    con.execute("BEGIN EXCLUSIVE")
-except sqlite3.OperationalError:
-    con.close()
-    sys.exit(0)
 def _w(data):
     con.execute(
         "INSERT OR REPLACE INTO cache (key, data, updated_at, cooldown_until)"
         " VALUES (?, ?, ?, 0)", (KEY, data, time.time()))
+    con.commit()
 def _cooldown(seconds=0):
-    now = time.time()
-    cd = now + seconds if seconds > 0 else 0
-    row = con.execute("SELECT 1 FROM cache WHERE key = ?", (KEY,)).fetchone()
-    if row:
-        con.execute("UPDATE cache SET updated_at = ?, cooldown_until = ? WHERE key = ?", (now, cd, KEY))
-    else:
-        con.execute("INSERT INTO cache (key, data, updated_at, cooldown_until) VALUES (?, '{}', ?, ?)", (KEY, now, cd))
+    cd = time.time() + (seconds if seconds > 0 else """ + str(ERROR_COOLDOWN_DEFAULT) + r""")
+    con.execute(
+        "INSERT OR REPLACE INTO cache (key, data, updated_at, cooldown_until)"
+        " VALUES (?, COALESCE((SELECT data FROM cache WHERE key = ?), '{}'),"
+        " COALESCE((SELECT updated_at FROM cache WHERE key = ?), 0), ?)",
+        (KEY, KEY, KEY, cd))
+    con.commit()
 try:
 __PAYLOAD__
 except Exception:
     _cooldown()
 finally:
-    con.commit()
+    try:
+        con.commit()
+    except Exception:
+        pass
     con.close()
 """
 
@@ -1010,17 +1018,23 @@ def _refresh_pr_cache_subprocess() -> None:
         '''.strip()],
         capture_output=True, text=True, timeout=TIMEOUT,
     )
-    prs = json.loads(gql.stdout) if gql.returncode == 0 else {}
-    notif = subprocess.run(
-        ["gh", "api", "notifications"], capture_output=True, text=True, timeout=TIMEOUT,
-    )
+    if gql.returncode != 0:
+        _cooldown()
+        sys.exit(0)
+    prs = json.loads(gql.stdout)
     unread = 0
-    if notif.returncode == 0:
-        for n in json.loads(notif.stdout):
-            if (n.get("subject", {}).get("type") in ("PullRequest", "Issue")
-                    and n.get("unread")
-                    and n.get("reason") in {"comment", "mention", "author", "review_requested", "assign"}):
-                unread += 1
+    try:
+        notif = subprocess.run(
+            ["gh", "api", "notifications"], capture_output=True, text=True, timeout=TIMEOUT,
+        )
+        if notif.returncode == 0:
+            for n in json.loads(notif.stdout):
+                if (n.get("subject", {}).get("type") in ("PullRequest", "Issue")
+                        and n.get("unread")
+                        and n.get("reason") in {"comment", "mention", "author", "review_requested", "assign"}):
+                    unread += 1
+    except Exception:
+        pass
     _w(json.dumps({"prs": prs, "unread_count": unread, "updated_at": int(time.time())}))
 """,
         cache_key="pr",
@@ -1030,7 +1044,7 @@ def _refresh_pr_cache_subprocess() -> None:
 def get_pr_status() -> "PrStatus | None":
     """Return structured PR status data from cache, trigger refresh if stale."""
     gh = check_gh_available()
-    if gh in ("no-gh", "no-auth"):
+    if gh != "ok":
         return None
 
     cache = _cached_json("pr", API_CACHE_TTL, _refresh_pr_cache_subprocess)
@@ -1084,7 +1098,8 @@ def _format_pr_dots(status: "PrStatus", include_pr: bool, include_notif: bool) -
             parts.append(f"{T.none}{''.join(status.dots_gray)}{T.R}")
 
     if include_notif and status.unread_count > 0:
-        parts.append(f" {T.notif}\U0001f4ac{status.unread_count}{T.R}")
+        sep = " " if parts else ""
+        parts.append(f"{sep}{T.notif}\U0001f4ac{status.unread_count}{T.R}")
 
     return "".join(parts)
 
@@ -1125,6 +1140,41 @@ def _parse_owner_repo(remote_url: str) -> tuple[str, str] | None:
     return (m.group(1), m.group(2)) if m else None
 
 
+def _refresh_ci_cache_subprocess(owner: str, repo: str, branch: str, ci_key: str) -> None:
+    """Fire-and-forget background refresh of CI cache."""
+    _bg_refresh(
+        imports="import json, subprocess",
+        payload=r"""
+    TIMEOUT = """ + str(TIMEOUT_GH_API) + r"""
+    out = subprocess.run(
+        ["gh", "api", f"repos/{sys.argv[3]}/{sys.argv[4]}/commits/{sys.argv[5]}/check-runs",
+         "--jq", ".check_runs"],
+        capture_output=True, text=True, timeout=TIMEOUT,
+    )
+    if out.returncode != 0:
+        _cooldown()
+        sys.exit(0)
+    runs = json.loads(out.stdout) if out.stdout.strip() else []
+    if not runs:
+        _w(json.dumps({"conclusion": "none"}))
+        sys.exit(0)
+    conclusions = [r.get("conclusion") for r in runs]
+    statuses = [r.get("status") for r in runs]
+    if any(c in ("failure", "timed_out", "cancelled", "action_required") for c in conclusions):
+        result = "failure"
+    elif all(c == "success" for c in conclusions if c is not None) and all(s == "completed" for s in statuses):
+        result = "success"
+    elif any(s in ("queued", "in_progress") for s in statuses):
+        result = "pending"
+    else:
+        result = "unknown"
+    _w(json.dumps({"conclusion": result}))
+""",
+        cache_key=ci_key,
+        extra_argv=(owner, repo, branch),
+    )
+
+
 def get_ci_status(cwd: str, branch: str) -> str:
     """Return CI status label for the current branch."""
     if not branch:
@@ -1149,43 +1199,13 @@ def get_ci_status(cwd: str, branch: str) -> str:
 
     ci_key = f"ci:{owner}_{repo}_{branch}"
 
-    if is_cache_fresh(ci_key, API_CACHE_TTL):
-        raw = cache_get_raw(ci_key)
-        if raw:
-            return _format_ci_label((_safe_json_loads(raw) or {}).get("conclusion"))
+    def _refresh():
+        _refresh_ci_cache_subprocess(owner, repo, branch, ci_key)
 
-    out = run(
-        ["gh", "api", f"repos/{owner}/{repo}/commits/{branch}/check-runs",
-         "--jq", ".check_runs"],
-        timeout=TIMEOUT_GH_API,
-    )
-    if out is None:
+    cache = _cached_json(ci_key, API_CACHE_TTL, _refresh)
+    if not cache:
         return ""
-
-    try:
-        runs = json.loads(out)
-    except json.JSONDecodeError:
-        return ""
-
-    if not runs:
-        cache_put(ci_key, json.dumps({"conclusion": "none"}))
-        return _format_ci_label("none")
-
-    conclusions = [r.get("conclusion") for r in runs]
-    statuses = [r.get("status") for r in runs]
-
-    if any(c in ("failure", "timed_out", "cancelled", "action_required") for c in conclusions):
-        result = "failure"
-    elif all(c == "success" for c in conclusions if c is not None) and all(s == "completed" for s in statuses):
-        result = "success"
-    elif any(s in ("queued", "in_progress") for s in statuses):
-        result = "pending"
-    else:
-        result = "unknown"
-
-    cache_put(ci_key, json.dumps({"conclusion": result}))
-
-    return _format_ci_label(result)
+    return _format_ci_label(cache.get("conclusion"))
 
 
 def _format_ci_label(conclusion: str | None) -> str:
@@ -1279,6 +1299,8 @@ def _refresh_limits_cache_subprocess() -> None:
     _bg_refresh(
         imports="import json\nfrom urllib.request import Request, urlopen\nfrom urllib.error import HTTPError",
         payload=r"""
+    BACKOFF_MIN = """ + str(LIMITS_COOLDOWN_MIN) + r"""
+    BACKOFF_MAX = """ + str(LIMITS_COOLDOWN_MAX) + r"""
     req = Request(sys.argv[3])
     req.add_header("Authorization", f"Bearer {sys.argv[4]}")
     req.add_header("anthropic-beta", "oauth-2025-04-20")
@@ -1287,7 +1309,26 @@ def _refresh_limits_cache_subprocess() -> None:
     except HTTPError as e:
         if e.code == 429:
             retry = int(e.headers.get("Retry-After", 0))
-            _cooldown(retry if retry > 0 else """ + str(LIMITS_COOLDOWN_DEFAULT) + r""")
+            if retry > 0:
+                _cooldown(retry)
+            else:
+                # Exponential backoff via fail counter stored in cache data
+                row = con.execute(
+                    "SELECT data FROM cache WHERE key = ?", (KEY,)
+                ).fetchone()
+                fails = 0
+                if row and row[0]:
+                    try:
+                        fails = json.loads(row[0]).get("_429_fails", 0)
+                    except Exception:
+                        pass
+                fails += 1
+                backoff = min(BACKOFF_MAX, BACKOFF_MIN * (2 ** (fails - 1)))
+                # Preserve fail counter in cache data (without updating updated_at)
+                con.execute(
+                    "UPDATE cache SET data = ? WHERE key = ?",
+                    (json.dumps({"_429_fails": fails}), KEY))
+                _cooldown(backoff)
             sys.exit(0)
         raise
     _w(json.dumps(json.loads(resp.read())))
@@ -1343,17 +1384,14 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
         has_data = data and "five_hour" in data
         if has_data:
             bars.extend(_build_limits_bars(data, sections))
-
-        cooldown_until = cache_get("limits")[2]
-        remaining = cooldown_until - time.time() if cooldown_until else 0
-        if remaining > 0:
-            eta = _format_duration(int(remaining / 60)) if remaining >= 60 else f"{int(remaining)}s"
-            bars.append(f"{T.warn}retry in {eta}{T.R}")
-        elif not has_data:
-            if "5h" in sections:
-                bars.append(f"{T.dir_parent}5h{T.R} {DIM}N/A{T.R}")
-            if "7d" in sections:
-                bars.append(f"{T.dir_parent}7d{T.R} {DIM}N/A{T.R}")
+        else:
+            # Show retry countdown only for long cooldowns (429 backoff),
+            # not for the brief 30s claim-cooldown during normal bg refresh
+            _, _, cooldown_until = cache_get("limits")
+            remaining = cooldown_until - time.time() if cooldown_until else 0
+            if remaining > ERROR_COOLDOWN_DEFAULT:
+                eta = _format_duration(int(remaining / 60)) if remaining >= 60 else f"{int(remaining)}s"
+                bars.append(f"{T.warn}retry in {eta}{T.R}")
 
     if "ctx" in sections:
         try:
@@ -1375,6 +1413,9 @@ def provider_vibes(_input_json: str, _cwd: str, *, show=None) -> str:
     """Built-in provider: 7d pace label (vibes indicator)."""
     data = _cached_json("limits", LIMITS_CACHE_TTL, _refresh_limits_cache_subprocess)
     if not data or "seven_day" not in data:
+        return ""
+    _, updated_at, _ = cache_get("limits")
+    if not updated_at or (time.time() - updated_at) > VIBES_MAX_DATA_AGE:
         return ""
     seven = data["seven_day"]
     r7 = _parse_iso_utc(seven.get("resets_at", ""))
@@ -1471,6 +1512,8 @@ def _refresh_external_slot_subprocess(command: str, input_json: str,
     )
     if r.returncode == 0 and r.stdout.strip():
         _w(r.stdout.strip())
+    elif r.returncode != 0:
+        _cooldown()
 """,
         cache_key=cache_key,
         extra_argv=(command,),
@@ -1503,7 +1546,7 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
         return placeholder
     slot_key = f"slot:{hashlib.md5(expanded.encode()).hexdigest()}"
 
-    if not is_cache_fresh(slot_key, ttl):
+    if _try_claim_refresh(slot_key, ttl):
         _refresh_external_slot_subprocess(expanded, input_json, slot_key)
 
     raw = cache_get_raw(slot_key)
@@ -1556,7 +1599,7 @@ def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
             li, wi = futures[future]
             try:
                 grid[li][wi] = future.result()
-            except (RuntimeError, ValueError, OSError, subprocess.SubprocessError):
+            except Exception:
                 grid[li][wi] = ""
 
     result: list[str] = []
