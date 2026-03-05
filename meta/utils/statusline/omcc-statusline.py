@@ -72,7 +72,6 @@ TIMEOUT_GH_API = 15
 GH_PR_FETCH_LIMIT = 20
 
 # Error/slot
-STDERR_MAX_LEN = 50
 SLOT_TIMEOUT = 120
 SLOT_CACHE_TTL = 60
 
@@ -123,7 +122,6 @@ CSI = f"{ESC}["
 
 def fg256(n: int) -> str: return f"{CSI}38;5;{n}m"
 def bg256(n: int) -> str: return f"{CSI}48;5;{n}m"
-def ul_color(n: int) -> str: return f"{CSI}58;5;{n}m"
 
 RESET         = f"{CSI}0m"
 BOLD          = f"{CSI}1m"
