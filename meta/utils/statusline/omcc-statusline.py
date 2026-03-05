@@ -236,6 +236,10 @@ class ThemeEntry:
     def copy(self) -> "ThemeEntry":
         return ThemeEntry(fg=self.fg, bg=self.bg, attrs=list(self.attrs))
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "ThemeEntry":
+        return cls(fg=d.get("fg"), bg=d.get("bg"), attrs=d.get("attrs", []))
+
 
 DEFAULTS: dict[str, ThemeEntry] = {
     "dir_parent":     ThemeEntry(fg=239),
@@ -1547,10 +1551,7 @@ def _theme_from_config(config: dict) -> dict[str, ThemeEntry]:
     theme = {k: v.copy() for k, v in DEFAULTS.items()}
     for key, val in config.get("theme", {}).items():
         if key in theme and isinstance(val, dict):
-            theme[key] = ThemeEntry(
-                fg=val.get("fg"), bg=val.get("bg"),
-                attrs=val.get("attrs", []),
-            )
+            theme[key] = ThemeEntry.from_dict(val)
     return theme
 
 
@@ -2152,12 +2153,10 @@ class Editor:
             self.msg = f"Saved → {self._config_path_display()}"
         elif key == "r":
             k = ELEMENTS[self.cursor].key
-            d = DEFAULTS[k]
-            self.theme[k] = ThemeEntry(fg=d.fg, bg=d.bg, attrs=list(d.attrs))
+            self.theme[k] = DEFAULTS[k].copy()
             self.msg = f"Reset {k} to default"
         elif key == "R":
-            self.theme = {k: ThemeEntry(fg=v.fg, bg=v.bg, attrs=list(v.attrs))
-                          for k, v in DEFAULTS.items()}
+            self.theme = {k: v.copy() for k, v in DEFAULTS.items()}
             self.msg = "Reset ALL to defaults"
         elif key == "c":
             e = self.theme[ELEMENTS[self.cursor].key]
