@@ -30,9 +30,9 @@ Requirements for v1.0 Code Quality milestone. Each maps to roadmap phases.
 - [x] **DRY-06**: Extract `_render_indicator_for_prefix()` wrapper (3 sites)
 - [x] **DRY-07**: Extract `_safe_json_loads()` for JSON parse with error handling (3 sites)
 - [x] **DRY-08**: Add `ThemeEntry.from_dict()` classmethod for consistent construction (4 sites)
-- [ ] **DRY-09**: Consolidate separator display mapping into helper (3 sites)
-- [ ] **DRY-10**: Extract preview parts building helper for editor (5 sites)
-- [ ] **DRY-11**: Consolidate color block building for editor (5 sites)
+- [x] **DRY-09**: Consolidate separator display mapping into helper (3 sites)
+- [x] **DRY-10**: Extract preview parts building helper for editor (5 sites)
+- [x] **DRY-11**: Consolidate color block building for editor (5 sites)
 - [x] **DRY-12**: Use `ThemeEntry.copy()` consistently for attribute copying (4 sites)
 
 ### Structural
@@ -75,9 +75,9 @@ None currently deferred.
 | DRY-06 | Phase 3 | Complete |
 | DRY-07 | Phase 3 | Complete |
 | DRY-08 | Phase 4 | Complete |
-| DRY-09 | Phase 4 | Pending |
-| DRY-10 | Phase 4 | Pending |
-| DRY-11 | Phase 4 | Pending |
+| DRY-09 | Phase 4 | Complete |
+| DRY-10 | Phase 4 | Complete |
+| DRY-11 | Phase 4 | Complete |
 | DRY-12 | Phase 4 | Complete |
 | STR-01 | Phase 5 | Pending |
 | STR-02 | Phase 5 | Pending |
