@@ -64,7 +64,7 @@ CACHE_DIR = Path("/tmp") / "omcc-statusline"
 CACHE_DB = CACHE_DIR / "cache.db"
 
 # Cache TTLs (seconds)
-API_CACHE_TTL = 300      # 5 min — CI, PR, limits (anything that hits an API)
+API_CACHE_TTL = 360      # 6 min — CI, PR, limits (anything that hits an API)
 GIT_CACHE_TTL = 5        # 5 sec — local git status (changes frequently)
 GH_CHECK_TTL = 1800      # 30 min — gh CLI availability (rarely changes)
 
@@ -89,7 +89,8 @@ LIMITS_API_URL = "https://api.anthropic.com/api/oauth/usage"
 LIMITS_CREDS_FILE = Path.home() / ".claude" / ".credentials.json"
 LIMITS_BAR_WIDTH = 5
 LIMITS_WINDOW_SECONDS = 7 * 24 * 3600
-LIMITS_PACE_BUDGET_HOURS = 120
+WORK_DAYS = 5
+LIMITS_PACE_BUDGET_HOURS = WORK_DAYS * 24
 LIMITS_COUNTDOWN_THRESHOLD = 50
 LIMITS_PACE_MIN_EXPECTED = 1
 
@@ -766,6 +767,27 @@ def _pace_delta_color(delta: float) -> str:
     return _ramp(t, RAMP_CYAN if delta > 0 else RAMP_ORANGE)
 
 
+def _fmt_surplus(days: float) -> str:
+    """Format surplus days with adaptive precision up to 8 decimal places.
+
+    |days| >= 1        → integer:   +2d, -1d
+    |days| >= 0.1      → 1 decimal: +0.5d
+    |days| >= 0.01     → 2 decimals: +0.05d
+    ...
+    |days| >= 1e-8     → 8 decimals: +0.00000001d
+    0                  → 0d
+    """
+    a = abs(days)
+    if a == 0:
+        return "0d"
+    if a >= 1:
+        return f"{round(days):+d}d"
+    for decimals in range(1, 9):
+        if a >= 10 ** -decimals:
+            return f"{days:+.{decimals}f}d"
+    return f"{days:+.8f}d"
+
+
 # --- bar rendering -----------------------------------------------------------
 
 def _resolve_bar_bg(bar_bg: str | None) -> str:
@@ -1290,33 +1312,63 @@ def _format_duration(minutes: int) -> str:
 
 
 def _7d_pace_label(utilization: float, resets_at: str) -> str:
-    """Return pace label for 7d window assuming 5-day (120h) working budget."""
+    """Return pace label for 7d window assuming WORK_DAYS budget.
+
+    After WORK_DAYS have elapsed, pace metrics are meaningless — show weekend mode instead.
+    """
     reset_epoch = _parse_iso_utc(resets_at)
     if reset_epoch is None:
         return ""
     hours_elapsed = max(0.0, (time.time() - (reset_epoch - LIMITS_WINDOW_SECONDS)) / 3600)
+    days_elapsed = hours_elapsed / 24
+    if days_elapsed >= WORK_DAYS:
+        return f"{T.lim_time}no pace police{T.R}"
     expected = min(hours_elapsed / LIMITS_PACE_BUDGET_HOURS * 100.0, 100.0)
     if expected < LIMITS_PACE_MIN_EXPECTED:
         return ""
     delta = expected - utilization
     dc = _pace_delta_color(delta)
     label = next(name for threshold, name in PACE_SCALE if delta <= threshold)
-    return f"{dc}{label} {delta:+.0f}%{T.R}"
+    surplus_str = ""
+    if utilization > 0 and days_elapsed >= 0.5:
+        daily_rate = utilization / days_elapsed
+        surplus_str = f" {_fmt_surplus((100 / daily_rate) - WORK_DAYS)}"
+    return f"{dc}{label} {delta:+.0f}%{surplus_str}{T.R}"
+
+
+def _bar_last_step_threshold(display: str, width: int = LIMITS_BAR_WIDTH) -> float:
+    """Return pct threshold above which the bar is stuck on its last visual step.
+
+    vbar: 8 steps  → threshold = 7.5/8 * 100 = 93.75%
+    hbar: width*8 steps → threshold = (N-0.5)/N * 100
+    """
+    n = width * 8 if display == "horizontal" else 8
+    return (n - 0.5) / n * 100
 
 
 def _format_limit_window(utilization: float, resets_at: str, label: str,
                          *, ramp: list, display: str) -> str:
-    """Format one limit window: '5h▅' (compact, no trailing separator)."""
+    """Format one limit window: '5h▅' or '5h [█96% 2d4h]' (compact)."""
     pct = max(0.0, min(100.0, utilization))
     indicator = _render_indicator(pct, ramp, display)
+
+    pct_str = ""
+    if pct >= _bar_last_step_threshold(display):
+        pct_str = f"{pct:.0f}%"
 
     time_str = ""
     if pct >= LIMITS_COUNTDOWN_THRESHOLD:
         reset_epoch = _parse_iso_utc(resets_at)
         if reset_epoch is not None:
             remaining_min = max(0, int((reset_epoch - time.time()) / 60))
-            time_str = f"{T.lim_time}{_format_duration(remaining_min)}{T.R}"
-    return f"{T.dir_parent}{label}{T.R} {indicator}{time_str}"
+            time_str = _format_duration(remaining_min)
+
+    extras = " ".join(filter(None, [pct_str, time_str]))
+    lc = T.dir_parent  # label color — used for brackets too
+    if extras:
+        inner = f"{indicator}{T.lim_time}{extras}{T.R}"
+        return f"{lc}{label}{T.R} {lc}[{T.R}{inner}{lc}]{T.R}"
+    return f"{lc}{label}{T.R} {indicator}"
 
 
 def _refresh_limits_cache_subprocess() -> None:
