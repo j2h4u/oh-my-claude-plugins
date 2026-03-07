@@ -9,6 +9,7 @@ Skills, agents, and hooks that make Claude Code smarter about your workflow — 
 [![Validate Plugins](https://github.com/j2h4u/oh-my-claude-plugins/actions/workflows/validate-plugins.yml/badge.svg)](https://github.com/j2h4u/oh-my-claude-plugins/actions/workflows/validate-plugins.yml)
 
 ![Statusline demo](meta/utils/statusline/demo.png)
+*[omcc-statusline](meta/utils/statusline/README.md) — Claude Code statusline with API usage, git status, and vibe pacing.*
 
 ## Quick Start
 
