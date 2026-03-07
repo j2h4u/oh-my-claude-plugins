@@ -13,6 +13,8 @@ my-project/ ⋮ ⑂feat/auth*+ · CI · ⁕⁕⁕⁕ 💬3 ⋮ 5h ▂ 7d ▁ ctx
 
 ## Vibe Pacing
 
+> Only relevant if you regularly burn through your weekly API limits. If you do, this saves you from constantly running `/usage` and mentally doing the math of "I used X% in Y days, am I on track?"
+
 The `vibes` block tells you how your API spending is going relative to your 5-day budget window — without making you do math.
 
 During the week you get a **pace label** and a **delta** (how far ahead or behind the expected burn rate you are):
