@@ -129,6 +129,40 @@ CSI = f"{ESC}["
 
 def fg256(n: int) -> str: return f"{CSI}38;5;{n}m"
 def bg256(n: int) -> str: return f"{CSI}48;5;{n}m"
+def fg_rgb(r: int, g: int, b: int) -> str: return f"{CSI}38;2;{r};{g};{b}m"
+
+
+def _rainbow(text: str, hue_start: float = 0.0, hue_range: float = 1.0) -> str:
+    """Colorize text with a rainbow gradient using 24-bit RGB (lolcat style).
+
+    hue_start: starting hue [0.0, 1.0)
+    hue_range: fraction of color wheel to span across the text
+    """
+    def _hsv_to_rgb(h: float) -> tuple[int, int, int]:
+        h = h % 1.0
+        i = int(h * 6)
+        f = h * 6 - i
+        p, q, t = 0.0, 1 - f, f
+        sector = i % 6
+        if sector == 0: r, g, b = 1.0, t, p
+        elif sector == 1: r, g, b = q, 1.0, p
+        elif sector == 2: r, g, b = p, 1.0, t
+        elif sector == 3: r, g, b = p, q, 1.0
+        elif sector == 4: r, g, b = t, p, 1.0
+        else: r, g, b = 1.0, p, q
+        return int(r * 255), int(g * 255), int(b * 255)
+
+    chars = list(text)
+    n = max(len(chars) - 1, 1)
+    out = []
+    for i, ch in enumerate(chars):
+        h = hue_start + (i / n) * hue_range
+        if ch == " ":
+            out.append(" ")
+            continue
+        r, g, b = _hsv_to_rgb(h)
+        out.append(f"{fg_rgb(r, g, b)}{ch}")
+    return "".join(out)
 
 RESET         = f"{CSI}0m"
 BOLD          = f"{CSI}1m"
@@ -632,6 +666,25 @@ def cache_get_raw(key: str) -> str | None:
     """Return just the data string for a cache key (first element of cache_get tuple)."""
     raw, _, _ = cache_get(key)
     return raw
+
+
+def _rainbow_next_phase(step: float = 1 / 14) -> float:
+    """Read rainbow phase from cache, advance by step, persist, return new value."""
+    with _DB_LOCK:
+        try:
+            con = _db()
+            con.execute(
+                "INSERT OR IGNORE INTO cache (key, data, updated_at, cooldown_until) "
+                "VALUES ('rainbow_phase', '0.0', 0, 0)"
+            )
+            row = con.execute("SELECT data FROM cache WHERE key = 'rainbow_phase'").fetchone()
+            phase = float(row[0]) if row else 0.0
+            phase = (phase + step) % 1.0
+            con.execute("UPDATE cache SET data = ? WHERE key = 'rainbow_phase'", (str(phase),))
+            con.commit()
+            return phase
+        except Exception:
+            return 0.0
 
 
 def _safe_json_loads(raw: str, default=None):
@@ -1322,7 +1375,7 @@ def _7d_pace_label(utilization: float, resets_at: str) -> str:
     hours_elapsed = max(0.0, (time.time() - (reset_epoch - LIMITS_WINDOW_SECONDS)) / 3600)
     days_elapsed = hours_elapsed / 24
     if days_elapsed >= WORK_DAYS:
-        return f"{T.lim_time}no pace police{T.R}"
+        return f"{_rainbow('no pace police', hue_start=_rainbow_next_phase())}{T.R}"
     expected = min(hours_elapsed / LIMITS_PACE_BUDGET_HOURS * 100.0, 100.0)
     if expected < LIMITS_PACE_MIN_EXPECTED:
         return ""
