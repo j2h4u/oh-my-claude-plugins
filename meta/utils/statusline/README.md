@@ -89,3 +89,11 @@ The 7-day usage limit is a **rolling window anchored to your first usage after t
 - If your window just expired and you want to keep the early reset time — **send a message as soon as possible** after reset, even a small one, to anchor the new window early
 - Avoid the trap of activating mid-week: you'll end up working weekends (because limits are still available) and sitting idle early in the week (waiting for reset)
 - The vibe pacing feature in this statusline assumes a **5-day work budget** within the 7-day window, specifically to help you pace through Mon–Fri and coast into the weekend
+
+**Experiment: auto-anchoring with `/loop`**
+
+> Status: untested, planned for next window reset
+
+The idea: if you know your window resets at, say, 4:00 AM Monday — start a Claude Code session on Sunday evening and run `/loop 1m /usage`. This fires a lightweight prompt every minute. When the old window expires and the new one starts, the first prompt that hits the API after reset should anchor the new window to ~4:00 AM again — preventing forward drift even if you personally wake up at 9 AM.
+
+**Open question:** Does `/loop` execute deterministically without consuming model tokens, or does each iteration count as API usage? If it burns tokens, this won't work when limits are exhausted. Needs testing.
