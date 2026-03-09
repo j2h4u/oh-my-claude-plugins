@@ -102,9 +102,12 @@ PACE_SCALE = [
     (float("inf"), "based"),
 ]
 
+RAMP_PACE_GOOD = ((0.45, 0.06, 195), (0.65, 0.10, 195))  # dark→mid teal
+RAMP_PACE_BAD  = ((0.45, 0.08, 50),  (0.60, 0.13, 25))   # muted → warm orange
+PACE_COLOR_MAX_DELTA = 40
+
 RAMP_CYAN   = (23, 51)
 RAMP_ORANGE = (58, 202)
-PACE_COLOR_MAX_DELTA = 40
 
 RAMP_PRESETS = {
     "aurora":    [(0, 44), (35, 33), (70, 127), (100, 160)],
@@ -813,11 +816,51 @@ def _multi_ramp(pct: float, waypoints: list[tuple[float, int]]) -> str:
     return fg256(_multi_ramp_color(pct, waypoints))
 
 
+def _oklch_to_rgb(L: float, C: float, h_deg: float) -> tuple[int, int, int]:
+    """OKLCH → sRGB (clamped to 0-255). Pure math, no dependencies."""
+    h_rad = math.radians(h_deg)
+    a = C * math.cos(h_rad)
+    b = C * math.sin(h_rad)
+    l_ = L + 0.3963377774 * a + 0.2158037573 * b
+    m_ = L - 0.1055613458 * a - 0.0638541728 * b
+    s_ = L - 0.0894841775 * a - 1.2914855480 * b
+    l, m, s = l_**3, m_**3, s_**3
+    r_lin = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+    g_lin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+    b_lin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+    def gamma(x): return x * 12.92 if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
+    return (
+        max(0, min(255, round(gamma(r_lin) * 255))),
+        max(0, min(255, round(gamma(g_lin) * 255))),
+        max(0, min(255, round(gamma(b_lin) * 255))),
+    )
+
+
+def _oklch_ramp(t: float, start: tuple, end: tuple, *, fixed_L: bool = False) -> str:
+    """Interpolate in OKLCH, return fg_rgb escape.
+
+    start/end: (L, C, H) tuples
+    fixed_L=True: keep L constant at start[0] (uniform brightness for limit bars)
+    fixed_L=False: interpolate L too (brightness ramps with hue for pace)
+    """
+    t = max(0.0, min(1.0, t))
+    L0, C0, H0 = start
+    L1, C1, H1 = end
+    L = L0 if fixed_L else L0 + t * (L1 - L0)
+    C = C0 + t * (C1 - C0)
+    # Shortest-path hue interpolation
+    dh = (H1 - H0 + 180) % 360 - 180
+    H = (H0 + t * dh) % 360
+    r, g, b = _oklch_to_rgb(L, C, H)
+    return fg_rgb(r, g, b)
+
+
 def _pace_delta_color(delta: float) -> str:
-    """Pace delta color: log-scaled cyan (under budget) or orange (over budget)."""
+    """Pace delta color: log-scaled OKLCH teal (under budget) or orange (over budget)."""
     magnitude = min(abs(delta), PACE_COLOR_MAX_DELTA)
     t = math.log1p(magnitude) / math.log1p(PACE_COLOR_MAX_DELTA)
-    return _ramp(t, RAMP_CYAN if delta > 0 else RAMP_ORANGE)
+    ramp = RAMP_PACE_GOOD if delta >= 0 else RAMP_PACE_BAD
+    return _oklch_ramp(t, ramp[0], ramp[1], fixed_L=False)
 
 
 def _fmt_surplus(days: float) -> str:
