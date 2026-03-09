@@ -98,4 +98,4 @@ The idea: if you know your window resets at, say, 4:00 AM Monday — start a Cla
 
 **Open question:** Does `/loop` execute deterministically without consuming model tokens, or does each iteration count as API usage? If it burns tokens, this won't work when limits are exhausted. Needs testing.
 
-**Fallback idea:** Run a Haiku subagent as a heartbeat probe. Haiku runs on API key billing, not subscription quota — so it works even when weekly limits are exhausted. Could be as simple as a `curl` to the Anthropic API with `max_tokens: 1`. The only goal is to register a usage event and anchor the window.
+**Fallback idea:** Create a Claude Code custom agent (`.md` file with `model: claude-haiku-4-5-20251001` in frontmatter) as a heartbeat probe. Haiku consumes far less of the subscription quota than Opus or Sonnet — a single-token ping should be negligible. Run it via `/loop` to register usage events and anchor the window at the right time.
