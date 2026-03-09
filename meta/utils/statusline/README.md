@@ -97,3 +97,5 @@ The 7-day usage limit is a **rolling window anchored to your first usage after t
 The idea: if you know your window resets at, say, 4:00 AM Monday — start a Claude Code session on Sunday evening and run `/loop 1m /usage`. This fires a lightweight prompt every minute. When the old window expires and the new one starts, the first prompt that hits the API after reset should anchor the new window to ~4:00 AM again — preventing forward drift even if you personally wake up at 9 AM.
 
 **Open question:** Does `/loop` execute deterministically without consuming model tokens, or does each iteration count as API usage? If it burns tokens, this won't work when limits are exhausted. Needs testing.
+
+**Fallback idea:** Run a Haiku subagent as a heartbeat probe. Haiku runs on API key billing, not subscription quota — so it works even when weekly limits are exhausted. Could be as simple as a `curl` to the Anthropic API with `max_tokens: 1`. The only goal is to register a usage event and anchor the window.
