@@ -72,6 +72,7 @@ GH_CHECK_TTL = 1800      # 30 min — gh CLI availability (rarely changes)
 # Autocompact fires at CLAUDE_AUTOCOMPACT_PCT_OVERRIDE% *used* (default 95%).
 # That maps to (100 - pct)% remaining = dead zone we'll never reach.
 # Usable range = everything above that remaining threshold.
+CTX_IRRITATE_USER_ABOVE = 70.0  # normalized used% above which the ctx block blinks
 def _ctx_autocompact_remaining() -> float:
     """Return the remaining% at which autocompact fires (default: 5.0)."""
     raw = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
@@ -1607,7 +1608,10 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
                 usable_remaining = (remaining - dead_zone) / usable_range * 100.0
                 used = max(0.0, min(100.0, 100.0 - usable_remaining))
                 ctx_bar = _render_indicator_for_prefix(used, "ctx")
-                bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
+                if used >= CTX_IRRITATE_USER_ABOVE:
+                    bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar} {BLINK}☠{RESET} ")
+                else:
+                    bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
             else:
                 bars.append(f"{T.dir_parent}ctx{T.R} {DIM}N/A{T.R}")
         except (json.JSONDecodeError, KeyError, TypeError):
@@ -1739,7 +1743,8 @@ def run_external_slot(command: str, input_json: str, ttl: int) -> str:
         _refresh_external_slot_subprocess(expanded, input_json, slot_key)
 
     raw = cache_get_raw(slot_key)
-    return raw.strip() if raw else ""
+    stripped = raw.strip() if raw else ""
+    return "" if stripped == "{}" else stripped
 
 
 # --- slot orchestrator -------------------------------------------------------
