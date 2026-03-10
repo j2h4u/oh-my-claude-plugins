@@ -26,6 +26,7 @@ jobs:
       - name: Sync files
         run: |
           rsync -av --delete \
+            --exclude '.git' \
             --exclude '__pycache__' \
             --exclude 'install.sh' \
             meta/utils/statusline/ oh-my-statusline/
