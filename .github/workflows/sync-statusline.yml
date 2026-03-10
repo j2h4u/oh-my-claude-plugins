@@ -1,0 +1,40 @@
+name: Sync statusline to oh-my-statusline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "meta/utils/statusline/**"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Checkout target
+        uses: actions/checkout@v4
+        with:
+          repository: j2h4u/oh-my-statusline
+          token: ${{ secrets.GH_PAT }}
+          path: oh-my-statusline
+
+      - name: Sync files
+        run: |
+          rsync -av --delete \
+            --exclude '__pycache__' \
+            meta/utils/statusline/ oh-my-statusline/
+
+      - name: Commit and push
+        working-directory: oh-my-statusline
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to sync"
+          else
+            git commit -m "sync: update from oh-my-claude-plugins@${{ github.sha }}"
+            git push
+          fi
