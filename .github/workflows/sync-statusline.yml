@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "meta/utils/statusline/**"
+  workflow_dispatch:
 
 jobs:
   sync:
