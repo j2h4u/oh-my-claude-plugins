@@ -25,6 +25,7 @@ jobs:
         run: |
           rsync -av --delete \
             --exclude '__pycache__' \
+            --exclude 'install.sh' \
             meta/utils/statusline/ oh-my-statusline/
 
       - name: Commit and push
@@ -32,6 +33,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/j2h4u/oh-my-statusline.git
           git add -A
           if git diff --cached --quiet; then
             echo "Nothing to sync"
