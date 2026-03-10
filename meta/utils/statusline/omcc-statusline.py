@@ -68,6 +68,21 @@ API_CACHE_TTL = 360      # 6 min — CI, PR, limits (anything that hits an API)
 GIT_CACHE_TTL = 5        # 5 sec — local git status (changes frequently)
 GH_CHECK_TTL = 1800      # 30 min — gh CLI availability (rarely changes)
 
+# Context window normalization.
+# Autocompact fires at CLAUDE_AUTOCOMPACT_PCT_OVERRIDE% *used* (default 95%).
+# That maps to (100 - pct)% remaining = dead zone we'll never reach.
+# Usable range = everything above that remaining threshold.
+def _ctx_autocompact_remaining() -> float:
+    """Return the remaining% at which autocompact fires (default: 5.0)."""
+    raw = os.environ.get("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "")
+    try:
+        pct_used = float(raw)
+        if 1.0 <= pct_used <= 100.0:
+            return 100.0 - pct_used
+    except (ValueError, TypeError):
+        pass
+    return 5.0  # default: autocompact at 95% used → 5% remaining
+
 # Timeouts (seconds)
 TIMEOUT_SUBPROCESS = 5
 TIMEOUT_GIT = 3
@@ -105,9 +120,6 @@ PACE_SCALE = [
 RAMP_PACE_GOOD = ((0.45, 0.06, 195), (0.65, 0.10, 195))  # dark→mid teal
 RAMP_PACE_BAD  = ((0.45, 0.08, 50),  (0.60, 0.13, 25))   # muted → warm orange
 PACE_COLOR_MAX_DELTA = 40
-
-RAMP_CYAN   = (23, 51)
-RAMP_ORANGE = (58, 202)
 
 RAMP_PRESETS = {
     "aurora":    [(0, 44), (35, 33), (70, 127), (100, 160)],
@@ -412,6 +424,53 @@ _VALID_SLOT_KEYS = frozenset({"provider", "command", "ttl", "enabled", "show"})
 _VALID_ATTRS = frozenset(name for name, _, _ in ATTRS_AVAILABLE)
 
 
+def _validate_theme_token(token: str, val: object, errors: list[str]) -> None:
+    """Validate a single theme token entry."""
+    if token not in _VALID_THEME_TOKENS:
+        errors.append(f"theme: unknown token '{token}'")
+        return
+    if not isinstance(val, dict):
+        errors.append(f"theme.{token}: must be an object")
+        return
+    for fld in val:
+        if fld not in ("fg", "bg", "attrs"):
+            errors.append(f"theme.{token}: unknown field '{fld}'")
+    fg = val.get("fg")
+    if fg is not None and (not isinstance(fg, int) or not 0 <= fg <= 255):
+        errors.append(f"theme.{token}.fg: must be 0-255, got {fg!r}")
+    bg = val.get("bg")
+    if bg is not None and (not isinstance(bg, int) or not 0 <= bg <= 255):
+        errors.append(f"theme.{token}.bg: must be 0-255, got {bg!r}")
+    attrs = val.get("attrs")
+    if attrs is not None:
+        if not isinstance(attrs, list):
+            errors.append(f"theme.{token}.attrs: must be a list")
+        else:
+            for a in attrs:
+                if a not in _VALID_ATTRS:
+                    errors.append(f"theme.{token}.attrs: unknown attr '{a}'")
+
+
+def _validate_slot_show(show: object, slot: dict, has_provider: bool, prefix: str, errors: list[str]) -> None:
+    """Validate a slot's 'show' field."""
+    if not isinstance(show, list):
+        errors.append(f"{prefix}.show: must be an array")
+    elif has_provider:
+        prov = slot["provider"]
+        valid_sections = PROVIDER_SECTIONS.get(prov)
+        if valid_sections is None:
+            errors.append(f"{prefix}.show: provider '{prov}' has no sections")
+        else:
+            for s in show:
+                if not isinstance(s, str):
+                    errors.append(f"{prefix}.show: values must be strings")
+                elif s not in valid_sections:
+                    errors.append(
+                        f"{prefix}.show: unknown section '{s}', "
+                        f"valid: [{', '.join(valid_sections)}]"
+                    )
+
+
 def _validate_config(config: dict) -> list[str]:
     """Validate hierarchical config, return list of error strings."""
     errors: list[str] = []
@@ -427,29 +486,7 @@ def _validate_config(config: dict) -> list[str]:
             errors.append("theme: must be an object")
         else:
             for token, val in theme.items():
-                if token not in _VALID_THEME_TOKENS:
-                    errors.append(f"theme: unknown token '{token}'")
-                    continue
-                if not isinstance(val, dict):
-                    errors.append(f"theme.{token}: must be an object")
-                    continue
-                for fld in val:
-                    if fld not in ("fg", "bg", "attrs"):
-                        errors.append(f"theme.{token}: unknown field '{fld}'")
-                fg = val.get("fg")
-                if fg is not None and (not isinstance(fg, int) or not 0 <= fg <= 255):
-                    errors.append(f"theme.{token}.fg: must be 0-255, got {fg!r}")
-                bg = val.get("bg")
-                if bg is not None and (not isinstance(bg, int) or not 0 <= bg <= 255):
-                    errors.append(f"theme.{token}.bg: must be 0-255, got {bg!r}")
-                attrs = val.get("attrs")
-                if attrs is not None:
-                    if not isinstance(attrs, list):
-                        errors.append(f"theme.{token}.attrs: must be a list")
-                    else:
-                        for a in attrs:
-                            if a not in _VALID_ATTRS:
-                                errors.append(f"theme.{token}.attrs: unknown attr '{a}'")
+                _validate_theme_token(token, val, errors)
 
     settings = config.get("settings")
     if settings is not None:
@@ -514,24 +551,7 @@ def _validate_config(config: dict) -> list[str]:
                         errors.append(f"{prefix}.enabled: must be a boolean")
                     show = slot.get("show")
                     if show is not None:
-                        if not isinstance(show, list):
-                            errors.append(f"{prefix}.show: must be an array")
-                        elif has_provider:
-                            prov = slot["provider"]
-                            valid_sections = PROVIDER_SECTIONS.get(prov)
-                            if valid_sections is None:
-                                errors.append(
-                                    f"{prefix}.show: provider '{prov}' has no sections"
-                                )
-                            else:
-                                for s in show:
-                                    if not isinstance(s, str):
-                                        errors.append(f"{prefix}.show: values must be strings")
-                                    elif s not in valid_sections:
-                                        errors.append(
-                                            f"{prefix}.show: unknown section '{s}', "
-                                            f"valid: [{', '.join(valid_sections)}]"
-                                        )
+                        _validate_slot_show(show, slot, has_provider, prefix, errors)
 
     return errors
 
@@ -619,7 +639,7 @@ def run(cmd: list[str], *, cwd: str | None = None, timeout: float = TIMEOUT_SUBP
         if r.returncode == 0:
             return r.stdout
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
+        pass  # command unavailable or timed out — caller gets None
     return None
 
 
@@ -630,21 +650,26 @@ def osc8_link(url: str, text: str) -> str:
 
 _DB_LOCK = threading.Lock()
 _CON: sqlite3.Connection | None = None
+_DB_ERROR: str | None = None
 
 
 def _db() -> sqlite3.Connection:
     """Return singleton cache DB connection (lazy init, WAL mode)."""
-    global _CON
+    global _CON, _DB_ERROR
     if _CON is None:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        _CON = sqlite3.connect(str(CACHE_DB), timeout=2, check_same_thread=False)
-        _CON.execute("PRAGMA journal_mode=WAL")
-        _CON.execute(
-            "CREATE TABLE IF NOT EXISTS cache "
-            "(key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}',"
-            " updated_at REAL NOT NULL DEFAULT 0,"
-            " cooldown_until REAL NOT NULL DEFAULT 0)"
-        )
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            _CON = sqlite3.connect(str(CACHE_DB), timeout=2, check_same_thread=False)
+            _CON.execute("PRAGMA journal_mode=WAL")
+            _CON.execute(
+                "CREATE TABLE IF NOT EXISTS cache "
+                "(key TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}',"
+                " updated_at REAL NOT NULL DEFAULT 0,"
+                " cooldown_until REAL NOT NULL DEFAULT 0)"
+            )
+        except (sqlite3.Error, OSError) as exc:
+            _DB_ERROR = str(exc)
+            raise
     return _CON
 
 
@@ -659,7 +684,7 @@ def cache_get(key: str) -> tuple[str | None, float, float]:
             if row:
                 return row[0], row[1], row[2]
         except sqlite3.Error:
-            pass
+            pass  # cache miss — return defaults below
     return None, 0.0, 0.0
 
 
@@ -686,8 +711,8 @@ def _rainbow_next_phase(step: float = 1 / 14) -> float:
             con.execute("UPDATE cache SET data = ? WHERE key = 'rainbow_phase'", (str(phase),))
             con.commit()
             return phase
-        except Exception:
-            return 0.0
+        except (sqlite3.Error, ValueError, TypeError):
+            return 0.0  # DB or parse error — use default phase
 
 
 def _safe_json_loads(raw: str, default=None):
@@ -701,7 +726,7 @@ def _safe_json_loads(raw: str, default=None):
 def _load_json_file(path: Path, *, fatal: bool = False) -> dict | None:
     """Read and parse a JSON file. If fatal=True, print error and exit(1). Otherwise return None on error."""
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         if fatal:
             print(f"config: failed to parse JSON: {exc}", file=sys.stderr)
@@ -752,12 +777,12 @@ def read_remote_url(cwd: str) -> str | None:
     git_dir = Path(cwd) / ".git"
     try:
         if git_dir.is_file():
-            text = git_dir.read_text().strip()
+            text = git_dir.read_text(encoding="utf-8").strip()
             if text.startswith("gitdir: "):
                 git_dir = Path(text[8:])
                 if not git_dir.is_absolute():
                     git_dir = (Path(cwd) / git_dir).resolve()
-        config = (git_dir / "config").read_text()
+        config = (git_dir / "config").read_text(encoding="utf-8")
     except OSError:
         return None
 
@@ -816,6 +841,11 @@ def _multi_ramp(pct: float, waypoints: list[tuple[float, int]]) -> str:
     return fg256(_multi_ramp_color(pct, waypoints))
 
 
+def _srgb_gamma(x: float) -> float:
+    """Linear → sRGB gamma correction."""
+    return x * 12.92 if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
+
+
 def _oklch_to_rgb(L: float, C: float, h_deg: float) -> tuple[int, int, int]:
     """OKLCH → sRGB (clamped to 0-255). Pure math, no dependencies."""
     h_rad = math.radians(h_deg)
@@ -828,12 +858,7 @@ def _oklch_to_rgb(L: float, C: float, h_deg: float) -> tuple[int, int, int]:
     r_lin = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
     g_lin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
     b_lin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
-    def gamma(x): return x * 12.92 if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
-    return (
-        max(0, min(255, round(gamma(r_lin) * 255))),
-        max(0, min(255, round(gamma(g_lin) * 255))),
-        max(0, min(255, round(gamma(b_lin) * 255))),
-    )
+    return tuple(max(0, min(255, round(_srgb_gamma(c) * 255))) for c in (r_lin, g_lin, b_lin))
 
 
 def _oklch_ramp(t: float, start: tuple, end: tuple, *, fixed_L: bool = False) -> str:
@@ -1095,13 +1120,13 @@ def _cooldown(seconds=0):
     con.commit()
 try:
 __PAYLOAD__
-except Exception:
+except Exception:  # broad: bg script must not crash — set cooldown instead
     _cooldown()
 finally:
     try:
         con.commit()
     except Exception:
-        pass
+        pass  # best-effort final commit before exit
     con.close()
 """
 
@@ -1180,7 +1205,7 @@ def _refresh_pr_cache_subprocess() -> None:
                         and n.get("reason") in {"comment", "mention", "author", "review_requested", "assign"}):
                     unread += 1
     except Exception:
-        pass
+        pass  # gh notifications fetch failed — skip unread count
     _w(json.dumps({"prs": prs, "unread_count": unread, "updated_at": int(time.time())}))
 """,
         cache_key="pr",
@@ -1369,13 +1394,13 @@ def _format_ci_label(conclusion: str | None) -> str:
 
 def _read_oauth_token() -> str | None:
     """Read OAuth access token from Claude credentials file."""
-    try:
-        data = _load_json_file(LIMITS_CREDS_FILE)
-        if data is None:
-            return None
-        return data["claudeAiOauth"]["accessToken"]
-    except KeyError:
+    data = _load_json_file(LIMITS_CREDS_FILE)
+    if data is None:
         return None
+    oauth = data.get("claudeAiOauth")
+    if not isinstance(oauth, dict):
+        return None
+    return oauth.get("accessToken")
 
 
 def _parse_iso_utc(raw: str) -> float | None:
@@ -1574,7 +1599,13 @@ def provider_limits(input_json: str, cwd: str, show: list[str] | None = None) ->
             inp = json.loads(input_json)
             remaining = inp.get("context_window", {}).get("remaining_percentage")
             if remaining is not None:
-                used = 100 - remaining
+                # Normalize: treat autocompact threshold as the "full" mark.
+                # usable_remaining = (remaining - dead_zone) / usable_range * 100
+                # used = 100 - usable_remaining  (clamped to [0, 100])
+                dead_zone = _ctx_autocompact_remaining()
+                usable_range = 100.0 - dead_zone
+                usable_remaining = (remaining - dead_zone) / usable_range * 100.0
+                used = max(0.0, min(100.0, 100.0 - usable_remaining))
                 ctx_bar = _render_indicator_for_prefix(used, "ctx")
                 bars.append(f"{T.dir_parent}ctx{T.R} {ctx_bar}")
             else:
@@ -1684,20 +1715,21 @@ def _check_command_available(command: str) -> str | None:
     if not parts:
         return None
     exe = parts[0]
-    if os.path.isabs(exe):
-        found = os.path.isfile(exe) and os.access(exe, os.X_OK)
+    exe_path = Path(exe)
+    if exe_path.is_absolute():
+        found = exe_path.is_file() and os.access(exe_path, os.X_OK)
     else:
         found = shutil.which(exe) is not None
     if found:
         return None
     # Prefer basename of first arg (script) over the interpreter itself
-    label = os.path.basename(parts[1]) if len(parts) > 1 else os.path.basename(exe)
+    label = Path(parts[1]).name if len(parts) > 1 else exe_path.name
     return f"{T.warn}[{label}: not found]{T.R}"
 
 
 def run_external_slot(command: str, input_json: str, ttl: int) -> str:
     """Return external slot output from cache, trigger bg refresh if stale."""
-    expanded = os.path.expanduser(command)
+    expanded = str(Path(command).expanduser())
     placeholder = _check_command_available(expanded)
     if placeholder is not None:
         return placeholder
@@ -1731,13 +1763,25 @@ def _build_slot_grid(slots: list) -> tuple[list[list[dict]], list[tuple[int, int
     return lines, all_widgets
 
 
+_CACHE_FREE_PROVIDERS = frozenset({"path"})
+
+
 def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
     """Execute all slots in parallel, return ordered list of non-empty lines."""
     lines, all_widgets = _build_slot_grid(slots)
 
+    db_err = _DB_ERROR
+    db_err_shown = False
+
     def _run_slot(slot: dict) -> str:
+        nonlocal db_err_shown
         provider = slot.get("provider")
         if provider:
+            if db_err and provider not in _CACHE_FREE_PROVIDERS:
+                if not db_err_shown:
+                    db_err_shown = True
+                    return f"{T.err}{CACHE_DIR} inaccessible, please delete{T.R}"
+                return ""
             func = PROVIDERS.get(provider)
             if func:
                 return func(input_json, cwd, show=slot.get("show"))
@@ -1757,7 +1801,7 @@ def execute_slots(slots: list, input_json: str, cwd: str) -> list[str]:
             try:
                 grid[li][wi] = future.result()
             except Exception:
-                grid[li][wi] = ""
+                grid[li][wi] = ""  # slot failed — render as empty
 
     result: list[str] = []
     for parts in grid:
@@ -1932,10 +1976,9 @@ class Editor:
 
     @staticmethod
     def _config_path_display() -> str:
-        try:
+        if CONFIG_FILE.is_relative_to(Path.home()):
             return f"~/{CONFIG_FILE.relative_to(Path.home())}"
-        except ValueError:
-            return str(CONFIG_FILE)
+        return str(CONFIG_FILE)
 
     # --- preview rendering ---
 
@@ -2484,10 +2527,7 @@ class Editor:
         elif key in (LEFT, RIGHT):
             sdef = SETTINGS_DEFS[self.settings_cursor]
             cur_val = self.settings[sdef.key]
-            try:
-                idx = sdef.options.index(cur_val)
-            except ValueError:
-                idx = 0
+            idx = sdef.options.index(cur_val) if cur_val in sdef.options else 0
             if key == RIGHT:
                 idx = (idx + 1) % len(sdef.options)
             else:
@@ -2787,7 +2827,7 @@ def install() -> None:
     settings["statusLine"] = {"type": "command", "command": command}
 
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n")
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
 
     if old and old != command:
         print(f"Replaced: {old}")
