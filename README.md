@@ -263,6 +263,20 @@ Quality is rated on **four dimensions**:
 
 Check **Notes** column for specifics. See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed improvement roadmap.
 
+## Claude Code Bug: Plugins Not Loading
+
+Some Claude Code versions silently skip installed plugins if they are not explicitly listed in the `enabledPlugins` map in `~/.claude/settings.json`. Older versions loaded all installed plugins automatically, but newer versions may require this explicit flag. When affected, skills and agents simply don't appear in the session — no error, no warning.
+
+**Symptoms:** You install a plugin, but its skills don't show up in `/skills`. The plugin is listed in `~/.claude/plugins/installed_plugins.json` but missing from `enabledPlugins` in `~/.claude/settings.json`.
+
+**Fix:** Run the included utility that syncs the two files:
+
+```bash
+python3 meta/utils/fix-enabled-plugins/fix-enabled-plugins.py
+```
+
+It shows diagnostics (installed vs enabled count), a diff of what's missing, creates a backup, and applies the fix. Safe to run multiple times. See [fix-enabled-plugins README](meta/utils/fix-enabled-plugins/README.md) for details.
+
 ## Alternative Installation
 
 Use as local plugin directory (development mode):
