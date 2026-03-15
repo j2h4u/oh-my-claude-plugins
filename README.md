@@ -344,6 +344,15 @@ bash .github/workflows/validate-plugins.yml
 
 Inspired by [Claude Code Plugin Template](https://github.com/ivan-magda/claude-code-plugin-template) by Ivan Magda. Plugin development documentation (schemas, best practices, templates) adapted from the template's plugin-authoring skill.
 
+### Third-party content
+
+Some skills are based on or derived from external sources:
+
+| Skill | Source | How it's used |
+|-------|--------|---------------|
+| web-design-guidelines | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) | Thin wrapper that fetches upstream `command.md` at runtime — always up to date |
+| vercel-react-best-practices | [Vercel Engineering blog](https://vercel.com/blog) | Compiled from multiple Vercel blog posts into 45 structured rules with examples |
+
 ## License
 
 Individual items may have their own licenses. Check each directory.
