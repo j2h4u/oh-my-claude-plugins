@@ -63,6 +63,7 @@ oh-my-claude-plugins/
 │   ├── plugin.json
 │   ├── skills/                   # Documentation creation skills
 │   │   ├── doc-coauthoring/
+│   │   ├── mermaid-best-practices/
 │   │   └── readme-generator/
 │   ├── plugins.md                # Official Claude Code documentation
 │   ├── hooks.md
@@ -134,6 +135,7 @@ Documentation creation.
 | Skill | Description | Quality |
 |-------|-------------|---------|
 | doc-coauthoring | Collaborative workflow: gathering, refinement, reader testing | ⭐⭐⭐⭐ |
+| mermaid-best-practices | Mermaid diagrams: syntax, quoting, shapes, rendering pitfalls | ⭐⭐⭐ |
 | readme-generator | README best practices by project type | ⭐⭐⭐ |
 
 ### devops
