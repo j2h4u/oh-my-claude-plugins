@@ -1,7 +1,7 @@
 {
   "name": "databases",
-  "version": "1.0.0",
-  "description": "Database tools: database administration",
+  "version": "1.1.0",
+  "description": "Database tools: administration, PostgreSQL query patterns",
   "author": {
     "name": "j2h4u"
   }

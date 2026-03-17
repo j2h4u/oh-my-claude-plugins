@@ -53,7 +53,8 @@ oh-my-claude-plugins/
 ├── databases/                    # Database tools
 │   ├── plugin.json
 │   └── skills/
-│       └── metabase-swiss-knife/
+│       ├── metabase-swiss-knife/
+│       └── postgres-patterns/
 ├── devops/                       # System administration
 │   ├── plugin.json
 │   └── skills/
@@ -150,6 +151,7 @@ Database tools and management.
 | Skill | Description | Quality |
 |-------|-------------|---------|
 | metabase-swiss-knife | CLI for Metabase: inspect, diag, backup/restore, cards, dashboards | ⭐⭐⭐⭐ |
+| postgres-patterns | Idiomatic PostgreSQL: LATERAL as variables, CTEs, window functions, indexes | ⭐⭐⭐ |
 
 ### claude-code-meta
 
@@ -352,6 +354,7 @@ Some skills are based on or derived from external sources:
 |-------|--------|---------------|
 | web-design-guidelines | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) | Thin wrapper that fetches upstream `command.md` at runtime — always up to date |
 | vercel-react-best-practices | [Vercel Engineering blog](https://vercel.com/blog) | Compiled from multiple Vercel blog posts into 45 structured rules with examples |
+| postgres-patterns | [Telegram post on CROSS JOIN LATERAL](https://t.me/bfrankly/84) | LATERAL-as-variables pattern; other patterns from PostgreSQL documentation |
 
 ## License
 
