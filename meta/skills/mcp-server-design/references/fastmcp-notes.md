@@ -30,22 +30,30 @@ A common assumption is that FastMCP cleans up the Pydantic `Optional[T]` → `an
 
 ---
 
-## PascalCase Tool Names
+## Tool Names in FastMCP
 
-Python functions are `snake_case`; MCP tool names should be `PascalCase`. Use the `name=` parameter — the Python function name is never exposed to clients when `name=` is set:
+Python function names are `snake_case`, and MCP tool names should also be `snake_case` — so the default FastMCP behaviour (function name = tool name) is already correct. No `name=` override needed in the common case:
 
 ```python
-@mcp.tool(name="ListDialogs")
+@mcp.tool()
 async def list_dialogs(limit: int = 20) -> list[dict]:
     """Lists available dialogs."""
     ...
+# → exposes tool name "list_dialogs" ✓
+```
+
+Use `name=` only when you need to override: disambiguating a collision, wrapping a legacy API, or fitting a specific naming constraint:
+
+```python
+@mcp.tool(name="search_messages_v2")  # versioning, legacy compat, etc.
+async def search_messages(...): ...
 ```
 
 Full decorator signature (FastMCP ≥ 2.x):
 
 ```python
 @mcp.tool(
-    name="CreateDocument",
+    name="create_document",            # override only if needed
     description="...",                 # overrides docstring if provided
     annotations=ToolAnnotations(
         readOnlyHint=False,

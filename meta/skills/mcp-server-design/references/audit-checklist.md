@@ -20,7 +20,7 @@
 
 ## 2. Tool Naming and Classification
 
-- [ ] **PascalCase verb-noun names** — e.g. `ListDialogs`, `GetEntityInfo`, `SubmitFeedback`. No `get_data`, `run_query`, `handle_request`.
+- [ ] **`snake_case` verb_noun names** — e.g. `list_dialogs`, `get_entity_info`, `submit_feedback`. No `getData`, `RunQuery`, `handle_request` (too generic), no spaces or special chars. Characters: `^[a-zA-Z0-9_]{1,64}$` — what Claude's frontend validates.
 - [ ] * **`title` field set on every tool** — 1–3 words, in the product's language, sentence case, user-facing. Claude Desktop shows this in "Claude is using…" blocks and the tool list. Without it the raw `name` is shown (`ozon_search`, `GetMyRecentActivity`) which leaks internal naming to users. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status".
 - [ ] **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail.
 - [ ] **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `GetMe` → `GetMyAccount`).

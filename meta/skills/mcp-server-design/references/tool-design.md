@@ -23,20 +23,24 @@ Most servers start tools-only. Add Resources when you have stable URI-addressabl
 
 ## Naming
 
-**Convention:** `PascalCase`, verb-noun.
+**Convention:** `snake_case`, verb_noun.
 
 ```
-GetEntityInfo      ListDialogs       SubmitFeedback
-MarkDialogForSync  SearchMessages    GetSyncStatus
+get_entity_info      list_dialogs       submit_feedback
+mark_dialog_for_sync  search_messages    get_sync_status
 ```
 
 **Rules:**
-- Verb first (`Get`, `List`, `Search`, `Submit`, `Mark`, `Create`, `Delete`)
-- Nouns are domain concepts, not implementation artifacts (`Dialog` not `Row`)
-- Avoid generic names: `GetData`, `RunQuery` — useless to the LLM
-- Watch for namespace collisions with the client: `GetMe` was intercepted by Claude Desktop as a meta-operation → renamed `GetMyAccount`
+- Verb first (`get_`, `list_`, `search_`, `submit_`, `create_`, `delete_`)
+- Nouns are domain concepts, not implementation artifacts (`dialog` not `row`)
+- Avoid generic names: `get_data`, `run_query` — useless to the LLM
+- Watch for namespace collisions with the client: `get_me` intercepted by some clients → use `get_my_account`
 
-**Convention note:** the spec also allows `snake_case` and `service.action` notation. `PascalCase` is unambiguous in the Claude ecosystem; `snake_case` is equally valid if your SDK or team convention favours it. Pick one and be consistent.
+**Why snake_case:** the spec (2025-11-25) is permissive about casing, but >90% of production servers use snake_case — including GitHub's official MCP server and all official reference implementations. Claude Desktop agents treat non-snake_case as inconsistent with ecosystem norms. PascalCase is essentially absent in practice.
+
+**Character set that Claude actually accepts:** `^[a-zA-Z0-9_]{1,64}$` — Claude's frontend validates this strictly. The spec permits hyphens and dots, but Claude rejects them. Stay within this set.
+
+**Namespacing by service/resource** (multi-server environments): prefix with service name — `asana_search`, `jira_search`, `asana_projects_search`. Prefer prefix over suffix — evaluation data suggests it affects LLM tool selection non-trivially.
 
 **`title` field: mandatory.** Separate from `name` and `description`. Client UIs display it where the user sees tool activity — Claude Desktop shows it in the tool list and in "Claude is using tool…" blocks.
 

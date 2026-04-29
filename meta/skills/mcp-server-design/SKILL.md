@@ -53,7 +53,7 @@ Load references by use case:
   Pydantic v2 `anyOf: null` recipes, MCP Python SDK gotchas, return-type pitfalls,
   stdout/stderr logging
 - **FastMCP specifics** *(FastMCP framework only)* — [references/fastmcp-notes.md](references/fastmcp-notes.md)
-  What FastMCP handles automatically, PascalCase via `name=`, framework-only bugs
+  What FastMCP handles automatically, tool name override via `name=`, framework-only bugs
 
 ---
 
@@ -75,7 +75,7 @@ Load references by use case:
 
 Quick rules:
 
-- Names: `PascalCase`, verb-noun — `ListDialogs`, `GetEntityInfo`, `SubmitFeedback`
+- Names: `snake_case`, verb_noun — `list_dialogs`, `get_entity_info`, `submit_feedback`
 - `title`: **mandatory** — 1–3 words, product language, sentence case, user-facing ("Search messages", not "SearchMessages")
 - Classify each tool: `primary` (user-facing) or `secondary/helper` (plumbing)
 - Annotate explicitly: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
