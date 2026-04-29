@@ -29,7 +29,11 @@ Data flows in one direction — agent → operator. There is no return channel.
 |-------|------|----------|-------|-------------|
 | `message` | string | yes | 1–10 000 chars | What was observed; ideally what was expected instead |
 | `severity` | enum | no | — | `bug` — wrong output or violated contract; `suggestion` — new capability or UX improvement; `question` — unclear how something is supposed to work |
-| `context` | string | no | 2 000 chars | Which tool, what arguments, or what task the agent was trying to accomplish |
+| `context` | string | no | 2 000 chars | Which tool, what arguments, or general context the agent was operating in |
+| `task` | string | no | 2 000 chars | The user's original request — verbatim preferred. Enables clustering by task type. Also populated automatically if the server has a `declare_session_task` tool |
+| `missing_capability` | string | no | 1 000 chars | What the agent needed but couldn't find. The highest-signal field for new feature decisions |
+| `confusing_tool` | string | no | 200 chars | Tool name that was ambiguous, misleading, or had unexpected behaviour |
+| `workaround_used` | string | no | 1 000 chars | How the agent worked around the limitation. Two calls where one should suffice = high-signal gap |
 | `model` | string | no | 200 chars | Agent model name, e.g. `claude-opus-4-7` |
 | `harness` | string | no | 200 chars | Client/environment, e.g. `Claude Desktop`, `Cursor`, `Codex CLI` |
 
@@ -104,6 +108,47 @@ Removes the row permanently. Use for spam or test submissions.
 | `status` | operator | default: `open` |
 | `status_changed_at` | operator | nullable unix timestamp |
 | `status_comment` | operator | nullable; set via `--reason` |
+
+---
+
+## Session-Level Task Tracking (Optional Enhancement)
+
+For servers where understanding *what the agent was trying to accomplish* matters as much
+as *what went wrong*, add a `declare_session_task` tool alongside `SubmitFeedback`.
+
+**Protocol:**
+
+1. Agent calls `declare_session_task(task=<user's request verbatim>)` before any other tool
+2. Agent does its work — the server auto-correlates all tool calls to the declared task
+3. Agent calls `SubmitFeedback(...)` with observations at end of session
+
+**Why verbatim:** agents paraphrase naturally. The original user request captures intent
+that rephrasings lose. Instruct the agent: *"Pass the user's exact words, not your
+interpretation."*
+
+**`declare_session_task` tool spec:**
+
+- Parameters: `task` (string, required, 2 000 chars) — the user's request
+- Response: plain confirmation. No session ID returned — the server tracks the active
+  connection internally and attaches the declared task to all subsequent calls and feedback
+- Annotations: `readOnlyHint: true`, `destructiveHint: false`
+- Posture: `secondary/helper` — plumbing, not a primary capability
+
+**What structured task tracking unlocks (for the proposer/optimizer):**
+
+| Pattern | What it reveals |
+|---------|----------------|
+| Task X → `search_*` called twice with different args | Missing filter parameter for X use cases |
+| Task X → `missing_capability` populated in >50% of sessions | Clear feature gap for X |
+| Task X → `workaround_used` mentions tool Y | Y should absorb the extra step, or grow a param |
+
+**Implicit trace signals (no tool required):**
+
+Even without explicit feedback, server-side call traces are signal:
+- Two `search_*` calls with different args in one session → first result insufficient
+- Error on first call → retry with adjusted args → description ambiguity or param semantics
+
+The declare/feedback pair enriches these patterns with task context for offline analysis.
 
 ---
 

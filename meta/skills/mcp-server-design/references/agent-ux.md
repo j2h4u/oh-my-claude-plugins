@@ -203,3 +203,7 @@ proactively, which turns every production session into a dark-room test automati
 
 The operator reviews the queue async, no ceremony required.
 Over time the feedback queue is the primary UX signal for what to fix next.
+
+For deeper analysis — correlating feedback with specific task types — pair with
+`declare_session_task`: agent declares intent before work, all calls and feedback
+are auto-correlated. → `feedback-tool.md §Session-Level Task Tracking`
