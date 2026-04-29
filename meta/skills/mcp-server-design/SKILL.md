@@ -1,15 +1,13 @@
 ---
 name: mcp-server-design
 description: >-
-  Use when designing or auditing MCP (Model Context Protocol) servers — NOT for hands-on
-  implementation (use mcp-builder for that). Covers design philosophy, tool naming,
-  parameter schemas, agent UX, feedback channel,
-  Covers design philosophy, tool naming, parameter schemas, agent UX, feedback channel,
-  transport, security, and client compatibility. Should be used when the user asks to
-  "design an MCP server", "audit an MCP server", "review MCP tools", "add MCP tool",
-  "write MCP server", "improve tool descriptions", "design tool surface",
-  "add SubmitFeedback tool", "write tool schema", mentions "MCP transport",
+  This skill should be used when the user asks to "design an MCP server", "audit an MCP server",
+  "review MCP tools", "add MCP tool", "write MCP server", "improve tool descriptions",
+  "design tool surface", "add SubmitFeedback tool", "write tool schema", mentions "MCP transport",
   "tool annotations", "mcp stdio", or is building, reviewing, or auditing any MCP server.
+  Covers design philosophy, tool naming, parameter schemas, agent UX, feedback channel,
+  transport, security, and client compatibility. NOT for hands-on implementation from scratch
+  (use mcp-builder for that).
 ---
 
 # Building MCP Servers
