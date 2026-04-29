@@ -1,7 +1,5 @@
 # Claude Code
-.claude/cache/
-.claude/logs/
-.claude/temp/
+.claude/
 *.log
 
 # OS Files
