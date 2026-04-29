@@ -50,7 +50,7 @@
 - [ ] * **No nested objects** — parameters are flat top-level primitives. No `filters: dict`, no `options: object`. Use prefixed flat names instead (`filter_from`, `filter_status`).
 - [ ] **Enums over free strings** — closed value sets use `Literal` / `enum`, not free `str`.
 - [ ] **Optional parameters have sensible defaults** — optional means meaningful behaviour without the argument, not "nullable required".
-- [ ] **`anyOf`/null variants stripped** `[Claude Desktop, Claude Code ≥ 2.0.21]` — `Optional[T]` serialized as `anyOf: [T, null]` breaks Claude Desktop; `anyOf` at the top level of `input_schema` causes a hard 400 in Claude Code ≥ 2.0.21. → Fix: `tool-design.md §Schema Compatibility Gotcha: anyOf with null`
+- [ ] **`anyOf`/null variants stripped** `[Claude Desktop, Claude Code ≥ 2.0.21]` — schemas with `anyOf: [T, null]` (typical when nullable/optional types in language SDKs serialize to JSON Schema) break Claude Desktop; top-level `anyOf` in `input_schema` causes a hard 400 in Claude Code ≥ 2.0.21. → Fix: `tool-design.md §Schema Compatibility Gotcha: anyOf with null`
 - [ ] **`min_length=1` is not enough** — whitespace-only strings checked explicitly; `"   "` passes `min_length=1`.
 
 ---

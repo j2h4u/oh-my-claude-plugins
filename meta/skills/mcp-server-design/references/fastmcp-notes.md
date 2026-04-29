@@ -1,7 +1,11 @@
 # FastMCP Specifics
 
 > **Load when:** Building or auditing an MCP server with the FastMCP framework (Python).
-> Skip entirely if using the raw MCP Python SDK.
+> Skip entirely if using the raw MCP Python SDK or another language.
+
+This file covers framework-specific behavior of FastMCP only. For Pydantic-level
+concerns that apply equally to the raw MCP Python SDK (anyOf null, complex return
+types, required[] inference, $schema header), see `python-notes.md`.
 
 ---
 
@@ -20,9 +24,9 @@
 
 **`anyOf: [T, null]` from `Optional[T]` — not stripped automatically.**
 
-This is a known open issue (FastMCP issues #2040, #2153). FastMCP emits standard Pydantic v2 schemas; Claude Desktop rejects `anyOf` null variants. You must apply the fix yourself.
+A common assumption is that FastMCP cleans up the Pydantic `Optional[T]` → `anyOf: [T, null]` serialisation before exposing the schema. It does not (FastMCP issues #2040, #2153). FastMCP emits standard Pydantic v2 schemas; Claude Desktop rejects `anyOf` null variants. The fix is your responsibility even when using FastMCP.
 
-→ See `tool-design.md §Schema Compatibility Gotcha: anyOf with null` for three concrete fixes.
+→ Concrete recipes: `python-notes.md §anyOf: [T, null]`
 
 ---
 
@@ -57,19 +61,14 @@ async def create_document(...): ...
 
 ---
 
-## Known Gotchas
-
-**`Optional[param]` without `= None` ends up in `required[]`**
-
-`param: Optional[str]` with no default is put in `required[]` — the SDK determines "required" from defaults, not type annotations. Always pair `Optional[X]` or `X | None` with `= None`.
-
-**Complex return types crash schema generation**
-
-Tools returning third-party objects (`pandas.DataFrame`, `sqlalchemy.Row`, etc.) will crash on `outputSchema` inference. Solutions:
-- Annotate return as `dict` and serialize manually
-- Use `structured_output=False` in the decorator
-- Use `output_schema={...}` with a hand-written schema
+## FastMCP-Specific Gotchas
 
 **`compress_schema` silently strips `additionalProperties: false`**
 
 FastMCP's internal schema compression (`prune_additional_properties=True` by default) removes `additionalProperties: false`. Currently no public config knob to disable — known bug (#3008).
+
+**`structured_output=False` to opt out of auto-inference**
+
+When return types are complex or you want full manual control, pass `structured_output=False` in the `@mcp.tool` decorator to suppress FastMCP's outputSchema inference. Pair with `output_schema={...}` to provide your own.
+
+→ Other Python/Pydantic-level gotchas (Optional/required, complex return types, $schema header): `python-notes.md`

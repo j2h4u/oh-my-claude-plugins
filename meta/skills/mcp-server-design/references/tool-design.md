@@ -143,63 +143,17 @@ documentation.
 
 ### Schema Compatibility Gotcha: `anyOf` with null
 
-`Optional[T]` in Pydantic v2 serialises to `{"anyOf": [{"type": "T"}, {"type": "null"}]}`. Several MCP clients reject this:
+Several MCP clients reject schemas where an optional parameter is exposed as `{"anyOf": [{"type": "T"}, {"type": "null"}]}`:
 
 | Client | Symptom |
 |--------|---------|
 | Claude Desktop | Validation error — optional param treated as required, fails with "not valid under any of the given schemas" |
 | Claude Code ≥ 2.0.21 | Hard 400 if `anyOf` appears at **top level** of `input_schema` |
 
-**Fix 1 — Drop `Optional`, use bare default (simplest, most portable):**
+This typically arises from how language SDKs serialise nullable/optional types into JSON Schema. The fix is conceptual: strip the null variant from `anyOf` before exposing the schema; collapse single-non-null `anyOf` to the bare type; drop `"default": null`. Apply at schema generation time when possible, or as a post-processing pass before constructing the `Tool` descriptor.
 
-```python
-# Breaks Claude Desktop — generates anyOf: [int, null]:
-from typing import Optional
-param: Optional[int] = None
-
-# Works everywhere — generates {type: integer}, field absent from required[]:
-param: int = None
-```
-
-mypy/pyright warn about the second form. Add `# type: ignore` or use Fix 2 for cleaner types.
-
-**Fix 2 — `SkipJsonSchema[None]` (type-checker clean):**
-
-```python
-from pydantic import BaseModel, Field
-from pydantic.json_schema import SkipJsonSchema
-
-def _drop_null(s: dict) -> None:
-    s.pop("default", None)  # strips leaked "default": null from schema
-
-class ToolInput(BaseModel):
-    project_id: int | SkipJsonSchema[None] = Field(default=None, json_schema_extra=_drop_null)
-    tags: list[str] | SkipJsonSchema[None] = Field(default=None, json_schema_extra=_drop_null)
-```
-
-`SkipJsonSchema[None]` removes the null arm; the callable drops the leaked `"default": null`. Verify with `ToolInput.model_json_schema()` — some older Pydantic v2 releases had a bug where `SkipJsonSchema` silently did nothing.
-
-**Fix 3 — Post-process schema (nuclear, for legacy/third-party models):**
-
-```python
-import copy
-
-def flatten_nullable(schema: dict) -> dict:
-    schema = copy.deepcopy(schema)
-    def _walk(node: dict) -> dict:
-        if "anyOf" in node:
-            non_null = [s for s in node["anyOf"] if s != {"type": "null"}]
-            if len(non_null) == 1:
-                merged = non_null[0]
-                merged.update({k: v for k, v in node.items() if k != "anyOf"})
-                return _walk(merged)
-        return {k: (_walk(v) if isinstance(v, dict) else v) for k, v in node.items()}
-    return _walk(schema)
-
-clean_schema = flatten_nullable(MyModel.model_json_schema())
-```
-
-**FastMCP note:** FastMCP does **not** strip `anyOf: null` automatically — this fix is your responsibility even when using FastMCP. See `references/fastmcp-notes.md`.
+→ **Python/Pydantic recipes**: `python-notes.md §anyOf: [T, null]`
+→ **FastMCP behavior**: `fastmcp-notes.md` — does **not** auto-strip; the fix is your responsibility
 
 ### Argument Flattening
 
