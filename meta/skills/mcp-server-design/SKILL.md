@@ -29,6 +29,7 @@ Load references by use case:
 | **Designing** a new server | design-philosophy, tool-design, agent-ux, feedback-tool |
 | **Security review** | security, clients, audit-checklist (sections 1, 4, 8) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
+| **FastMCP framework** | fastmcp-notes, tool-design |
 
 - **Design philosophy** — [references/design-philosophy.md](references/design-philosophy.md)
   "Not an API wrapper" principles, antipatterns, Bad vs Good comparisons, 5 principles
@@ -47,6 +48,8 @@ Load references by use case:
   15-section, ~80-item checklist for auditing existing servers; HIGH/MEDIUM/LOW findings
 - **Daemon architecture** *(stateful backends only)* — [references/daemon-architecture.md](references/daemon-architecture.md)
   Daemon + on-demand split, Unix socket, crash isolation, when NOT to use
+- **FastMCP specifics** *(FastMCP framework only)* — [references/fastmcp-notes.md](references/fastmcp-notes.md)
+  What FastMCP handles automatically, PascalCase naming, `anyOf` not auto-stripped, gotchas
 
 ---
 

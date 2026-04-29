@@ -50,7 +50,7 @@
 - [ ] * **No nested objects** — parameters are flat top-level primitives. No `filters: dict`, no `options: object`. Use prefixed flat names instead (`filter_from`, `filter_status`).
 - [ ] **Enums over free strings** — closed value sets use `Literal` / `enum`, not free `str`.
 - [ ] **Optional parameters have sensible defaults** — optional means meaningful behaviour without the argument, not "nullable required".
-- [ ] **`anyOf`/null variants stripped** — `Optional[T]` serialized as `anyOf: [T, null]` breaks Claude Desktop. Null variants collapsed to the non-null type, `default: null` dropped.
+- [ ] **`anyOf`/null variants stripped** `[Claude Desktop, Claude Code ≥ 2.0.21]` — `Optional[T]` serialized as `anyOf: [T, null]` breaks Claude Desktop; `anyOf` at the top level of `input_schema` causes a hard 400 in Claude Code ≥ 2.0.21. → Fix: `tool-design.md §Schema Compatibility Gotcha: anyOf with null`
 - [ ] **`min_length=1` is not enough** — whitespace-only strings checked explicitly; `"   "` passes `min_length=1`.
 
 ---
@@ -117,6 +117,8 @@
 
 ## 13. Architecture (Daemon/Stateless split — if applicable)
 
+> **Skip if:** single-process server without a persistent background resource (DB, WebSocket, ML model, Unix socket). All items below are N/A for stateless servers.
+
 - [ ] **Stale socket file cleaned at daemon startup** — daemon deletes existing socket file before `bind()`, otherwise crashes with "address already in use" after unclean shutdown.
 - [ ] **MCP server reads stdin until client closes** — not exiting after first response. Premature exit silently breaks stdio sessions.
 - [ ] **Daemon-not-running error is user-facing** — `FileNotFoundError` / `ConnectionRefusedError` translated to a single actionable message, not leaked as a socket exception.
@@ -136,7 +138,7 @@
 ## 15. Testing
 
 - [ ] **Integration smoke test exists** — calls every tool through the actual transport against a live server. Unit tests alone don't cover transport or schema serialisation.
-- [ ] **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt.
+- [ ] **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Agent UX Testing`
 
 ---
 
