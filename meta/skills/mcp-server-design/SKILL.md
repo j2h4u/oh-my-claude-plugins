@@ -23,7 +23,14 @@ Patterns and conventions for production-grade MCP servers, distilled from multip
 
 ## References
 
-Load the relevant reference before proceeding:
+Load references by use case:
+
+| Use case | Read |
+|----------|------|
+| **Auditing** an existing server | all references (each maps to checklist sections) |
+| **Designing** a new server | design-philosophy, tool-design, agent-ux, feedback-tool |
+| **Security review** | security, clients, audit-checklist (sections 1, 4, 8) |
+| **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
 
 - **Design philosophy** — [references/design-philosophy.md](references/design-philosophy.md)
   "Not an API wrapper" principles, antipatterns, Bad vs Good comparisons, 5 principles
@@ -40,6 +47,8 @@ Load the relevant reference before proceeding:
   Claude Desktop capabilities, notification behavior, timeouts — empirically verified 2026-04-28
 - **Audit checklist** — [references/audit-checklist.md](references/audit-checklist.md)
   15-section, ~80-item checklist for auditing existing servers; HIGH/MEDIUM/LOW findings
+- **Daemon architecture** *(stateful backends only)* — [references/daemon-architecture.md](references/daemon-architecture.md)
+  Daemon + on-demand split, Unix socket, crash isolation, when NOT to use
 
 ---
 
@@ -103,27 +112,10 @@ Every MCP server should expose a `SubmitFeedback` tool:
 
 ---
 
-## Daemon + On-Demand Server Architecture
+## Daemon + On-Demand Architecture *(stateful backends only)*
 
-When the server needs a long-running backend resource, split into two processes:
-
-- **Daemon** — container PID 1; owns the backend resource exclusively; exposes Unix socket
-- **MCP server** — started on demand; stateless; connects to daemon; exits when client disconnects
-
-```
-Claude Desktop
-    │ stdio (docker exec -i)
-    ▼
-MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
-    (ephemeral)                                        (PID 1, persistent)
-```
-
-Operational rules:
-
-- Delete stale socket file at daemon startup before `bind()` — crash leaves socket on disk
-- MCP server must keep reading stdin until client closes — premature exit silently kills the session
-- Daemon-not-running errors must produce a single user-facing actionable message, not a raw socket exception
-- Crash isolation: MCP server crash → daemon unaffected; daemon crash → MCP server returns clean error per call
+→ [references/daemon-architecture.md](references/daemon-architecture.md) — daemon/MCP split,
+Unix socket rules, crash isolation, when NOT to use this pattern.
 
 ---
 
