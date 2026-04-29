@@ -26,6 +26,9 @@ MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
   socket exception (e.g. `"Server not running. Start with: docker compose up -d"`)
 - **Crash isolation** — MCP server crash → daemon unaffected; daemon crash → MCP server returns
   a clean error per call (does not crash itself)
+- **Logging via socket** — MCP server sends all log entries to the daemon over the same Unix socket
+  (as a structured log message type alongside RPC calls); daemon owns the log sink (file, journal).
+  Do NOT write logs to `stderr` from the MCP server — stderr goes to the MCP client, not the operator.
 
 ## When NOT to Use This Pattern
 
