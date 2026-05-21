@@ -2,6 +2,9 @@
 
 > **Load when:** Naming, classifying, or writing descriptions for MCP tools; designing
 > parameter schemas; deciding how many tools a server should expose.
+>
+> **Scope:** mostly UNIVERSAL. Tool-count thresholds and primary/secondary classification are
+> opinionated heuristics; protocol requirements are called out explicitly.
 
 ---
 
@@ -90,6 +93,23 @@ Clients use annotations to drive confirmation dialogs, auto-approval policies, a
 
 ---
 
+## Safe Defaults for Mutating Tools
+
+Any tool that can spend money, publish content, change permissions, delete data, or trigger
+external side effects must default to the least-surprising safe state.
+
+Examples:
+- Create campaigns, jobs, alerts, or automations as `paused`, `draft`, or `disabled`
+- Prefer `dry_run: true` or preview tools before irreversible execution
+- Require explicit activation for destructive or costly actions (`activate=true`, separate
+  `activate_campaign`, or a confirmation token from a prior preview)
+- Set conservative limits by default: small batch sizes, rate limits, no "all tenants" scope
+
+Do not hide dangerous defaults behind documentation. Put the safety into the implementation and
+make the tool description state the default clearly.
+
+---
+
 ## Writing Tool Descriptions
 
 The description is a **prompt read by the LLM**. Answer three questions:
@@ -109,6 +129,12 @@ The description is a **prompt read by the LLM**. Answer three questions:
 "Use this proactively" is a directive. Without it, agents wait to be asked.
 
 **For parameters:** explain field semantics in the description, not just in the schema. The LLM reads the description; the schema is for validation.
+
+**For responses:** describe the shape the agent should expect, especially for non-trivial
+structured output. Include the main fields, units, truncation behaviour, and whether the text
+summary is a preview of `structuredContent`. If the server has static reference material such
+as query-language fields, enum catalogs, or service limits, expose it as an MCP Resource instead
+of stuffing it into every tool description.
 
 ---
 
@@ -134,6 +160,13 @@ The `content` text field should be a human-readable summary of the same data car
 `structuredContent`. This redundancy is intentional — older clients that don't understand
 `structuredContent` fall back to reading the text block. It's a compatibility bridge, not
 documentation.
+
+**Token economy for tabular data:** don't repeat large JSON blobs in the text `content`. For
+read-only tabular results, make `content` a compact preview such as CSV or a short table, while
+keeping the full machine-readable data in `structuredContent` when an `outputSchema` is declared.
+If a tool needs a text export mode, use a small enum such as `response_format: "compact" | "json"`
+or `response_format: "csv" | "json"` and document which formats are intended for humans versus
+programmatic extraction. Never omit required `structuredContent` just to save tokens.
 
 ---
 
@@ -206,6 +239,12 @@ Error messages should be actionable:
 ```
 
 Include an `Action:` hint whenever the error is recoverable. When the backend is unavailable, say so explicitly — the agent needs to know it's an infrastructure problem, not a logic error.
+
+Preserve diagnostic detail. Generic backend errors like "Bad Request", "Internal Server Error",
+or "not found" are not enough for an agent to self-correct. Include the backend's field-level
+validation details, request correlation ID, and relevant response body excerpt where safe.
+Do not truncate errors so aggressively that the cause disappears; do redact secrets, tokens,
+cookies, and tenant-private data.
 
 ---
 

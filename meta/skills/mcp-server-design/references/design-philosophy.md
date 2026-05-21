@@ -2,6 +2,9 @@
 
 > **Load when:** Designing the overall tool surface for a new MCP server, or reviewing whether
 > an existing server is well-shaped for agent consumption.
+>
+> **Scope:** UNIVERSAL design lens. Examples are illustrative; apply the principles to the
+> server's actual domain rather than copying the sample tool names.
 
 ---
 

@@ -2,6 +2,8 @@
 
 > **Load when:** Designing tools or server behaviour that may be affected by client limitations.
 >
+> **Scope:** EMPIRICAL. These are compatibility notes, not MCP protocol guarantees.
+>
 > **Format:** each limitation is dated — verify periodically whether it's been resolved.
 > Items marked `⚠️ UNVERIFIED` need a targeted check before relying on them.
 

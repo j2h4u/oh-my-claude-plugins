@@ -2,10 +2,47 @@
 
 > **Load when:** Building or auditing an MCP server in Python — either with the raw
 > MCP Python SDK or with FastMCP. Skip if using another language.
+>
+> **Scope:** STACK-SPECIFIC: Python/Pydantic. Do not apply these recipes to TypeScript, Go,
+> or other SDKs unless the same schema issue is observed there.
 
 This reference collects Python-ecosystem implementation specifics. Abstract design
 principles live in `tool-design.md`; framework-specific behavior for FastMCP lives
 in `fastmcp-notes.md`.
+
+---
+
+## Self-Documenting Parameter Schemas
+
+For Python MCP servers, especially FastMCP, prefer `typing.Annotated` with
+`pydantic.Field` for parameters whose meaning is not obvious from the name alone.
+The generated schema becomes part of the prompt the model uses to call the tool.
+
+```python
+from typing import Annotated
+from pydantic import Field
+
+CustomerId = Annotated[
+    str,
+    Field(
+        description="Customer ID, numeric string without separators",
+        pattern=r"^\d{10}$",
+        examples=["1234567890"],
+    ),
+]
+
+DateISO = Annotated[
+    str,
+    Field(
+        description="Date in YYYY-MM-DD format",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
+]
+```
+
+Use this for IDs, dates, enum-like strings, limits, external account names, and fields where
+the agent might otherwise guess formatting. Keep the descriptions short and operational:
+format, allowed values, units, and default behaviour.
 
 ---
 

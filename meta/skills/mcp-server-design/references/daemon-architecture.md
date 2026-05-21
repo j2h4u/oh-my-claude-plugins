@@ -1,5 +1,8 @@
 # Daemon + On-Demand Server Architecture
 
+> **Scope:** STACK-SPECIFIC / CONDITIONAL. Use only when a server has expensive persistent
+> state or a long-running backend resource; skip for ordinary stateless MCP servers.
+
 Use this pattern when the MCP server needs a long-running backend resource (database connection,
 persistent WebSocket, ML model loaded in memory, etc.) that cannot be cheaply recreated per request.
 

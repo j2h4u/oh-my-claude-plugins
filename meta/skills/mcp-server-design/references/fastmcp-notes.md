@@ -2,6 +2,9 @@
 
 > **Load when:** Building or auditing an MCP server with the FastMCP framework (Python).
 > Skip entirely if using the raw MCP Python SDK or another language.
+>
+> **Scope:** STACK-SPECIFIC: FastMCP. Do not treat FastMCP behaviours as generic MCP SDK
+> behaviour.
 
 This file covers framework-specific behavior of FastMCP only. For Pydantic-level
 concerns that apply equally to the raw MCP Python SDK (anyOf null, complex return
@@ -66,6 +69,11 @@ Full decorator signature (FastMCP ≥ 2.x):
 )
 async def create_document(...): ...
 ```
+
+Docstrings become tool descriptions unless `description=` is passed explicitly. For tools with
+non-obvious output, include a short response-shape note in the docstring or explicit description:
+main fields, units, truncation, and whether the text response is a compact preview of structured
+data. Keep long static reference material in MCP Resources, not in every tool docstring.
 
 ---
 

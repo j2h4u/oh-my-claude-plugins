@@ -1,6 +1,9 @@
 # Agent Feedback Channel — Interface Specification
 
 > **Load when:** Implementing `SubmitFeedback` or the operator feedback CLI in any MCP server.
+>
+> **Scope:** OPINIONATED. This is a recommended maintainer-feedback pattern, not an MCP
+> protocol requirement.
 
 Language-agnostic contract. Implement in Python, TypeScript, Go, or whatever the server is written in.
 

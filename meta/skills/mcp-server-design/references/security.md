@@ -2,6 +2,8 @@
 
 > **Load when:** Deploying an MCP server on the network, handling untrusted data in tool
 > responses, or reviewing a server for security posture.
+>
+> **Scope:** UNIVERSAL baseline unless a section names a specific transport or deployment shape.
 
 ---
 
@@ -54,6 +56,26 @@ visible to clients. They are **hints, not guarantees**. A client MUST NOT treat 
 security controls — a compromised or malicious server can declare any values.
 
 Security enforcement belongs in the server's own access control, not in annotations.
+
+---
+
+## Input Boundary Validation
+
+Treat every value produced by the model as untrusted user input. Validate before the value
+touches filesystem, shell, network, database, tenant selection, or credential-handling code.
+
+High-risk checks:
+- Filesystem paths: resolve to an allowlisted root; reject `..`, symlink escapes, and absolute
+  paths when only relative paths are expected
+- Shell/process calls: avoid `shell=True`; pass argument arrays; allowlist commands and flags
+- URLs/webhooks: allowlist schemes and hosts; block internal metadata and localhost targets unless
+  explicitly intended
+- Tenant/account IDs: verify the authenticated principal can access the requested scope
+- Secrets: never include tokens, cookies, API keys, or OAuth codes in URLs, logs, tool responses,
+  or feedback records
+
+Input validation belongs in the server even if the client is trusted. The model can be confused,
+prompt-injected, or asked to operate on hostile data.
 
 ---
 

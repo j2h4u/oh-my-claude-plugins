@@ -2,6 +2,9 @@
 
 > **Load when:** Writing tool descriptions, designing the system prompt, or running
 > UX validation on a completed MCP server.
+>
+> **Scope:** tool descriptions and actionable errors are UNIVERSAL. System prompt structure,
+> dark-room testing, and feedback loops are opinionated production practices.
 
 ---
 
