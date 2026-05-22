@@ -114,7 +114,13 @@ Removes the row permanently. Use for spam or test submissions.
 
 ---
 
-## Session-Level Task Tracking (Optional Enhancement)
+## Session-Level Task Tracking
+
+> **Optional — skip unless you need it.** Add this only when you have an active feedback
+> review practice and want to cluster submissions by task type for offline analysis.
+> The cost is non-trivial: persistent session state, tool call ordering assumptions, and
+> additional instruction surface in the agent prompt. If you are not yet reading and acting
+> on your feedback queue regularly, implement `submit_feedback` alone first.
 
 For servers where understanding *what the agent was trying to accomplish* matters as much
 as *what went wrong*, add a `declare_session_task` tool alongside `submit_feedback`.
@@ -172,7 +178,6 @@ The declare/feedback pair enriches these patterns with task context for offline 
 
 This pattern is not universally applicable. Avoid `submit_feedback` in these contexts:
 
-- **Multi-tenant servers** — Feedback is tenant-specific; poor scoping allows tenant A to observe tenant B's submissions through shared storage.
 - **Adversarial environments** — Feedback is an injection surface. Anything the agent writes may be replayed to maintainers reading the queue, or back to future agent sessions acting as prompts.
 - **No maintainer reviewing the queue** — Without active review, the feedback queue becomes write-only garbage with no operational value.
 - **Short-lived deployments** — Development containers, ephemeral test services, or demo instances torn down before anyone reads the feedback.

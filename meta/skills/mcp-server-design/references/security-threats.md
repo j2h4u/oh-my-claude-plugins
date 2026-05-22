@@ -70,8 +70,9 @@ operator — see [daemon-architecture.md](daemon-architecture.md). A single log 
 stdout corrupts the framing and silently breaks the connection. Configure your logger with
 `stream=sys.stderr` (or equivalent) before starting the server loop.
 
-Remote servers need authentication. The spec supports OAuth 2.1 for this. For internal
-Docker networks, no auth is needed if the network itself is trusted.
+Remote servers need authentication. The spec supports OAuth 2.1 for this (OAuth 2.1 is the
+consolidated successor to OAuth 2.0 — see [RFC 9700](https://datatracker.ietf.org/doc/rfc9700/)
+for the spec). For internal Docker networks, no auth is needed if the network itself is trusted.
 
 ---
 
@@ -298,8 +299,6 @@ Active hygiene measures:
   the code forgets to redact.
 - **Pull secrets at use, do not log at startup.** "Loaded config" lines that include env
   values are how secrets end up in shipping logs.
-- **Separate the secret store.** `.env` in `~/.secrets/`, not next to the project (see
-  project AGENTS.md). Mounted read-only into the container.
 - **Test for leakage.** A unit test that calls each tool with synthetic secrets in the
   upstream data and asserts they do not appear in the tool response, log, or feedback row.
 
@@ -320,15 +319,11 @@ addition.
 - **Audit at build.** `npm audit`, `pip-audit`, `osv-scanner`, or `dependabot` /
   `renovate` running on the repo. Treat advisories ≥ HIGH as build-failing.
 - **Avoid optional/large surface area.** Each dependency is an account on a registry that
-  can be hijacked. Prefer the stdlib + 5 well-maintained packages over 50 micro-libs.
+  can be hijacked.
 
 ### MCP-specific namespace and provenance
 
-- **Claim your namespace early** on npm, PyPI, Docker Hub, GHCR — even if you have not
-  published yet. Typosquats are cheap; a name you claimed cannot be squatted.
-- **Publish provenance so hosts can verify.** npm provenance, PyPI Trusted Publishing,
-  Sigstore for images. Hosts and defenders consuming your package can then confirm it
-  came from your CI, not from a hijacked maintainer account.
+- **Publish provenance** for publicly distributed servers (npm provenance, PyPI Trusted Publishing, Sigstore) so downstream consumers can verify origin.
 - **Tool-surface stability via semver.** Adding, renaming, or removing a tool or changing
   a parameter schema is a minor or major bump — never patch. Silent surface changes are
   indistinguishable from malicious rug-pulls from a defender's vantage point.
@@ -353,7 +348,8 @@ the user's trust. To not look malicious you must behave non-malicious **visibly*
 - **Notify on tool list changes.** Emit `notifications/tools/list_changed` when the surface
   changes within a session (e.g. login adds tools). Hosts use this; defenders watch for it.
 - **Publish a public stable URL** for your tool catalogue (e.g. via MCP Resources), so
-  defenders can diff between versions.
+  defenders can diff between versions. *(Applies when serving multiple clients or as part
+  of a published distribution. For local/personal servers, irrelevant.)*
 
 Surface stability is a security property because instability is indistinguishable from
 attack from a defender's vantage point.
@@ -368,11 +364,7 @@ Even with sections 1–8 applied, incidents happen. Be ready.
   cannot investigate a tool that you do not measure.
 - **A security contact** — `SECURITY.md` in the repo with a reporting channel (security
   email, GitHub private vuln reporting). Reachable people, not a `noreply@`.
-- **Version pinning advisory** — when you ship a security fix, the changelog must say
-  *"upgrade to ≥ X.Y.Z; prior versions are vulnerable to …"* explicitly. Many hosts pin
-  versions and will not move without a stated reason.
-- **Revocation plan.** If you issue tokens (OAuth provider role), you must be able to
-  revoke a single principal's tokens within minutes. Confirm this works before you need it.
+- **Version pinning advisory** — security-fix releases must state "upgrade to ≥ X.Y.Z; prior versions are vulnerable to …" in the changelog.
 
 ---
 

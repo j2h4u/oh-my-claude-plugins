@@ -39,11 +39,11 @@ mark_dialog_for_sync  search_messages    get_sync_status
 - Avoid generic names: `get_data`, `run_query` — useless to the LLM
 - Watch for namespace collisions with the client: `get_me` intercepted by some clients → use `get_my_account`
 
-**Why snake_case:** the spec (2025-11-25) is permissive about casing, but >90% of production servers use snake_case — including GitHub's official MCP server and all official reference implementations. Claude Desktop agents treat non-snake_case as inconsistent with ecosystem norms. PascalCase is essentially absent in practice.
+**Why snake_case:** the spec (2025-11-25) is permissive about casing, but snake_case is the established convention — GitHub's official MCP server, all official reference implementations, and the broader ecosystem follow it. Claude Desktop agents treat non-snake_case as inconsistent with ecosystem norms. PascalCase is essentially absent in practice.
 
 **Character set that Claude actually accepts:** `^[a-zA-Z0-9_]{1,64}$` — Claude's frontend validates this strictly. The spec permits hyphens and dots, but Claude rejects them. Stay within this set.
 
-**Namespacing by service/resource** (multi-server environments): prefix with service name — `asana_search`, `jira_search`, `asana_projects_search`. Prefer prefix over suffix — evaluation data suggests it affects LLM tool selection non-trivially.
+**Namespacing by service/resource** (multi-server environments): prefix with service name — `asana_search`, `jira_search`, `asana_projects_search`. Prefer prefix over suffix — the prefix establishes domain context before the verb, which aligns with how LLMs scan tool lists when selecting among multiple servers.
 
 **`title` field: mandatory.** Separate from `name` and `description`. Client UIs display it where the user sees tool activity — Claude Desktop shows it in the tool list and in "Claude is using tool…" blocks.
 
@@ -118,7 +118,7 @@ The description is a **prompt read by the LLM**. Answer three questions:
 2. **What does it do?** — one sentence, mechanically accurate
 3. **What should I not do with it?** — constraints, misuse patterns
 
-**Example — SubmitFeedback:**
+**Example — `submit_feedback`:**
 
 > Send feedback to the maintainer — bugs, confusing behaviour, or improvement suggestions.
 > Use this **proactively** whenever you notice a tool response is unhelpful, surprising, or
@@ -156,10 +156,11 @@ Agents can validate against the schema, extract fields reliably without parsing,
 - Error messages and confirmations
 - Content the agent reads but doesn't structurally process
 
-The `content` text field should be a human-readable summary of the same data carried in
-`structuredContent`. This redundancy is intentional — older clients that don't understand
-`structuredContent` fall back to reading the text block. It's a compatibility bridge, not
-documentation.
+**When `outputSchema` is declared, always return BOTH:**
+- `structuredContent` — the typed, machine-parseable payload conforming to the schema
+- `text` (the `content` field) — a human-readable summary of the same data
+
+This redundancy is intentional — older clients that don't understand `structuredContent` fall back to reading the text block. It's a compatibility bridge, not documentation. A tool that declares a schema and omits either field is incomplete: `structuredContent` without `text` breaks legacy clients; `text` without `structuredContent` violates the protocol.
 
 **Token economy for tabular data:** don't repeat large JSON blobs in the text `content`. For
 read-only tabular results, make `content` a compact preview such as CSV or a short table, while
@@ -189,16 +190,37 @@ Several MCP clients reject schemas where an optional parameter is exposed as `{"
 
 This typically arises from how language SDKs serialise nullable/optional types into JSON Schema. The fix is conceptual: strip the null variant from `anyOf` before exposing the schema; collapse single-non-null `anyOf` to the bare type; drop `"default": null`. Apply at schema generation time when possible, or as a post-processing pass before constructing the `Tool` descriptor.
 
+**Before (broken — Claude Desktop rejects this):**
+```json
+{
+  "name": "limit",
+  "schema": {
+    "anyOf": [{"type": "integer"}, {"type": "null"}],
+    "default": null
+  }
+}
+```
+
+**After (fixed — bare type, no null variant):**
+```json
+{
+  "name": "limit",
+  "schema": {
+    "type": "integer",
+    "default": 20
+  }
+}
+```
+
 → **Python/Pydantic recipes**: `python-notes.md §anyOf: [T, null]`
 → **FastMCP behavior**: `fastmcp-notes.md` — does **not** auto-strip; the fix is your responsibility
 
 ### Argument Flattening
 
-Avoid nested objects in parameter schemas. LLMs hallucinate the key names inside nested
-objects — especially two or more levels deep.
+Avoid *untyped* nested objects — `dict`, bare `object` with no `properties`. These give the LLM no schema to anchor on, so it invents key names.
 
 ```python
-# Weak — model invents key names inside the dict
+# Weak — model invents key names inside the untyped dict
 def list_messages(filters: dict) -> str: ...
 
 # Strong — flat primitives, closed enum, nothing to invent
@@ -209,9 +231,9 @@ def list_messages(
 ) -> str: ...
 ```
 
-When parameters are logically grouped, use prefixed flat names (`filter_from`, `filter_status`)
-over a nested `filter` object. Models fill in known top-level names with confidence; they guess
-at nested ones.
+**Typed nested models at one level deep are fine** when the group is logically cohesive and the sub-schema fully declares `properties`. The failure mode is schema-less dicts, not typed sub-models.
+
+Use prefixed flat names (`filter_from`, `filter_status`) instead of a nested object when the group is small (≤3 fields) or when you observe hallucination in practice. For larger, coherent parameter groups, a typed nested model with all fields declared is preferable to a long flat namespace. Never go two levels deep — that's where hallucination reliably appears regardless of typing.
 
 ---
 
@@ -297,9 +319,9 @@ Merge when:
 
 ## Dynamic Tool Sets — `listChanged`
 
-If your server conditionally exposes tools (e.g., different tools before and after auth, or based
-on runtime feature flags), declare the `listChanged` capability and emit the
-`notifications/tools/list_changed` notification whenever the set changes.
+**Most servers don't need this.** If your tool set is fixed at startup, skip this capability entirely — it adds complexity with no benefit.
+
+Only declare `listChanged` if your server conditionally exposes tools at runtime (e.g., different tools before and after auth, or based on feature flags). When you do, emit the `notifications/tools/list_changed` notification whenever the set changes — otherwise clients cache the initial tool list and never learn about additions or removals.
 
 ```python
 # capabilities declaration
@@ -308,6 +330,3 @@ on runtime feature flags), declare the `listChanged` capability and emit the
 # emit after tool set changes
 await session.send_tool_list_changed()
 ```
-
-Without this, clients cache the initial tool list and never learn about changes. For static
-tool sets (the common case) this capability is irrelevant — skip it.

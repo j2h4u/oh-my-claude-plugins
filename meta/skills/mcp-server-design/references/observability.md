@@ -82,7 +82,8 @@ jq -r '[.tool_name, .status] | @tsv' calls.jsonl \
   | awk '{calls[$1]++; if($2=="error") errs[$1]++} END {for(t in calls) printf "%s\t%.2f\n", t, errs[t]/calls[t]}' \
   | sort -k2 -rn
 
-# p95 latency per tool with DuckDB
+# p95 latency per tool with DuckDB (an embedded analytical SQL database — no server,
+# single file, fast aggregations; think SQLite for OLAP)
 duckdb -c "SELECT tool_name,
              QUANTILE_CONT(duration_ms, 0.95) AS p95_ms,
              COUNT(*) AS calls
@@ -115,6 +116,11 @@ different table.
 
 ### Pattern C — structured log to existing stack *(Loki, OTel, Datadog already in place)*
 
+**When this is worth it:** multi-service deployment, distributed traces across process
+boundaries, or when you already operate an OTel collector. **Skip if:** single-server MCP,
+low volume, no existing OTel infrastructure — Pattern A or B will give you more signal per
+hour of work.
+
 Emit JSON events; let the existing pipeline handle storage, retention, and dashboards. Use
 Loki/Promtail labels or OTel attributes for `tool_name` and `status` so queries fan out
 correctly.
@@ -133,8 +139,9 @@ Four queries cover most decisions:
 2. **Dead tools** — call_count = 0 or < 1% of median over a window long enough for the
    median to be statistically meaningful — for a tool called occasionally that may mean a
    longer window; for hot tools, a shorter one suffices
-3. **Error rate per tool** — `errors / total` > 10% is a smell; look at `error_class`
-   distribution
+3. **Error rate per tool** — `errors / total` > 10% sustained over 30 minutes AND > 20
+   errors in that window is a smell; look at `error_class` distribution. At low volume
+   (< 20 calls/window) alert on absolute error count instead — 10% means nothing on 5 calls
 4. **Latency p50 / p95 per tool** — agents time out on slow tools and abandon them; the
    tool then looks "dead" in metric 2
 

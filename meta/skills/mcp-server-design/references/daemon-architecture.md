@@ -31,8 +31,9 @@ MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
   a clean error per call (does not crash itself)
 - **Logging via socket** — MCP server sends all log entries to the daemon over the same Unix socket
   (as a structured log message type alongside RPC calls); daemon owns the log sink (file, journal).
+  **In this pattern only, the stderr rule from SKILL.md and security-threats.md is reversed:**
   Do NOT write logs to `stderr` from the MCP server — stderr goes to the MCP client, not the operator.
-  **Exception note:** this overrides the default "log to stderr" rule in SKILL.md and security-threats.md; those documents cover the standard case where no daemon is present.
+  (Those documents cover the standard case where no daemon is present.)
 
 ## When NOT to Use This Pattern
 

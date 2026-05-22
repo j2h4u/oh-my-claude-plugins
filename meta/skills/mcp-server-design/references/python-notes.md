@@ -52,20 +52,7 @@ Pydantic v2 serialises `Optional[T]` (and `T | None`) as `{"anyOf": [{"type": "T
 
 Three working fixes, in order of preference:
 
-### Fix 1 — Drop `Optional`, use bare default (simplest, most portable)
-
-```python
-# Breaks Claude Desktop — generates anyOf: [int, null]:
-from typing import Optional
-param: Optional[int] = None
-
-# Works everywhere — generates {type: integer}, field absent from required[]:
-param: int = None
-```
-
-mypy/pyright warn about the second form. Add `# type: ignore` per-line or use Fix 2 for clean types.
-
-### Fix 2 — `SkipJsonSchema[None]` (type-checker clean)
+### Fix 1 — `SkipJsonSchema[None]` (type-checker clean, recommended)
 
 ```python
 from pydantic import BaseModel, Field
@@ -80,6 +67,19 @@ class ToolInput(BaseModel):
 ```
 
 `SkipJsonSchema[None]` removes the null arm; the callable drops the leaked `"default": null`. Verify with `ToolInput.model_json_schema()` — some older Pydantic v2 releases had a bug where `SkipJsonSchema` silently did nothing.
+
+### Fix 2 — Drop `Optional`, use bare default (quick workaround)
+
+```python
+# Breaks Claude Desktop — generates anyOf: [int, null]:
+from typing import Optional
+param: Optional[int] = None
+
+# Works everywhere — generates {type: integer}, field absent from required[]:
+param: int = None
+```
+
+mypy/pyright warn about the second form. Add `# type: ignore` per-line if you can't refactor to Fix 1 right now.
 
 ### Fix 3 — Post-process schema (nuclear, for legacy/third-party models)
 

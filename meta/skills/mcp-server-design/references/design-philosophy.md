@@ -40,8 +40,8 @@ What breaks:
 - **Tool pollution** — the agent loads all tool descriptions on every request. Each tool taxes
   the context window, even tools that won't be called. Benchmarks across 6 LLMs showed accuracy
   dropping measurably as tool count rose; the GitHub MCP team collapsed 40 tools to a small
-  handful and saw a 60–90% reduction in context window usage — consistent with keeping tool
-  count in the single digits (see tool-design.md for the rule-of-thumb budget).
+  handful and saw a substantial reduction in context window usage — consistent with keeping
+  primary tool count at ≤10 (see tool-design.md for the rule-of-thumb budget).
 - **Choreography burden** — the agent must reconstruct intent from low-level primitives.
   Sequencing three calls across a conversation is error-prone reasoning, not domain logic.
 - **Accuracy collapse** — Block's Linear server went from 30+ tools to 2 over three iterations,
@@ -129,6 +129,6 @@ the underlying API returns it.
 ## When Thin IS Correct
 
 The above applies to tools that expose domain operations. The **daemon+stateless split**
-(see SKILL.md) is a different kind of "thin" — the MCP server process stays thin (no state,
+(see daemon-architecture.md) is a different kind of "thin" — the MCP server process stays thin (no state,
 no resources) while the *tool implementation* does the orchestration. That split is correct
 architecture; it doesn't contradict this philosophy.

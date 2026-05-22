@@ -3,7 +3,7 @@ name: mcp-server-design
 description: >-
   This skill should be used when the user asks to "design an MCP server", "audit an MCP server",
   "review MCP tools", "add MCP tool", "write MCP server", "improve tool descriptions",
-  "design tool surface", "add SubmitFeedback tool", "write tool schema", mentions "MCP transport",
+  "design tool surface", "add submit_feedback tool", "write tool schema", mentions "MCP transport",
   "tool annotations", "mcp stdio", or is building, reviewing, or auditing any MCP server.
   Covers design philosophy, tool naming, parameter schemas, agent UX, feedback channel,
   transport, security, and client compatibility. NOT for hands-on implementation from scratch
@@ -27,7 +27,7 @@ the tags below as binding when applying the references:
 - **UNIVERSAL** — applies to any MCP server, independent of language, SDK, transport, or host
 - **OPINIONATED** — recommended default from production practice; adapt or skip when it does not
   match the project
-- **STACK-SPECIFIC** — applies only to the named stack, framework, client, or deployment shape
+- **STACK-SPECIFIC** — applies only to the named stack, framework, client, or deployment shape; inline as `[STACK:label]` where `label` names the specific stack (e.g. `[STACK:Python]`, `[STACK:stateful-backends]`)
 - **EMPIRICAL** — observed client behaviour; verify when the client version or date matters
 - **CONDITIONAL** — applies when the named precondition holds (specific transport, deployment
   shape, or stack); skip otherwise
@@ -42,9 +42,9 @@ Load references by use case:
 | Use case | Read |
 |----------|------|
 | **Auditing** an existing server | audit-checklist plus the UNIVERSAL refs; add conditional refs only when the stack matches |
-| **Designing** a new server | design-philosophy, tool-design, security-threats, observability; then choose opinionated modules deliberately |
-| **Security review** | security-threats, clients, audit-checklist (sections 1, 4, 8) |
-| **Tool-surface review / 80-20 audit** | observability, audit-checklist (section 1) |
+| **Designing** a new server | design-philosophy, tool-design, agent-ux, feedback-tool, security-threats, observability; then choose opinionated modules deliberately |
+| **Security review** | security-threats, clients, audit-checklist (§14 Security, §12 Transport and Logging, §5 Parameter Schemas) |
+| **Tool-surface review / 80-20 audit** | observability, audit-checklist (§1 Design Philosophy) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
 | **Python/Pydantic implementation** | python-notes, tool-design |
 | **FastMCP framework** | python-notes, fastmcp-notes, tool-design |
@@ -70,7 +70,7 @@ Load references by use case:
 - **Client compatibility** *(EMPIRICAL)* — [references/clients.md](references/clients.md)
   Claude Desktop capabilities, notification behavior, timeouts — empirically verified 2026-04-28
 - **Audit checklist** *(MIXED; items are tagged)* — [references/audit-checklist.md](references/audit-checklist.md)
-  15-section checklist for auditing existing servers; apply item tags before severity
+  16-section checklist for auditing existing servers; apply item tags before severity
 - **Daemon architecture** `[STACK:stateful-backends]` — [references/daemon-architecture.md](references/daemon-architecture.md)
   Daemon + on-demand split, Unix socket, crash isolation, when NOT to use
 - **Gateway aggregation** `[STACK:remote-multi-server]` — [references/gateway-aggregation.md](references/gateway-aggregation.md)
@@ -103,16 +103,16 @@ Load references by use case:
 Quick rules:
 
 - Names: `snake_case`, verb_noun — `list_dialogs`, `get_entity_info`, `submit_feedback`
-- `title`: **mandatory** — 1–3 words, product language, sentence case, user-facing ("Search messages", not "SearchMessages")
+- `title`: **mandatory** — 1–3 words, product language, sentence case, user-facing ("Search messages", not the raw tool name `search_messages`)
 - Classify each tool: `primary` (user-facing) or `secondary/helper` (plumbing)
 - Annotate explicitly: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
 - Mutating tools default to safe states: drafts, paused resources, dry-run, conservative limits
-- Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` (MCP's typed return-value field, see tool-design.md) on every call
+- Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` (`structuredContent` is a sibling key to `content` in an MCP tool result that carries typed JSON data conforming to the declared `outputSchema`; see tool-design.md) on every call
 - Use `isError: true` for business errors (validation, API failures) — never raise protocol exceptions for domain errors
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
 - Flat parameter schemas — no nested objects; LLMs hallucinate nested key names
 - Hard-cap all list responses; include pagination token when truncated
-- Keep primary tools within the rule-of-thumb ceiling in `references/tool-design.md` — past it, consolidate or split into domain servers
+- Keep primary tools at ≤10 — past that ceiling, consolidate or split into domain servers (see `references/tool-design.md`)
 
 → Full conventions: [references/tool-design.md](references/tool-design.md)
 
@@ -127,7 +127,7 @@ For self-owned production servers with a maintainer who reads the queue, exposin
 - Agent reports bugs, confusing behaviour, missing capabilities in the moment
 - Operator reviews out-of-band via `feedback list` / `feedback status` / `feedback delete`
 - Separate storage from the server's main data (own SQLite file or table)
-- System prompt must include the directive: *"Use SubmitFeedback immediately when a tool
+- System prompt must include the directive: *"Use `submit_feedback` immediately when a tool
   response is wrong, surprising, or missing a useful capability."*
 
 → Full interface spec (fields, severity, CLI contract, data model):
@@ -158,6 +158,8 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 ## Transport
 
 **Decision tree:** stdio (launched as subprocess by Claude Desktop / CLI) → Streamable HTTP (shared between containers or accessed over a network) → add auth layer (exposed outside a trusted network).
+
+> **Streamable HTTP** is the current MCP network transport (spec 2025-11-25), replacing the deprecated HTTP+SSE transport — it uses standard HTTP with an SSE upgrade path and a session header.
 
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
 - `stdio`: use for Claude Desktop and any client that launches subprocesses
@@ -205,7 +207,7 @@ for schema, storage patterns, privacy rules, and report templates.
 
 ## Auditing an Existing Server
 
-→ [references/audit-checklist.md](references/audit-checklist.md) — 15-section, ~80-item checklist,
+→ [references/audit-checklist.md](references/audit-checklist.md) — 16-section, ~80-item checklist,
 `*` marks high-priority items, produces HIGH / MEDIUM / LOW findings summary.
 
 ---
@@ -218,7 +220,7 @@ Before shipping or handing off:
 - [ ] Tools designed for outcomes (user goals), not 1:1 endpoint wrappers
 - [ ] Primary tool count within the ceiling in `references/tool-design.md` *(OPINIONATED)*
 - [ ] Mutating tools are safe by default — draft/paused/dry-run unless explicit activation requested
-- [ ] `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
+- [ ] `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back (for session-task tracking via `declare_session_task`, see `references/feedback-tool.md`)
 - [ ] System prompt includes feedback directive *(OPINIONATED)*, kept short, built dynamically
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST, not optional)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions

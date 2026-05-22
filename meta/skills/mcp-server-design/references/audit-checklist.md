@@ -15,9 +15,9 @@
 
 ## 1. Design Philosophy
 
-- [ ] * `[UNIVERSAL]` **Tool count controlled** — count all tools exposed in the registry. If > 15 primary tools, the surface likely needs consolidation or splitting into domain-specific servers.
+- [ ] * `[UNIVERSAL]` **Tool count controlled** — count all tools exposed in the registry. If > 10 primary tools (target ≤10 per tool-design.md), the surface likely needs consolidation or splitting into domain-specific servers.
 - [ ] * `[UNIVERSAL]` **No thin API wrapper** — for each tool, ask: "does this map 1:1 to a backend endpoint?" If yes, it should bundle the downstream calls internally instead.
-- [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. "TrackLatestOrder", not "GetOrderStatus".
+- [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. `track_latest_order`, not `get_order_status`.
 - [ ] `[UNIVERSAL]` **One server, one job** — can you describe the server's purpose in one sentence? If not, scope is too broad.
 - [ ] * `[OPINIONATED]` **80/20 check** — are there tools nobody calls? Run a dead-tool query against the usage log (30+ days, hundreds of calls minimum). Tools with ~0 calls: rewrite description first, delete next review cycle if still dead. See [observability.md](observability.md). If no usage log exists, that is itself a finding — fix observability first, then audit.
 
@@ -49,7 +49,7 @@
 - [ ] `[UNIVERSAL]` **Parameter semantics in prose** — field meanings explained in description, not just in schema. The LLM reads descriptions; schema is for validation.
 - [ ] `[UNIVERSAL]` **Response shape documented** — non-trivial tools describe key fields, units, truncation, and whether text is a preview of `structuredContent`.
 - [ ] `[CONDITIONAL]` **Static reference material uses Resources** — field catalogs, enum lists, query syntax, and service limits are exposed as MCP Resources instead of repeated in tool descriptions.
-- [ ] `[OPINIONATED]` **`[posture]` prefix consistent** — if the project uses `[primary]` / `[secondary/helper]` prefix, it's applied to all tools without exception.
+- [ ] `[OPINIONATED]` **Assertive proactive language present where relevant** — for tools the agent should call without being asked, the description includes a direct directive ("Use this proactively whenever…"). This is the empirically validated lever for biasing tool selection — see `agent-ux.md §What Actually Moves Tool Selection`.
 
 ---
 
@@ -76,7 +76,7 @@
 
 - [ ] * `[UNIVERSAL]` **Business errors use `isError: true`** — validation failures, API failures, entity-not-found — all returned as tool results with `isError: true`, not raised as exceptions.
 - [ ] `[UNIVERSAL]` **Protocol errors reserved for protocol failures** — JSON-RPC exceptions only for malformed requests, unknown tool names. Not for domain errors.
-- [ ] `[UNIVERSAL]` **Error messages are actionable** — every recoverable error includes an `Action:` hint or names a tool the agent can call next. "Entity not found — use ListDialogs to get valid IDs."
+- [ ] `[UNIVERSAL]` **Error messages are actionable** — every recoverable error includes an `Action:` hint or names a tool the agent can call next. "Entity not found — use `list_dialogs` to get valid IDs."
 - [ ] `[UNIVERSAL]` **Generic backend errors preserve diagnostics** — "Bad Request", "Internal Server Error", or "not found" include safe field-level details, response excerpts, or correlation IDs; secrets are redacted.
 - [ ] `[CONDITIONAL]` **Backend-unavailable errors explicit** — if the daemon/backend is down, the error message says so clearly ("daemon not running — start with: …"), not a raw socket exception.
 
@@ -111,17 +111,17 @@
 ## 11. System Prompt (`server.instructions`)
 
 - [ ] `[OPINIONATED]` **System prompt exists and is non-empty** — server has `server.instructions` set.
-- [ ] `[OPINIONATED]` **Feedback directive present** — "Use SubmitFeedback immediately when a tool response is wrong, surprising, or missing a useful capability."
+- [ ] `[OPINIONATED]` **Feedback directive present** — "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability."
 - [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow.
 - [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time.
-- [ ] `[OPINIONATED]` **Under 300 tokens** — estimate token count. Over budget = directive that should be moved into a tool description or a missing tool.
+- [ ] `[OPINIONATED]` **Description budget: a few hundred tokens** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt`) — estimate token count. Over budget = directive that should be moved into a tool description or a missing tool.
 
 ---
 
 ## 12. Transport and Logging
 
 - [ ] * `[UNIVERSAL]` **No HTTP+SSE transport (2024-11-05)** — deprecated. Only `stdio` or Streamable HTTP.
-- [ ] * `[CONDITIONAL]` **All logging goes to `stderr`** — for stdio servers, no `print()` or logger writing to `stdout`. Any `stdout` output corrupts the transport silently.
+- [ ] * `[CONDITIONAL]` **All logging goes to `stderr`** — for stdio servers, no `print()` or logger writing to `stdout`. Any `stdout` output corrupts the transport silently. **Exception:** if the architecture uses a separate logging daemon (see [daemon-architecture.md](daemon-architecture.md)), the MCP server must NOT write to `stderr` — the daemon owns logging.
 - [ ] `[UNIVERSAL]` **Transport matches deployment** — `stdio` for subprocess clients (Claude Desktop), Streamable HTTP for inter-container or HTTP-capable clients.
 
 ---
@@ -145,13 +145,13 @@
 - [ ] `[UNIVERSAL]` **Secrets never leak** — tokens, cookies, API keys, OAuth codes absent from URLs, logs, tool responses, and feedback records.
 - [ ] `[UNIVERSAL]` **Local server not exposed on public interface** — binds to `127.0.0.1` or Unix socket, or has authentication if network-accessible.
 - [ ] `[CONDITIONAL]` **Origin header validation for Streamable HTTP** — server rejects requests with invalid `Origin` (HTTP 403). Usually handled by SDK — verify it's not disabled.
-- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. → [security-threats.md §4](security-threats.md)
-- [ ] `[CONDITIONAL]` **`Host` header validated against allowlist** — defends localhost-bound HTTP servers against DNS rebinding. → [security-threats.md §4](security-threats.md)
-- [ ] * `[CONDITIONAL]` **OAuth: per-principal tokens, narrow scopes, no pass-through** — applies to servers acting as OAuth client or authorization server. → [security-threats.md §3](security-threats.md)
-- [ ] * `[UNIVERSAL]` **Authorization checked per call, not only at search** — every read/write tool joins against the authenticated principal; no IDOR via `*_id` arguments. → [security-threats.md §3](security-threats.md)
-- [ ] `[UNIVERSAL]` **Per-tool timeout + concurrency cap + request/response size cap** — bounded resources prevent DoS by a buggy or hostile caller. → [security-threats.md §5](security-threats.md)
-- [ ] `[UNIVERSAL]` **Tool surface changes go through semver + changelog** — no silent renames, no annotation flips, no description-only behaviour changes. → [security-threats.md §8](security-threats.md)
-- [ ] `[UNIVERSAL]` **Lockfile committed; dependency audit gates CI; 2FA + signed releases on registry account** — supply-chain hygiene. → [security-threats.md §7](security-threats.md)
+- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. → [security-threats.md §4 Session and transport security](security-threats.md)
+- [ ] `[CONDITIONAL]` **`Host` header validated against allowlist** — defends localhost-bound HTTP servers against DNS rebinding. → [security-threats.md §4 Session and transport security](security-threats.md)
+- [ ] * `[CONDITIONAL]` **OAuth: per-principal tokens, narrow scopes, no pass-through** — applies to servers acting as OAuth client or authorization server. → [security-threats.md §3 Authentication and authorization](security-threats.md)
+- [ ] * `[UNIVERSAL]` **Authorization checked per call, not only at search** — every read/write tool joins against the authenticated principal; no IDOR via `*_id` arguments. → [security-threats.md §3 Authentication and authorization](security-threats.md)
+- [ ] `[UNIVERSAL]` **Per-tool timeout + concurrency cap + request/response size cap** — bounded resources prevent DoS by a buggy or hostile caller. → [security-threats.md §5 Resource exhaustion and DoS](security-threats.md)
+- [ ] `[UNIVERSAL]` **Tool surface changes go through semver + changelog** — no silent renames, no annotation flips, no description-only behaviour changes. → [security-threats.md §8 Release hygiene and surface stability](security-threats.md)
+- [ ] `[UNIVERSAL]` **Lockfile committed; dependency audit (`npm audit`, `pip-audit`) gates CI.** → [security-threats.md §7 Supply chain — defending your own package](security-threats.md)
 
 → Deep threat reference for security review: [security-threats.md](security-threats.md)
 

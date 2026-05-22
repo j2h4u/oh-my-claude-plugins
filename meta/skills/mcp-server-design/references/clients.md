@@ -118,9 +118,9 @@ In order of reliability:
 
 ## Cursor
 
-**Verified:** — | **Recheck:** —
+**Verified:** — | **Recheck:** 2026-08-01
 
-*(No data yet)*
+Treat as a conservative profile similar to Claude Desktop until empirical data is collected. MCP support in Cursor is not yet documented here.
 
 ---
 

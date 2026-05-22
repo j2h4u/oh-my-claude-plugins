@@ -48,6 +48,10 @@ docs/_WIP/
 new-skill/
 inbox/
 
+# Local tooling output
+.planning/graphs/
+graphify-out/
+
 # Archives
 *.zip
 *.tar.gz

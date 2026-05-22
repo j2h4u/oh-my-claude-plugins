@@ -106,9 +106,9 @@ not appear in `tools/list`.
 ### Backend Network Rules
 
 - Put backend MCP containers on a private Docker network shared with the gateway.
-- Bind backend servers to `0.0.0.0` **inside the container** so sibling containers can reach them.
-- Avoid host port publishing for private backends; if needed for local debugging, bind to
-  `127.0.0.1`, never `0.0.0.0`.
+- Backends may listen on all interfaces within their container — Docker network isolation (not
+  bind address) is the boundary. Never add `ports:` mappings to host interfaces for private
+  backends. Verify with `docker inspect` that no host port is published.
 - Prefer Docker DNS names (`http://service:port/mcp`) over host ports.
 - Treat `host.docker.internal` as a migration bridge, not the final architecture.
 
@@ -125,34 +125,12 @@ servers, and prefer remote-only catalog entries when backend lifecycle is manage
 
 ## Auth Proxy Edge
 
-The auth proxy sits between public ingress and the gateway:
-
-```yaml
-services:
-  mcp-auth-proxy:
-    image: ghcr.io/sigbit/mcp-auth-proxy:<pinned-version>
-    environment:
-      EXTERNAL_URL: ${MCP_EXTERNAL_URL}
-      NO_AUTO_TLS: "true"
-      OIDC_CONFIGURATION_URL: ${OIDC_CONFIGURATION_URL}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
-      OIDC_ALLOWED_USERS: ${OIDC_ALLOWED_USERS:-}
-      OIDC_ALLOWED_USERS_GLOB: ${OIDC_ALLOWED_USERS_GLOB:-}
-      TRUSTED_PROXIES: 172.16.0.0/12
-    command:
-      - http://mcp-gateway:8811/mcp
-    expose:
-      - "80"
-    networks:
-      - edge
-```
+The auth proxy sits between public ingress and the gateway. Configure per your chosen auth proxy's documentation; the design rules below apply regardless of implementation.
 
 Rules:
 
 - `EXTERNAL_URL` must exactly match the public URL clients use.
-- Use OIDC allowlists or attribute filters; password auth is acceptable for spikes, not preferred
-  for production.
+- Use OIDC allowlists or attribute filters.
 - Set `NO_AUTO_TLS=true` when TLS is terminated by a tunnel, reverse proxy, or managed ingress.
 - Point the public ingress to the auth proxy, never directly to the gateway.
 - Verify unauthenticated `/mcp` returns `401` and authenticated `/mcp` reaches the gateway.
@@ -194,8 +172,9 @@ Rules:
 - Preserve each backend's `title`, annotations, `outputSchema`, and `structuredContent`; the
   gateway should not be a reason to weaken tool contracts.
 
-As a rough audit trigger: if the aggregated endpoint exposes more than 15 primary tools, ask
-whether the endpoint should be split or filtered.
+As a rough audit trigger: if the aggregated endpoint exposes more than 10 primary tools, ask
+whether the endpoint should be split or filtered. See `tool-design.md` for the rationale behind
+the ≤10 primary-tool limit.
 
 ---
 

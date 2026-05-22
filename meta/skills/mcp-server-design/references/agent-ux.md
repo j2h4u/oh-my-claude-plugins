@@ -33,15 +33,30 @@ The one-liner is what humans scan. The LLM reads the entire block.
 
 ---
 
-## The `[posture]` Prefix
+## What Actually Moves Tool Selection *(empirically validated)*
 
-The registration posture label (`primary`, `secondary/helper`) is prepended to the
-tool description as `[primary] ` or `[secondary/helper] `. The LLM sees this prefix
-and uses it to gauge centrality — which tools to reach for first vs. which are
-supporting utilities. Keep it consistent.
+Tool selection is dominated by **description content**, not structural tags. Faghih
+et al. (EMNLP 2025) tested nine description-edit types across 17 models on BFCL and
+saw single-token edits shift tool usage by 10× — descriptions are the single strongest
+lever an MCP author has. There is **no evidence** that structural prefix tags like
+`[primary] ` / `[secondary/helper] ` change selection. Use the levers below instead.
 
-**Note:** this is a project-local convention, not an MCP spec feature or community standard.
-Adopt it if it suits your codebase; skip it if it adds noise for your use case.
+| Lever | What it is | Where it lives in this skill |
+|-------|-----------|------------------------------|
+| **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Descriptions` (the three-question structure), Faghih et al. found this single most effective |
+| **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` line 46 (Anthropic engineering recommendation) |
+| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title` — the protocol's own posture channel | `audit-checklist.md §3 Tool Annotations` |
+| **Sharper, distinct descriptions** | Each tool's description is semantically distant from others; near-duplicates collapse selection | `tool-design.md §Descriptions` — answer "When?" / "What?" / "What NOT?" |
+| **Toolsets / config-level grouping** | Let operators enable/disable groups of tools at install time | GitHub MCP `--toolsets`; an organizational pattern, not a description pattern |
+
+> Background: [Anthropic — Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents);
+> [Faghih et al. 2025 — Tool Preferences in Agentic LLMs are Unreliable](https://arxiv.org/abs/2505.18135);
+> [MCP tool annotations reference](https://modelcontextprotocol.io/specification/2025-11-25).
+
+If you're tempted to add a `[primary]` / `[secondary/helper]` prefix to descriptions:
+that is **not** the validated lever. Spend the same effort on the description body
+(assertive triggers, clearer "What NOT to do", or sharper wording that differentiates
+this tool from siblings).
 
 ---
 
@@ -67,11 +82,11 @@ between requests (those are tool responses).
 
 ```
 Key workflows:
-- SEARCH THEN READ: Use SearchMessages (omit dialog= for global) to find. Use
-  ListMessages(anchor_message_id=M) to read context around any hit.
-- BROWSE: Use ListMessages with navigation="newest" or a next_navigation token.
+- SEARCH THEN READ: Use `search_messages` (omit dialog= for global) to find. Use
+  `list_messages(anchor_message_id=M)` to read context around any hit.
+- BROWSE: Use `list_messages` with navigation="newest" or a next_navigation token.
   Continue calling until next_navigation is absent.
-- FIND DIALOG IDS: Use ListDialogs to get exact numeric dialog ids.
+- FIND DIALOG IDS: Use `list_dialogs` to get exact numeric dialog ids.
 ```
 
 Named patterns give the LLM stable vocabulary to refer to internally. Agents
@@ -107,10 +122,10 @@ Agents act on error text directly. A good error message includes what went wrong
 "Entity not found"
 
 # Good
-"Entity 12345 not found — use ListDialogs to get valid dialog ids."
+"Entity 12345 not found — use `list_dialogs` to get valid dialog ids."
 
 # Good (boundary error pattern)
-"Tool GetEntityInfo argument validation failed: field 'dialog_id' required.
+"Tool `get_entity_info` argument validation failed: field 'dialog_id' required.
  Action: Check the tool arguments against the exported schema and retry."
 ```
 
@@ -134,7 +149,7 @@ ask it to complete a real task, then read the feedback queue.
 2. Give the agent a **real task** (not a toy: "find my unread messages from this week",
    "summarise what I was discussing with X yesterday")
 3. No briefing — don't explain tools, names, or conventions
-4. Instruction: *"As you work, use SubmitFeedback for anything surprising, confusing,
+4. Instruction: *"As you work, use `submit_feedback` for anything surprising, confusing,
    or missing. At the end, submit a session summary: what felt intuitive, what was a
    WTF moment, what capability you wished existed."*
 5. Let it run
@@ -199,8 +214,7 @@ stabilises, not after.
 A useful pattern for servers with an active maintainer: the system prompt instructs
 agents to submit feedback proactively, which turns every production session into a
 dark-room test automatically. This works well when there is someone regularly reviewing
-the feedback queue; it may not apply to multi-tenant servers or adversarial environments
-where feedback submission carries different risks.
+the feedback queue.
 
 ```
 "Use submit_feedback immediately when a tool response is wrong,
