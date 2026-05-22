@@ -55,10 +55,10 @@ agent behaviour without adding tools. Every request pays the token cost — keep
 | Type | Example |
 |------|---------|
 | Domain authority | "Read-only access to message history via a local sync cache." |
-| Named workflow patterns | "SEARCH THEN READ: use SearchMessages to find, then ListMessages to read context" |
+| Named workflow patterns | "SEARCH THEN READ: use search_messages to find, then list_messages to read context" |
 | Stable context hints | "`dialog_id` is stable for the session — cache it, don't re-resolve on every call" |
-| Feedback directive | "Use SubmitFeedback immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session" |
-| Error recovery hints | "If GetEntityInfo returns access_error, the dialog may need MarkDialogForSync first" |
+| Feedback directive | "Use submit_feedback immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session" |
+| Error recovery hints | "If get_entity_info returns access_error, the dialog may need mark_dialog_for_sync first" |
 
 **What does NOT belong here:** parameter docs, field walkthroughs, data that changes
 between requests (those are tool responses).
@@ -130,7 +130,7 @@ ask it to complete a real task, then read the feedback queue.
 
 **Protocol:**
 
-1. Ensure `SubmitFeedback` is deployed and the system prompt includes the feedback directive
+1. Ensure `submit_feedback` is deployed and the system prompt includes the feedback directive
 2. Give the agent a **real task** (not a toy: "find my unread messages from this week",
    "summarise what I was discussing with X yesterday")
 3. No briefing — don't explain tools, names, or conventions
@@ -194,18 +194,21 @@ stabilises, not after.
 
 ---
 
-## The SubmitFeedback + System Prompt Combination
+## The submit_feedback + System Prompt Combination
 
-The most effective pairing: the system prompt instructs agents to submit feedback
-proactively, which turns every production session into a dark-room test automatically.
+A useful pattern for servers with an active maintainer: the system prompt instructs
+agents to submit feedback proactively, which turns every production session into a
+dark-room test automatically. This works well when there is someone regularly reviewing
+the feedback queue; it may not apply to multi-tenant servers or adversarial environments
+where feedback submission carries different risks.
 
 ```
-"Use SubmitFeedback immediately when a tool response is wrong,
+"Use submit_feedback immediately when a tool response is wrong,
  surprising, or missing a useful capability — don't wait until end of session."
 ```
 
-The operator reviews the queue async, no ceremony required.
-Over time the feedback queue is the primary UX signal for what to fix next.
+The operator reviews the queue async, no ceremony required. Over time the feedback
+queue becomes a signal for what to fix next.
 
 For deeper analysis — correlating feedback with specific task types — pair with
 `declare_session_task`: agent declares intent before work, all calls and feedback

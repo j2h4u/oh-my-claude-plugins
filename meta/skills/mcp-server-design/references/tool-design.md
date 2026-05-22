@@ -14,7 +14,7 @@ MCP defines three distinct server primitives. Always use the right one.
 
 | Primitive | Who decides to use it | Nature | Examples |
 |-----------|----------------------|--------|---------|
-| **Tool** | The model | Active — has side effects or retrieves dynamic data | `SearchMessages`, `SubmitFeedback` |
+| **Tool** | The model | Active — has side effects or retrieves dynamic data | `search_messages`, `submit_feedback` |
 | **Resource** | The application/client | Passive — context data the client selects and injects | Current file, user profile, config snapshot |
 | **Prompt** | The user | Reusable template the user invokes by name | "Summarise unread", "Draft a reply" |
 
@@ -72,7 +72,7 @@ Tools ship in two tiers.
 | `primary` | User-facing capability, the LLM should know it exists | Listed in tool catalogue |
 | `secondary` / `helper` | Supporting operation, plumbing | May be hidden from catalogue |
 
-Target ≤12 primary tools. Past that, ask what can be merged or promoted to a parameter.
+Target **≤10 primary tools** as a rule of thumb — more tools dilute LLM selection accuracy; aim for ≤10 with a strong bias toward fewer. Real-world evidence supports this: GitHub's MCP server collapsed 40 tools down to 3–10 focused ones. Past ≤10, ask what can be merged or promoted to a parameter before adding another tool.
 
 ---
 
@@ -235,7 +235,7 @@ Error messages should be actionable:
 "Entity not found"
 
 # Strong
-"Entity 12345 not found — use ListDialogs to find valid dialog ids."
+"Entity 12345 not found — use list_dialogs to find valid dialog ids."
 ```
 
 Include an `Action:` hint whenever the error is recoverable. When the backend is unavailable, say so explicitly — the agent needs to know it's an infrastructure problem, not a logic error.
@@ -270,7 +270,7 @@ For anything slow (file analysis, data migration, external API with high latency
 async handle pattern instead of blocking:
 
 1. Tool returns immediately with a task `id` and `status: "working"`
-2. A separate polling tool (`GetTaskStatus`, `CheckJobResult`) takes the `id` and returns current state
+2. A separate polling tool (`get_task_status`, `check_job_result`) takes the `id` and returns current state
 3. Final state returns the actual result or error
 
 This requires no spec feature — just two tools and a server-side state store. The key invariant:

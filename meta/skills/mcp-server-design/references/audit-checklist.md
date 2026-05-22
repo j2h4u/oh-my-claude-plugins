@@ -19,23 +19,23 @@
 - [ ] * `[UNIVERSAL]` **No thin API wrapper** — for each tool, ask: "does this map 1:1 to a backend endpoint?" If yes, it should bundle the downstream calls internally instead.
 - [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. "TrackLatestOrder", not "GetOrderStatus".
 - [ ] `[UNIVERSAL]` **One server, one job** — can you describe the server's purpose in one sentence? If not, scope is too broad.
-- [ ] `[OPINIONATED]` **80/20 check** — are there tools nobody calls? Review call logs or feedback queue. Dead tools should be removed.
+- [ ] * `[OPINIONATED]` **80/20 check** — are there tools nobody calls? Run a dead-tool query against the usage log (30+ days, hundreds of calls minimum). Tools with ~0 calls: rewrite description first, delete next review cycle if still dead. See [observability.md](observability.md). If no usage log exists, that is itself a finding — fix observability first, then audit.
 
 ---
 
 ## 2. Tool Naming and Classification
 
 - [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — e.g. `list_dialogs`, `get_entity_info`, `submit_feedback`. No `getData`, `RunQuery`, `handle_request` (too generic), no spaces or special chars. Characters: `^[a-zA-Z0-9_]{1,64}$` — what Claude's frontend validates.
-- [ ] * `[UNIVERSAL]` **`title` field set on every tool** — 1–3 words, in the product's language, sentence case, user-facing. Claude Desktop shows this in "Claude is using…" blocks and the tool list. Without it the raw `name` is shown (`ozon_search`, `GetMyRecentActivity`) which leaks internal naming to users. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status".
+- [ ] * `[UNIVERSAL]` **`title` field set on every tool** — 1–3 words, in the product's language, sentence case, user-facing. Claude Desktop shows this in "Claude is using…" blocks and the tool list. Without it the raw `name` is shown (`ozon_search`, `get_my_recent_activity`) which leaks internal naming to users. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status".
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail.
-- [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `GetMe` → `GetMyAccount`).
+- [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
 
 ---
 
 ## 3. Tool Annotations
 
 - [ ] `[UNIVERSAL]` **`readOnlyHint` set on read-only tools** — tools that make no state changes declare `readOnlyHint: true`. Default is `false`; missing annotation is a miss.
-- [ ] `[UNIVERSAL]` **`destructiveHint` set to `false` on additive writes** — e.g. `SubmitFeedback` is additive, not destructive.
+- [ ] `[UNIVERSAL]` **`destructiveHint` set to `false` on additive writes** — e.g. `submit_feedback` is additive, not destructive.
 - [ ] `[UNIVERSAL]` **`idempotentHint` set where applicable** — tools safe to retry (same args → same result) declare it.
 - [ ] `[UNIVERSAL]` **`openWorldHint: false` on local-only tools** — tools that don't touch external services should not carry the default `true`.
 - [ ] * `[UNIVERSAL]` **Mutating tools are safe by default** — costly or destructive tools create drafts/paused resources, use dry-run/preview, or require explicit activation.
@@ -101,10 +101,10 @@
 
 ## 10. Agent Feedback Channel
 
-- [ ] * `[OPINIONATED]` **`SubmitFeedback` tool exists** — write-only, fire-and-forget, no read-back tool.
-- [ ] `[OPINIONATED]` **`SubmitFeedback` description includes proactive triggers** — verbatim: when a tool returned unexpected output, error is unclear, capability was missing, behaviour contradicts docs.
-- [ ] `[OPINIONATED]` **Operator CLI exists** — `feedback list`, `feedback status <id> <status>`, `feedback delete <id>`.
-- [ ] `[OPINIONATED]` **Separate storage** — feedback persists in its own DB/file, not mixed with server's main data.
+- [ ] `[OPINIONATED]` **`submit_feedback` tool considered** — useful pattern for servers where a maintainer actively reviews the feedback queue; mark N/A if no queue is monitored. Write-only, fire-and-forget, no read-back tool.
+- [ ] `[CONDITIONAL]` **`submit_feedback` description includes proactive triggers** — if the tool exists: verbatim triggers when a tool returned unexpected output, error is unclear, capability was missing, behaviour contradicts docs.
+- [ ] `[CONDITIONAL]` **Operator CLI exists** — if the tool exists: `feedback list`, `feedback status <id> <status>`, `feedback delete <id>`.
+- [ ] `[CONDITIONAL]` **Separate storage** — if the tool exists: feedback persists in its own DB/file, not mixed with server's main data.
 
 ---
 
@@ -145,6 +145,15 @@
 - [ ] `[UNIVERSAL]` **Secrets never leak** — tokens, cookies, API keys, OAuth codes absent from URLs, logs, tool responses, and feedback records.
 - [ ] `[UNIVERSAL]` **Local server not exposed on public interface** — binds to `127.0.0.1` or Unix socket, or has authentication if network-accessible.
 - [ ] `[CONDITIONAL]` **Origin header validation for Streamable HTTP** — server rejects requests with invalid `Origin` (HTTP 403). Usually handled by SDK — verify it's not disabled.
+- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. → [security-threats.md §4](security-threats.md)
+- [ ] `[CONDITIONAL]` **`Host` header validated against allowlist** — defends localhost-bound HTTP servers against DNS rebinding. → [security-threats.md §4](security-threats.md)
+- [ ] * `[CONDITIONAL]` **OAuth: per-principal tokens, narrow scopes, no pass-through** — applies to servers acting as OAuth client or authorization server. → [security-threats.md §3](security-threats.md)
+- [ ] * `[UNIVERSAL]` **Authorization checked per call, not only at search** — every read/write tool joins against the authenticated principal; no IDOR via `*_id` arguments. → [security-threats.md §3](security-threats.md)
+- [ ] `[UNIVERSAL]` **Per-tool timeout + concurrency cap + request/response size cap** — bounded resources prevent DoS by a buggy or hostile caller. → [security-threats.md §5](security-threats.md)
+- [ ] `[UNIVERSAL]` **Tool surface changes go through semver + changelog** — no silent renames, no annotation flips, no description-only behaviour changes. → [security-threats.md §8](security-threats.md)
+- [ ] `[UNIVERSAL]` **Lockfile committed; dependency audit gates CI; 2FA + signed releases on registry account** — supply-chain hygiene. → [security-threats.md §7](security-threats.md)
+
+→ Deep threat reference for security review: [security-threats.md](security-threats.md)
 
 ---
 
@@ -152,6 +161,15 @@
 
 - [ ] `[UNIVERSAL]` **Integration smoke test exists** — calls every tool through the actual transport against a live server. Unit tests alone don't cover transport or schema serialisation.
 - [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Agent UX Testing`
+
+---
+
+## 16. Observability
+
+- [ ] * `[OPINIONATED]` **Per-call usage log exists** — every tool call recorded with at minimum `ts`, `tool_name`, `status`, `duration_ms`. Without it, §1 80/20 check cannot be answered. → [observability.md](observability.md)
+- [ ] `[UNIVERSAL]` **No raw argument values or response bodies in the log** — only schema-only `args_shape`, sizes, and error classes. Raw values may carry secrets, PII, or prompt-injected content.
+- [ ] `[OPINIONATED]` **Reports are runnable, not just data** — dead-tool, error-rate-per-tool, p95-latency-per-tool queries exist or are trivial to write (DuckDB / SQL / Loki).
+- [ ] `[OPINIONATED]` **Dead-tool query has been acted on at least once** — tool surface has been pruned or descriptions rewritten based on usage data. A log that is never read is theatre.
 
 ---
 

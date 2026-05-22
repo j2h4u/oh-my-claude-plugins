@@ -94,12 +94,12 @@ In order of reliability:
 - "Server busy" with remaining time estimate is visible to the agent — write informative busy messages.
 
 **Tool names:**
-- Watch for namespace collisions with client meta-operations. `GetMe` was intercepted by Claude Desktop as a client-side operation → renamed `GetMyAccount`.
+- Watch for namespace collisions with client meta-operations. `get_me` was intercepted by Claude Desktop as a client-side operation → renamed `get_my_account`.
 
 **All context must be in descriptions and system prompt:**
 - Notifications don't work → schema, behaviour, limits, failure modes all belong in tool descriptions and `server.instructions`.
 - Describe failure modes explicitly: "if session expired — do X", "if server busy — retry in N seconds".
-- Describe tool dependencies: "call SearchX before QueryX".
+- Describe tool dependencies: "call search_x before query_x".
 
 **What NOT to implement for Claude Desktop:**
 - Push progress notifications (model won't see them)

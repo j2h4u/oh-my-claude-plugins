@@ -29,6 +29,8 @@ the tags below as binding when applying the references:
   match the project
 - **STACK-SPECIFIC** — applies only to the named stack, framework, client, or deployment shape
 - **EMPIRICAL** — observed client behaviour; verify when the client version or date matters
+- **CONDITIONAL** — applies when the named precondition holds (specific transport, deployment
+  shape, or stack); skip otherwise
 
 When in doubt, enforce UNIVERSAL rules first. Do not treat OPINIONATED or STACK-SPECIFIC recipes
 as protocol requirements.
@@ -40,12 +42,13 @@ Load references by use case:
 | Use case | Read |
 |----------|------|
 | **Auditing** an existing server | audit-checklist plus the UNIVERSAL refs; add conditional refs only when the stack matches |
-| **Designing** a new server | design-philosophy, tool-design, security; then choose opinionated modules deliberately |
-| **Security review** | security, clients, audit-checklist (sections 1, 4, 8) |
+| **Designing** a new server | design-philosophy, tool-design, security-threats, observability; then choose opinionated modules deliberately |
+| **Security review** | security-threats, clients, audit-checklist (sections 1, 4, 8) |
+| **Tool-surface review / 80-20 audit** | observability, audit-checklist (section 1) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
 | **Python/Pydantic implementation** | python-notes, tool-design |
 | **FastMCP framework** | python-notes, fastmcp-notes, tool-design |
-| **Remote multi-server gateway** | gateway-aggregation, security, clients, audit-checklist |
+| **Remote multi-server gateway** | gateway-aggregation, security-threats, clients, audit-checklist |
 
 - **Design philosophy** *(UNIVERSAL)* — [references/design-philosophy.md](references/design-philosophy.md)
   "Not an API wrapper" principles, antipatterns, Bad vs Good comparisons, 5 principles
@@ -56,22 +59,27 @@ Load references by use case:
 - **Agent UX** *(UNIVERSAL + OPINIONATED)* — [references/agent-ux.md](references/agent-ux.md)
   System prompt structure, dark-room testing, `Action:` error hints, post-MVP normalization
 - **Feedback channel** *(OPINIONATED)* — [references/feedback-tool.md](references/feedback-tool.md)
-  `SubmitFeedback` tool interface, operator CLI contract, data model, status lifecycle
-- **Security** *(UNIVERSAL)* — [references/security.md](references/security.md)
-  Prompt injection, transport security, SSE deprecation clarification, annotation trust
+  `submit_feedback` tool interface, operator CLI contract, data model, status lifecycle
+- **Security** *(UNIVERSAL)* — [references/security-threats.md](references/security-threats.md)
+  Prompt injection, transport security, annotation trust; threat model for benign servers:
+  data injection, arg validation, authn/authz, sessions, resource exhaustion, secret
+  hygiene, supply chain, release stability
+- **Observability** *(UNIVERSAL + OPINIONATED)* — [references/observability.md](references/observability.md)
+  Tool-usage logging; schema, storage patterns (JSONL / DB table / structured log),
+  privacy rules, reports for dead-tool / hot-tool / error-rate decisions
 - **Client compatibility** *(EMPIRICAL)* — [references/clients.md](references/clients.md)
   Claude Desktop capabilities, notification behavior, timeouts — empirically verified 2026-04-28
 - **Audit checklist** *(MIXED; items are tagged)* — [references/audit-checklist.md](references/audit-checklist.md)
   15-section checklist for auditing existing servers; apply item tags before severity
-- **Daemon architecture** *(STACK-SPECIFIC: stateful backends only)* — [references/daemon-architecture.md](references/daemon-architecture.md)
+- **Daemon architecture** `[STACK:stateful-backends]` — [references/daemon-architecture.md](references/daemon-architecture.md)
   Daemon + on-demand split, Unix socket, crash isolation, when NOT to use
-- **Gateway aggregation** *(STACK-SPECIFIC: remote multi-server deployments)* — [references/gateway-aggregation.md](references/gateway-aggregation.md)
+- **Gateway aggregation** `[STACK:remote-multi-server]` — [references/gateway-aggregation.md](references/gateway-aggregation.md)
   Docker MCP Gateway / registry pattern, shared OAuth edge, public tunnel, private backends,
   tool-surface curation, smoke tests, failure modes
-- **Python notes** *(STACK-SPECIFIC: Python ecosystem)* — [references/python-notes.md](references/python-notes.md)
+- **Python notes** `[STACK:Python]` — [references/python-notes.md](references/python-notes.md)
   Pydantic v2 `anyOf: null` recipes, `Annotated`/`Field` schema docs,
   MCP Python SDK gotchas, return-type pitfalls, stdout/stderr logging
-- **FastMCP specifics** *(STACK-SPECIFIC: FastMCP framework only)* — [references/fastmcp-notes.md](references/fastmcp-notes.md)
+- **FastMCP specifics** `[STACK:FastMCP]` — [references/fastmcp-notes.md](references/fastmcp-notes.md)
   What FastMCP handles automatically, tool name override via `name=`, framework-only bugs
 
 ---
@@ -99,12 +107,12 @@ Quick rules:
 - Classify each tool: `primary` (user-facing) or `secondary/helper` (plumbing)
 - Annotate explicitly: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
 - Mutating tools default to safe states: drafts, paused resources, dry-run, conservative limits
-- Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` on every call
+- Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` (MCP's typed return-value field, see tool-design.md) on every call
 - Use `isError: true` for business errors (validation, API failures) — never raise protocol exceptions for domain errors
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
 - Flat parameter schemas — no nested objects; LLMs hallucinate nested key names
 - Hard-cap all list responses; include pagination token when truncated
-- Target ≤ 15 primary tools *(OPINIONATED threshold)* — past that, consolidate or split into domain servers
+- Keep primary tools within the rule-of-thumb ceiling in `references/tool-design.md` — past it, consolidate or split into domain servers
 
 → Full conventions: [references/tool-design.md](references/tool-design.md)
 
@@ -112,8 +120,8 @@ Quick rules:
 
 ## Agent Feedback Channel *(OPINIONATED)*
 
-For self-owned production servers, this skill recommends exposing a `SubmitFeedback` tool. This
-is a strong default, not an MCP protocol requirement:
+For self-owned production servers with a maintainer who reads the queue, exposing a
+`submit_feedback` tool is a useful pattern — not an MCP protocol requirement:
 
 - Write-only for the agent — no read-back, no tracking ID, fire and forget
 - Agent reports bugs, confusing behaviour, missing capabilities in the moment
@@ -130,7 +138,7 @@ is a strong default, not an MCP protocol requirement:
 ## Agent UX
 
 - Tool descriptions serve two audiences: LLM (reads as prompt) and human (sees in UI). Write for LLM first
-- System prompt (`server.instructions`): ≤ 300 tokens, ALL-CAPS named workflow patterns, built dynamically at startup
+- System prompt (`server.instructions`): keep short (rule of thumb: a few hundred tokens), ALL-CAPS named workflow patterns, built dynamically at startup
 - Dark-room UX test: agent + server + real task + no briefing → review feedback queue
 - Error messages: include `Action:` hint for every recoverable error — agents act on error text directly
 
@@ -138,7 +146,9 @@ is a strong default, not an MCP protocol requirement:
 
 ---
 
-## Daemon + On-Demand Architecture *(stateful backends only)*
+## Daemon + On-Demand Architecture `[STACK:stateful-backends]`
+
+Skip this section unless your backend is stateful or requires shared infrastructure across tool calls.
 
 → [references/daemon-architecture.md](references/daemon-architecture.md) — daemon/MCP split,
 Unix socket rules, crash isolation, when NOT to use this pattern.
@@ -147,15 +157,16 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 ## Transport
 
+**Decision tree:** stdio (launched as subprocess by Claude Desktop / CLI) → Streamable HTTP (shared between containers or accessed over a network) → add auth layer (exposed outside a trusted network).
+
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
 - `stdio`: use for Claude Desktop and any client that launches subprocesses
 - Streamable HTTP: use for inter-container (Docker network) or HTTP-capable clients
-- Remote multi-server deployments *(STACK-SPECIFIC)*: put auth/proxy/ingress in front of a curated gateway, not
-  in every backend server
-- For `stdio`, **all logging MUST go to `stderr`** — any `stdout` output corrupts the JSON-RPC transport silently
+- `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
+- For `stdio`, **all logging goes to `stderr` by default** — any `stdout` output corrupts the JSON-RPC transport silently. `[CONDITIONAL]` If your architecture uses a separate logging daemon, the MCP server should NOT write to `stderr` (the daemon owns logging) — see [references/daemon-architecture.md](references/daemon-architecture.md)
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
-→ Security per transport: [references/security.md](references/security.md)
+→ Security per transport: [references/security-threats.md](references/security-threats.md)
 → Client limitations (Claude Desktop, Cursor): [references/clients.md](references/clients.md)
 
 ---
@@ -167,7 +178,19 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 - **Annotation trust** — annotations are hints only; enforcement belongs in server access control, not client
 - **Input boundary** — validate all paths, shell arguments, URLs, tenant IDs, and secrets server-side
 
-→ Full details: [references/security.md](references/security.md)
+→ Threat reference (data injection, authn/authz, sessions, DoS, secrets, supply chain, release stability):
+   [references/security-threats.md](references/security-threats.md)
+
+---
+
+## Observability *(UNIVERSAL + OPINIONATED)*
+
+Per-call usage logs drive three decisions no intuition can replace: which tools are dead
+(rewrite or delete), which are hot (invest description work there first), which are
+error-prone (agent-UX bug, not a backend bug). Minimum fields per call: `ts`,
+`tool_name`, `status`, `duration_ms`. Never log raw args or responses — secrets, PII,
+prompt-injected content. See [references/observability.md](references/observability.md)
+for schema, storage patterns, privacy rules, and report templates.
 
 ---
 
@@ -193,15 +216,16 @@ Before shipping or handing off:
 
 - [ ] `title` set on every tool — 1–3 words, product language, sentence case, user-facing
 - [ ] Tools designed for outcomes (user goals), not 1:1 endpoint wrappers
-- [ ] Tool count ≤ 15 primary tools *(OPINIONATED threshold)*
+- [ ] Primary tool count within the ceiling in `references/tool-design.md` *(OPINIONATED)*
 - [ ] Mutating tools are safe by default — draft/paused/dry-run unless explicit activation requested
-- [ ] `SubmitFeedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
-- [ ] System prompt includes feedback directive *(OPINIONATED)*, ≤ 300 tokens, built dynamically
+- [ ] `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
+- [ ] System prompt includes feedback directive *(OPINIONATED)*, kept short, built dynamically
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST, not optional)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
 - [ ] For `stdio`, logs go to `stderr`, never `stdout`
 - [ ] Integration smoke test exists and passes against live server
 - [ ] No nested objects in parameter schemas — flat primitives only
+- [ ] Per-call usage log in place — `ts`, `tool_name`, `status`, `duration_ms` minimum; no raw args / no responses logged *(OPINIONATED)*
 
 ---
 

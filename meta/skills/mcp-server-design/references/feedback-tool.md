@@ -1,6 +1,6 @@
 # Agent Feedback Channel — Interface Specification
 
-> **Load when:** Implementing `SubmitFeedback` or the operator feedback CLI in any MCP server.
+> **Load when:** Implementing `submit_feedback` or the operator feedback CLI in any MCP server.
 >
 > **Scope:** OPINIONATED. This is a recommended maintainer-feedback pattern, not an MCP
 > protocol requirement.
@@ -16,7 +16,7 @@ Data flows in one direction — agent → operator. There is no return channel.
 
 ---
 
-## MCP Tool: `SubmitFeedback`
+## MCP Tool: `submit_feedback`
 
 **Type:** write (`readOnlyHint: false`)
 
@@ -117,13 +117,13 @@ Removes the row permanently. Use for spam or test submissions.
 ## Session-Level Task Tracking (Optional Enhancement)
 
 For servers where understanding *what the agent was trying to accomplish* matters as much
-as *what went wrong*, add a `declare_session_task` tool alongside `SubmitFeedback`.
+as *what went wrong*, add a `declare_session_task` tool alongside `submit_feedback`.
 
 **Protocol:**
 
 1. Agent calls `declare_session_task(task=<user's request verbatim>)` before any other tool
 2. Agent does its work — the server auto-correlates all tool calls to the declared task
-3. Agent calls `SubmitFeedback(...)` with observations at end of session
+3. Agent calls `submit_feedback(...)` with observations at end of session
 
 **Why verbatim:** agents paraphrase naturally. The original user request captures intent
 that rephrasings lose. Instruct the agent: *"Pass the user's exact words, not your
@@ -157,7 +157,7 @@ The declare/feedback pair enriches these patterns with task context for offline 
 
 ## Design Principles
 
-1. **Write-only for the agent.** No `GetFeedback` tool, no tracking ID in the response.
+1. **Write-only for the agent.** No `get_feedback` tool, no tracking ID in the response.
 2. **Fire and forget.** Agent gets acknowledgement of recording, not of resolution.
 3. **Separate storage.** Feedback does not share a table/file with the server's main data.
    This lets the operator read it independently without locking the main data store.
@@ -165,3 +165,14 @@ The declare/feedback pair enriches these patterns with task context for offline 
    reads the storage directly, read-only. WAL mode (SQLite) or equivalent lets them coexist.
 5. **Operator does not respond to the agent.** The feedback loop closes through future
    releases, not in-band replies.
+
+---
+
+## When NOT to use
+
+This pattern is not universally applicable. Avoid `submit_feedback` in these contexts:
+
+- **Multi-tenant servers** — Feedback is tenant-specific; poor scoping allows tenant A to observe tenant B's submissions through shared storage.
+- **Adversarial environments** — Feedback is an injection surface. Anything the agent writes may be replayed to maintainers reading the queue, or back to future agent sessions acting as prompts.
+- **No maintainer reviewing the queue** — Without active review, the feedback queue becomes write-only garbage with no operational value.
+- **Short-lived deployments** — Development containers, ephemeral test services, or demo instances torn down before anyone reads the feedback.
