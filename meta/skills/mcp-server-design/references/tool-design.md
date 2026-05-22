@@ -72,7 +72,15 @@ Tools ship in two tiers.
 | `primary` | User-facing capability, the LLM should know it exists | Listed in tool catalogue |
 | `secondary` / `helper` | Supporting operation, plumbing | May be hidden from catalogue |
 
-Target **≤10 primary tools** as a rule of thumb — more tools dilute LLM selection accuracy; aim for ≤10 with a strong bias toward fewer. Real-world evidence supports this: GitHub's MCP server collapsed 40 tools down to 3–10 focused ones. The ceiling is not absolute: a server with sharply-distinct descriptions inside one tight domain can carry more than ≤10; a server with overlapping descriptions spanning loose concerns will struggle below it. The number is a signal that the surface needs scrutiny, not a hard cap. Past ≤10, ask what can be merged or promoted to a parameter before adding another tool.
+**≤10 primary tools** is a signal, not a hard cap. More tools dilute LLM selection accuracy — every loaded tool description taxes the context window, even tools the agent never calls. Bias toward fewer.
+
+The number is a trigger for scrutiny:
+
+- A server with sharply-distinct descriptions inside one tight domain can carry more than 10.
+- A server with overlapping descriptions across loose concerns will struggle below 10.
+- Past the signal, the question is always: can two tools merge, or can a tool be promoted to a parameter, before adding another?
+
+Real-world evidence: GitHub's MCP server collapsed 40 tools down to 3–10 focused ones; Block's Linear server went from 30+ to 2 over three iterations with performance improving at each step. The cliff is sharper than the slope suggests.
 
 ---
 
@@ -288,19 +296,69 @@ cookies, and tenant-private data.
 ## Long-Running Operations
 
 Synchronous tools that block for more than a few seconds hold the connection and degrade UX.
-For anything slow (file analysis, data migration, external API with high latency), use an
-async handle pattern instead of blocking:
+For anything slow (file analysis, data migration, external API with high latency), do not block —
+return a handle and let the client poll.
 
-1. Tool returns immediately with a task `id` and `status: "working"`
-2. A separate polling tool (`get_task_status`, `check_job_result`) takes the `id` and returns current state
-3. Final state returns the actual result or error
+There are two ways to do this. **Prefer the spec primitive when the client supports it; fall
+back to the roll-your-own pattern when it doesn't.**
 
-This requires no spec feature — just two tools and a server-side state store. The key invariant:
-the first tool never blocks; it only enqueues work and returns a handle.
+### Spec primitive — Tasks (`DRAFT-2025-11-25`, [SEP-1686](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1686))
 
-**When blocking is fine:** sub-second operations, anything where the LLM would retry anyway.
-**When to use the handle pattern:** external API calls with unpredictable latency, file processing,
-background sync, anything that's caused connection timeouts in practice.
+The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`,
+`elicitation/create`). Declare per-tool with `execution.taskSupport`:
+
+```jsonc
+{
+  "name": "deep_research",
+  "description": "...",
+  "execution": { "taskSupport": "required" }  // "forbidden" | "optional" | "required"
+}
+```
+
+| Value | Meaning |
+|-------|---------|
+| `forbidden` | Default. Tool is invoked synchronously; no task augmentation. |
+| `optional` | Client may choose to augment with a task or call synchronously. |
+| `required` | Client must augment with a task — synchronous call is rejected. |
+
+Wire shape when the client augments:
+
+```jsonc
+// Client → server
+{"method":"tools/call","params":{"name":"deep_research","arguments":{...},"task":{"ttl":600000}}}
+// Server → client (immediate)
+{"result":{"taskId":"...","status":"working","createdAt":"...","ttl":600000,"pollInterval":2000}}
+// Client polls
+{"method":"tasks/get","params":{"taskId":"..."}}
+// Terminal: working | input_required | completed | failed | cancelled
+{"method":"tasks/result","params":{"taskId":"..."}}  // returns the original CallToolResult
+{"method":"tasks/cancel","params":{"taskId":"..."}}  // optional
+```
+
+Notes:
+- The receiver generates the task ID and may shorten the requested `ttl`.
+- Clients poll. `notifications/tasks/status` is optional — requestors must not rely on it.
+- Bind tasks to the session / auth context; use high-entropy IDs.
+- SDK support is rolling out — check [clients.md](clients.md) and your SDK's release notes before
+  marking a tool `taskSupport: "required"`.
+
+### Fallback — roll-your-own async handle
+
+For clients that don't yet implement tasks, expose two tools:
+
+1. Submit tool returns immediately with a domain `id` and `status: "working"`.
+2. A separate polling tool (`get_task_status`, `check_job_result`) takes the `id` and returns current state.
+3. Final state returns the actual result or error.
+
+No spec feature needed — just two tools and a server-side state store. Same invariant: the first
+tool never blocks; it only enqueues work and returns a handle. Prefer the spec primitive once your
+target clients support it — the roll-your-own pattern leaks polling cadence into prompt engineering
+and depends on the agent remembering to call the status tool.
+
+### When blocking is fine
+
+Sub-second operations, anything where the LLM would retry anyway. Watch the client's tool-call
+timeout — see [clients.md](clients.md) for empirical numbers per host.
 
 ---
 

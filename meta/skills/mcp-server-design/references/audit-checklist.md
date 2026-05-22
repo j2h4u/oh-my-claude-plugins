@@ -15,7 +15,7 @@
 
 ## 1. Design Philosophy
 
-- [ ] * `[UNIVERSAL]` **Tool count controlled** — count all tools exposed in the registry. If > 10 primary tools (target ≤10 per tool-design.md), the surface likely needs consolidation or splitting into domain-specific servers.
+- [ ] * `[OPINIONATED]` **Tool count under scrutiny** — count primary tools in the registry. >10 is a signal to consolidate or split into domain servers, not a hard cap. See [tool-design.md §Classification](tool-design.md#classification) for rationale and exceptions.
 - [ ] * `[UNIVERSAL]` **No thin API wrapper** — for each tool, ask: "does this map 1:1 to a backend endpoint?" If yes, it should bundle the downstream calls internally instead.
 - [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. `track_latest_order`, not `get_order_status`.
 - [ ] `[UNIVERSAL]` **One server, one job** — can you describe the server's purpose in one sentence? If not, scope is too broad.

@@ -49,6 +49,7 @@ the references they link to.
 | `outputSchema` | JSON Schema declared on a tool that types its structured output. When declared, the server MUST return `structuredContent` on every successful call. |
 | `structuredContent` | Sibling of `content` in a tool result — carries typed JSON conforming to `outputSchema`. Lets clients render/parse without re-parsing text. |
 | `isError` | Boolean on the tool result. `true` = business/validation error the agent can recover from. Distinct from protocol exceptions (transport-level failures). |
+| `execution.taskSupport` | Per-tool field (`DRAFT-2025-11-25`, SEP-1686): `forbidden` \| `optional` \| `required`. Declares whether the client may (or must) augment a `tools/call` with a `task` param to run it as a polled task via `tasks/get` / `tasks/result`. Spec primitive for long-running ops. |
 | `server.instructions` | The server-declared system prompt — first-class config surface for shaping agent behaviour without adding tools. Paid per request; keep tight. |
 | Tool `annotations` | Protocol hints on a tool: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`. Hints to clients/agents, not enforced server-side. |
 | `posture` (primary / secondary) | Project-level classification: *primary* tools = user-facing capabilities; *secondary/helper* tools = plumbing the agent uses to support primary calls. Not a protocol field. |
@@ -132,25 +133,29 @@ Quick rules:
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
 - Flat parameter schemas — no nested objects; LLMs hallucinate nested key names
 - Hard-cap all list responses; include pagination token when truncated
-- Keep primary tools at ≤10 — past that ceiling, consolidate or split into domain servers (see `references/tool-design.md`)
+- ≤10 primary tools is a signal, not a hard cap *(OPINIONATED — rationale and exceptions in `references/tool-design.md` §Classification)*
 
 → Full conventions: [references/tool-design.md](references/tool-design.md)
 
 ---
 
-## Agent Feedback Channel *(OPINIONATED)*
+## Agent Feedback Channel *(OPINIONATED · CONDITIONAL)*
 
-For self-owned production servers with a maintainer who reads the queue, exposing a
-`submit_feedback` tool is a useful pattern — not an MCP protocol requirement:
+A useful pattern for **self-owned production servers with a maintainer who reads the queue** —
+not an MCP protocol requirement. Skip this entirely for adversarial environments, deployments
+without an active reviewer, or short-lived/demo servers — see
+[feedback-tool.md §When NOT to use](references/feedback-tool.md#when-not-to-use).
+
+If you adopt the pattern:
 
 - Write-only for the agent — no read-back, no tracking ID, fire and forget
 - Agent reports bugs, confusing behaviour, missing capabilities in the moment
 - Operator reviews out-of-band via `feedback list` / `feedback status` / `feedback delete`
 - Separate storage from the server's main data (own SQLite file or table)
-- System prompt must include the directive: *"Use `submit_feedback` immediately when a tool
+- Pair with a system-prompt directive: *"Use `submit_feedback` immediately when a tool
   response is wrong, surprising, or missing a useful capability."*
 
-→ Full interface spec (fields, severity, CLI contract, data model):
+→ Full interface spec (fields, severity, CLI contract, data model, when-not-to-use):
 [references/feedback-tool.md](references/feedback-tool.md)
 
 ---
@@ -189,7 +194,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 - `stdio`: use for Claude Desktop and any client that launches subprocesses
 - Streamable HTTP: use for inter-container (Docker network) or HTTP-capable clients
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
-- For `stdio`, **all logging goes to `stderr` by default** — any `stdout` output corrupts the JSON-RPC transport silently. `[CONDITIONAL]` If your architecture uses a separate logging daemon, the MCP server should NOT write to `stderr` (the daemon owns logging) — see [references/daemon-architecture.md](references/daemon-architecture.md)
+- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. `[CONDITIONAL]` Exception: under the daemon + on-demand server pattern, stderr is piped to the MCP client (not the operator), so the MCP server must NOT write to stderr — it ships logs to the daemon over the socket. Canonical rule and rationale: [references/daemon-architecture.md](references/daemon-architecture.md)
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
 → Security per transport: [references/security-threats.md](references/security-threats.md)
@@ -242,10 +247,10 @@ Before shipping or handing off:
 
 - [ ] `title` set on every tool — 1–3 words, product language, sentence case, user-facing
 - [ ] Tools designed for outcomes (user goals), not 1:1 endpoint wrappers
-- [ ] Primary tool count within the ceiling in `references/tool-design.md` *(OPINIONATED)*
+- [ ] Primary tool count scrutinised against the ≤10 signal *(OPINIONATED — see `references/tool-design.md` §Classification)*
 - [ ] Mutating tools are safe by default — draft/paused/dry-run unless explicit activation requested
-- [ ] `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
-- [ ] System prompt includes feedback directive *(OPINIONATED)*, kept short, built dynamically
+- [ ] *(if adopting feedback pattern — see `references/feedback-tool.md` §When NOT to use)* `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
+- [ ] *(if adopting feedback pattern)* System prompt includes feedback directive *(OPINIONATED)*, kept short, built dynamically
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST, not optional)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
 - [ ] For `stdio`, logs go to `stderr`, never `stdout`

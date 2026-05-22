@@ -31,9 +31,20 @@ MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
   a clean error per call (does not crash itself)
 - **Logging via socket** — MCP server sends all log entries to the daemon over the same Unix socket
   (as a structured log message type alongside RPC calls); daemon owns the log sink (file, journal).
-  **In this pattern only, the stderr rule from SKILL.md and security-threats.md is reversed:**
-  Do NOT write logs to `stderr` from the MCP server — stderr goes to the MCP client, not the operator.
-  (Those documents cover the standard case where no daemon is present.)
+
+## Stderr Rule — Reversed Under This Pattern
+
+This is the canonical source for the stderr-inversion rule (SKILL.md, security-threats.md, and
+python-notes.md link here):
+
+- **Standard stdio rule:** log to `stderr`, never `stdout` — stdout carries JSON-RPC and any other
+  byte corrupts the transport.
+- **Under the daemon pattern:** the MCP server is launched by the client (`docker exec -i`),
+  so its `stderr` is piped to the **MCP client**, not the operator. Writing logs there leaks them
+  into the client's diagnostic stream and the operator never sees them. The MCP server must NOT
+  write to stderr; it ships logs to the daemon over the Unix socket, and the daemon writes the sink.
+- Net effect for this pattern: stdin = JSON-RPC in, stdout = JSON-RPC out, stderr = silent,
+  socket = logs + RPC to daemon.
 
 ## When NOT to Use This Pattern
 

@@ -90,7 +90,7 @@ In order of reliability:
 
 **Tool call duration:**
 - Target <20s. Anything longer risks connection drop.
-- For slow operations: use the async-handle pattern (return `id` + `status: "working"` immediately, expose a separate polling tool for state). Canonical recipe: [tool-design.md §Long-Running Operations](tool-design.md). Do not block the call waiting for completion.
+- For slow operations: do not block the call. Claude Desktop does not (as of this recheck) implement the spec Tasks primitive, so use the roll-your-own async-handle fallback (return `id` + `status: "working"` immediately, expose a separate polling tool for state). Canonical recipe and the spec-primitive alternative: [tool-design.md §Long-Running Operations](tool-design.md).
 - "Server busy" with remaining time estimate is visible to the agent — write informative busy messages.
 
 **Tool names:**

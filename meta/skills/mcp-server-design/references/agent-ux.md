@@ -235,3 +235,7 @@ queue becomes a signal for what to fix next.
 For clustering submissions by task type, instruct the agent to populate the `task`
 field of `submit_feedback` with the user's original request verbatim
 (see `feedback-tool.md` parameter table).
+
+**Do not deploy this pattern blindly.** It assumes an active maintainer, a non-adversarial
+environment, and a deployment lifetime long enough for review cycles to matter. See
+[feedback-tool.md §When NOT to use](feedback-tool.md#when-not-to-use).

@@ -85,7 +85,8 @@ log_event({"ts": ..., "tool_name": "search_messages", "status": "ok", "duration_
 ```
 
 Rotate daily, retain 30–90 days. For stdio servers, this MUST be a file or stderr — never
-stdout (see security-threats.md transport rule).
+stdout. Daemon-pattern servers ship logs over the socket instead; see
+[daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
 Analysis example — error rate and p95 latency per tool with `jq` and `awk`:
 
@@ -212,11 +213,10 @@ matters at scale.
   as successes.
 - Logging must never fail the call. Wrap the log write in `try/except` and discard on
   failure; an observability bug should not break the product.
-- For stdio servers, the log writer must not touch stdout (corrupts JSON-RPC framing — see
-  security-threats.md).
-- If the server is multi-process (daemon + on-demand MCP), the on-demand process emits to
-  the daemon over its socket, the daemon writes the log. Same as the daemon-architecture
-  pattern for application logs.
+- Stdio transport rule and the daemon-pattern exception are canonical in
+  [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+  Short version for usage logs: never stdout; default to file or stderr; under the daemon pattern,
+  the on-demand MCP process ships logs to the daemon over the socket instead.
 
 ---
 

@@ -176,10 +176,9 @@ Rules:
 - Preserve each backend's `title`, annotations, `outputSchema`, and `structuredContent`; the
   gateway should not be a reason to weaken tool contracts.
 
-As a rough audit trigger: if the aggregated endpoint exposes more than 10 primary tools, ask
-whether the endpoint should be split or filtered. See `tool-design.md` for the rationale behind
-the ≤10 primary-tool rule of thumb (the ceiling is a signal, not a hard cap — it depends on
-how sharply tools are described and how tight the domain is).
+Audit trigger: if the aggregated endpoint exposes >10 primary tools, ask whether to split or
+filter. The ≤10 signal applies to gateways too — see
+[tool-design.md §Classification](tool-design.md#classification).
 
 ---
 

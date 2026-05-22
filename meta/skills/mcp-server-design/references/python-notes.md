@@ -132,3 +132,5 @@ Python's default `print()` and `logging.basicConfig()` write to `stdout`. With s
 import logging, sys
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 ```
+
+**Exception — daemon + on-demand server pattern:** under stdio, stderr is piped to the MCP client, not the operator. If the server ships logs to a separate daemon over a socket, do NOT write to stderr — wire the logger to the socket handler instead. See [daemon-architecture.md](daemon-architecture.md).

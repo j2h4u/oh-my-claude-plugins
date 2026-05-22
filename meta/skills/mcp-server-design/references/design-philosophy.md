@@ -38,10 +38,9 @@ get_order_status(order_id)      # → GET /orders/{id}/status
 What breaks:
 
 - **Tool pollution** — the agent loads all tool descriptions on every request. Each tool taxes
-  the context window, even tools that won't be called. Benchmarks across 6 LLMs showed accuracy
-  dropping measurably as tool count rose; the GitHub MCP team collapsed 40 tools to a small
-  handful and saw a substantial reduction in context window usage — consistent with keeping
-  primary tool count at ≤10 (see tool-design.md for the rule-of-thumb budget).
+  the context window, even tools that won't be called. Accuracy drops measurably as tool count
+  rises (see [tool-design.md §Classification](tool-design.md#classification) for the ≤10 signal
+  and the evidence behind it).
 - **Choreography burden** — the agent must reconstruct intent from low-level primitives.
   Sequencing three calls across a conversation is error-prone reasoning, not domain logic.
 - **Accuracy collapse** — Block's Linear server went from 30+ tools to 2 over three iterations,
@@ -78,9 +77,9 @@ The **80/20 rule:** 20% of API capabilities serve 80% of user requests. Identify
 real user workflows and expose only those. The remaining 80% of endpoints do not justify tool
 explosion.
 
-**Target:** See tool-design.md for the rule-of-thumb tool budget. When the count grows past that,
-split into domain-specific servers — never cram more tools into one server to avoid the split.
-"One server, one job."
+**Target:** ≤10 primary tools per server (see [tool-design.md §Classification](tool-design.md#classification)).
+Past that signal, split into domain-specific servers — never cram more tools into one server to
+avoid the split. "One server, one job."
 
 > "Your 20-tool MCP server is making every agent that connects to it dumber." — ksopyla.com
 
