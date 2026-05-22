@@ -17,9 +17,9 @@ Tool name + description reaches two distinct readers:
 | **LLM (agent)** | reads at inference to decide when/how to call | When to call, what NOT to do, how to interpret output |
 | **Human (operator/user)** | sees it in client UIs — tool panels, hover tooltips | What the tool does in one sentence, side effects |
 
-Write for the LLM first — it's the harder constraint. Heuristic, not measured: a
-description precise enough for an LLM (when to call, what NOT to do, field semantics)
-is usually scannable enough for humans too; the reverse is less reliable.
+Write for the LLM first — it's the harder constraint. A description precise enough
+for an LLM (when to call, what NOT to do, field semantics) is scannable enough for
+humans too; the reverse is not reliable.
 
 **Structure that satisfies both:**
 
@@ -44,10 +44,10 @@ lever an MCP author has. There is **no evidence** that structural prefix tags li
 
 | Lever | What it is | Where it lives in this skill |
 |-------|-----------|------------------------------|
-| **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Descriptions` (the three-question structure), Faghih et al. found this single most effective |
+| **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Writing Tool Descriptions` (the three-question structure), Faghih et al. found this single most effective |
 | **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` line 46 (Anthropic engineering recommendation) |
 | **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title` — the protocol's own posture channel | `audit-checklist.md §3 Tool Annotations` |
-| **Sharper, distinct descriptions** | Each tool's description is semantically distant from others; near-duplicates collapse selection | `tool-design.md §Descriptions` — answer "When?" / "What?" / "What NOT?" |
+| **Sharper, distinct descriptions** | Each tool's description is semantically distant from others; near-duplicates collapse selection | `tool-design.md §Writing Tool Descriptions` — answer "When?" / "What?" / "What NOT?" |
 | **Toolsets / config-level grouping** | Let operators enable/disable groups of tools at install time | GitHub MCP `--toolsets`; an organizational pattern, not a description pattern |
 
 > Background: [Anthropic — Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents);
@@ -91,10 +91,9 @@ Key workflows:
 ```
 
 Named patterns give the LLM stable, compact vocabulary to refer to multi-step flows.
-The mechanism is plausible (a labelled pattern is easier to retrieve and reason about
-than re-deriving the steps), but this skill does not have measured data on how often
-agents actually cite the labels back. Treat as a candidate pattern worth testing on
-your own surface, not a guaranteed outcome.
+A labelled pattern is easier to retrieve and reason about than re-deriving the steps
+from scratch. Measure whether agents cite the labels back on your own surface — the
+benefit is strongest on complex multi-step flows where step order matters.
 
 **Dynamic data injection:** build the system prompt at startup, not at deploy time.
 Inject live server state (connected account, current limits, active features) so
@@ -142,22 +141,30 @@ Apply at both layers:
 
 ---
 
-## Dark-Room Agent UX Testing
+## Two Kinds of Testing
 
-The highest-signal UX test: give the agent the server with no briefing,
-ask it to complete a real task, then read the feedback queue.
+These address different failure modes and are run at different points in the lifecycle.
+Both require `submit_feedback` deployed and the feedback directive in the system prompt.
+
+**Dark-room** = "does it function when the agent is blind?" — a smoke test run after
+every significant change. **Agent CustDev** = "does the agent's strategy match the
+designer's intent?" — an API design review run once after the first complete surface,
+then after major redesigns.
+
+### Dark-Room Test
+
+Give the agent the server with no briefing, assign a real task, then read the feedback queue.
 
 **Protocol:**
 
-1. Ensure `submit_feedback` is deployed and the system prompt includes the feedback directive
-2. Give the agent a **real task** (not a toy: "find my unread messages from this week",
+1. Give the agent a **real task** (not a toy: "find my unread messages from this week",
    "summarise what I was discussing with X yesterday")
-3. No briefing — don't explain tools, names, or conventions
-4. Instruction: *"As you work, use `submit_feedback` for anything surprising, confusing,
+2. No briefing — don't explain tools, names, or conventions
+3. Instruction: *"As you work, use `submit_feedback` for anything surprising, confusing,
    or missing. At the end, submit a session summary: what felt intuitive, what was a
    WTF moment, what capability you wished existed."*
-5. Let it run
-6. Review `<server> feedback list` after the session
+4. Let it run
+5. Review `<server> feedback list` after the session
 
 **Signals to look for:**
 
@@ -168,31 +175,16 @@ ask it to complete a real task, then read the feedback queue.
 - **Reached-for capabilities** — clear signal for the next iteration
 - **Contract violations** — agent expected one behaviour, got another
 
-**When to run:** after any significant change to the tool surface — per change,
-not per release. One session takes minutes; issues caught here cost far less
-than issues discovered mid-task by real users.
+**When to run:** after any significant change to the tool surface — per change, not per release.
 
----
+### Agent CustDev
 
-## Agent CustDev: Post-Release Tool Surface Review
-
-**The shortest framing:** this is customer development — for agents. You ship the first
-version of the tool surface, then run a dedicated session interviewing capable agents
-*about the API itself*, not about any task. The agent is your user; treat them like one.
-
-After the first working version ships, do a dedicated tool surface review with agents —
-not task-based, but explicitly about the API itself.
-
-**Why:** the first version of a tool surface is shaped by how the developer thinks,
-not how agents reason. Smart agents have distinct cognitive trajectories — they
-form expectations from names, infer semantics from parameter structure, make
-analogies to other tools. A surface that's technically correct can still be
-cognitively dissonant.
+Run a dedicated session where capable agents review the API itself — no task, explicitly
+about the tool surface. Different models expose different blind spots; use at least two.
 
 **Protocol:**
 
-1. Present the full tool catalogue to one or more capable agents (different models = different
-   blind spots)
+1. Present the full tool catalogue to one or more capable agents
 2. Ask explicitly: *"Look at these tools as a user who has never used this server.
    For each tool: does the name immediately tell you what it does and when to call it?
    Are there parameters that seem redundant, misnamed, or missing? Is there anything
@@ -204,16 +196,13 @@ cognitively dissonant.
 5. Collect responses, look for convergence — if two different agents flag the same tool
    or parameter, it's a real issue
 
-**What to optimise for:**
+**Goal:** cognitive congruence — tool names, parameter names, and descriptions match
+the way a capable agent naturally thinks in this domain. A tool is well-named if an
+agent reaches for it without being told to. A parameter is well-structured if filling
+it in feels like completing a thought, not consulting a spec.
 
-The goal is **cognitive congruence** — tool names, parameter names, and descriptions
-should match the way a capable agent naturally thinks when solving problems in this domain.
-A tool is well-named if an agent reaches for it without being told to. A parameter is
-well-structured if filling it in feels like completing a thought, not consulting a spec.
-
-**When to run:** once after the first complete tool surface. Then again after any
-major redesign. This is a design review, not a QA step — run it before the surface
-stabilises, not after.
+**When to run:** once after the first complete tool surface; again after any major
+redesign. This is a design review, not a QA step — run it before the surface stabilises.
 
 ---
 

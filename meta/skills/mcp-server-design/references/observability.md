@@ -52,8 +52,7 @@ Minimal, useful, safe:
 
 Do **NOT** log:
 
-- Raw argument values — they may contain secrets, PII, or prompt-injected content that you
-  later display in a dashboard and trigger the injection on a human reviewer
+- Raw argument values — they may contain secrets, PII, or untrusted content (see [security-threats.md §1 — Untrusted data flowing through your server](security-threats.md#1-untrusted-data-flowing-through-your-server))
 - Full response bodies — same reason, plus disk cost
 - Full error messages verbatim if the message echoes user data — log the class, store the
   message in a separate, access-controlled error log if you need it
@@ -213,10 +212,8 @@ matters at scale.
   as successes.
 - Logging must never fail the call. Wrap the log write in `try/except` and discard on
   failure; an observability bug should not break the product.
-- Stdio transport rule and the daemon-pattern exception are canonical in
+- Stdio transport rule and the daemon-pattern exception (socket-based logging) are canonical in
   [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
-  Short version for usage logs: never stdout; default to file or stderr; under the daemon pattern,
-  the on-demand MCP process ships logs to the daemon over the socket instead.
 
 ---
 

@@ -166,6 +166,35 @@ responses.
 | Argument confusion | `--config=/etc/shadow` passed to CLI tool | Use `--` separator. Allowlist flags. |
 | Tenant/object ref | `account_id=42` not owned by caller | Resolve relative to authenticated principal, not as a free-form ID. See section 4. |
 
+Defensive URL validation for outbound calls from tools:
+
+```python
+import ipaddress, urllib.parse
+
+ALLOWED_SCHEMES = {"https"}
+
+def validate_outbound_url(url: str) -> None:
+    p = urllib.parse.urlparse(url)
+    if p.scheme not in ALLOWED_SCHEMES:
+        raise ValueError(f"Scheme '{p.scheme}' not allowed")
+    if not p.hostname:
+        raise ValueError("URL has no hostname")
+    try:
+        addr = ipaddress.ip_address(p.hostname)
+        _reject_private(addr)
+    except ValueError:
+        import socket
+        resolved = socket.getaddrinfo(p.hostname, None)
+        for *_, sockaddr in resolved:
+            _reject_private(ipaddress.ip_address(sockaddr[0]))
+
+def _reject_private(addr: ipaddress.IPAddress) -> None:
+    if addr.is_loopback or addr.is_link_local or addr.is_private:
+        raise ValueError(f"Address {addr} is not routable")
+```
+
+DNS recheck after resolution prevents TOCTOU: the name could resolve differently between validation and the actual request if the attacker controls DNS TTLs.
+
 **General principle:** validate at the boundary, in the server, before the value touches
 the filesystem, shell, network, DB, or rendering pipeline. Repeat validation at the
 function that consumes the value — boundary-only validation breaks when call paths refactor.
@@ -356,8 +385,7 @@ attack from a defender's vantage point.
 
 Even with sections 1–8 applied, incidents happen. Be ready.
 
-- **Logging makes investigation possible** — see [observability.md](observability.md). You
-  cannot investigate a tool that you do not measure.
+- **Log security events** — auth failures, rate-limit breaches, allowlist denials. Full logging guidance in [observability.md](observability.md).
 - **A security contact** — `SECURITY.md` in the repo with a reporting channel (security
   email, GitHub private vuln reporting). Reachable people, not a `noreply@`.
 - **Version pinning advisory** — security-fix releases must state "upgrade to ≥ X.Y.Z; prior versions are vulnerable to …" in the changelog.

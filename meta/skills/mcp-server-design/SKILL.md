@@ -2,9 +2,9 @@
 name: mcp-server-design
 description: >-
   This skill should be used when the user asks to "design an MCP server", "audit an MCP server",
-  "review MCP tools", "add MCP tool", "write MCP server", "improve tool descriptions",
-  "design tool surface", "add submit_feedback tool", "write tool schema", mentions "MCP transport",
-  "tool annotations", "mcp stdio", or is building, reviewing, or auditing any MCP server.
+  "review MCP tools", "add MCP tool", "improve tool descriptions", "design tool surface",
+  "add submit_feedback tool", "review tool schema", mentions "MCP transport", "tool annotations",
+  "mcp stdio", "MCP Resources", "MCP Prompts", or is designing, reviewing, or auditing any MCP server.
   Covers design philosophy, tool naming, parameter schemas, agent UX, feedback channel,
   transport, security, and client compatibility. NOT for hands-on implementation from scratch
   (use mcp-builder for that).
@@ -18,6 +18,12 @@ Patterns and conventions for production-grade MCP servers, distilled from multip
 > Pydantic/Zod schemas, evaluation harness) use the official Anthropic skill **`mcp-builder`**,
 > available by default in most Claude Code installations:
 > https://github.com/anthropics/skills/tree/main/skills/mcp-builder
+
+**Scope split — this skill vs mcp-builder:**
+- `mcp-server-design` (this skill): tool design, schema design, agent UX, security threat model, audit checklists, client compatibility. *What and why.*
+- `mcp-builder`: scaffolding a server, SDK setup, deployment, language idioms. *How to wire it up.*
+
+Use both together when implementing a server. Use this one alone when reviewing or auditing an existing server.
 
 ## Scope Tags
 
@@ -45,7 +51,9 @@ the references they link to.
 | Term | One-line meaning |
 |------|------------------|
 | `stdio` transport | MCP over a process's stdin/stdout; the host launches the server as a subprocess. Default for Claude Desktop and CLI hosts. |
-| `Streamable HTTP` transport | The current MCP network transport (spec 2025-11-25): standard HTTP with an SSE upgrade and a session header. Replaces deprecated HTTP+SSE. |
+| `Streamable HTTP` transport | The current MCP network transport (spec 2025-11-25): single endpoint, POST + GET. Server returns `application/json` or `text/event-stream` per response. Client MUST send `MCP-Protocol-Version` header. Replaces deprecated HTTP+SSE. |
+| **Resource** | Read-only addressable content the client/application selects and injects. Stable, URI-addressable. In Claude Code: `@server:proto://path` mention syntax (e.g. `@github:issue://123`). → [tool-design.md §Three Primitives](references/tool-design.md#three-primitives) |
+| **Prompt** | Parameterized text snippet the user invokes by name. Surfaces in Claude Code as `/mcp__<server>__<prompt>` slash command. → [tool-design.md §Three Primitives](references/tool-design.md#three-primitives) |
 | `outputSchema` | JSON Schema declared on a tool that types its structured output. When declared, the server MUST return `structuredContent` on every successful call. |
 | `structuredContent` | Sibling of `content` in a tool result — carries typed JSON conforming to `outputSchema`. Lets clients render/parse without re-parsing text. |
 | `isError` | Boolean on the tool result. `true` = business/validation error the agent can recover from. Distinct from protocol exceptions (transport-level failures). |
@@ -53,17 +61,29 @@ the references they link to.
 | `server.instructions` | The server-declared system prompt — first-class config surface for shaping agent behaviour without adding tools. Paid per request; keep tight. |
 | Tool `annotations` | Protocol hints on a tool: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`. Hints to clients/agents, not enforced server-side. |
 | `posture` (primary / secondary) | Project-level classification: *primary* tools = user-facing capabilities; *secondary/helper* tools = plumbing the agent uses to support primary calls. Not a protocol field. |
+| `resource_link` | Tool result content type (`{type:"resource_link", uri, name, mimeType}`) introduced in 2025-11-25. Tools return a URI pointer instead of inlining content. Not guaranteed to appear in `resources/list`. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). |
+| `icons` (tool/resource/prompt field) | Optional array `{src, mimeType, sizes?[]}` on Tool, Resource, ResourceTemplate, Prompt. Added in 2025-11-25 (SEP-973). Source: [Changelog 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/changelog). |
 
 ---
 
 ## References
 
-Load references by use case:
+**Reading order for new servers (spine — read sequentially):**
+
+```
+design-philosophy → tool-design → (language-specific: python-notes OR fastmcp-notes) → audit-checklist
+```
+
+Lateral files (security-threats, observability, daemon-architecture, gateway-aggregation, clients, agent-ux, feedback-tool) load on demand when their use case triggers.
+
+**Load by use case:**
 
 | Use case | Read |
 |----------|------|
 | **Auditing** an existing server | audit-checklist plus the UNIVERSAL refs; add conditional refs only when the stack matches |
-| **Designing** a new server | design-philosophy, tool-design, agent-ux, feedback-tool, security-threats, observability, clients; then choose opinionated modules deliberately |
+| **Designing** a new server (spine) | design-philosophy → tool-design → agent-ux → feedback-tool → security-threats → observability → clients |
+| **Designing a server that exposes data** | tool-design §Three Primitives (Resources) |
+| **Designing reusable agent workflows** | tool-design §Three Primitives (Prompts) |
 | **Security review** | security-threats, clients, audit-checklist (§14 Security, §12 Transport and Logging, §5 Parameter Schemas) |
 | **Tool-surface review / 80-20 audit** | observability, audit-checklist (§1 Design Philosophy) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
@@ -71,37 +91,20 @@ Load references by use case:
 | **FastMCP framework** | python-notes, fastmcp-notes, tool-design |
 | **Remote multi-server gateway** | gateway-aggregation, security-threats, clients, audit-checklist |
 
-- **Design philosophy** *(UNIVERSAL)* — [references/design-philosophy.md](references/design-philosophy.md)
-  "Not an API wrapper" principles, antipatterns, Bad vs Good comparisons, 5 principles
-- **Tool design** *(UNIVERSAL, with opinionated thresholds)* — [references/tool-design.md](references/tool-design.md)
-  Naming, `title`, classification, annotations, descriptions, outputSchema, parameter schemas,
-  safe defaults, error diagnostics, compact responses, pagination, long-running ops,
-  argument flattening, listChanged
-- **Agent UX** *(UNIVERSAL + OPINIONATED)* — [references/agent-ux.md](references/agent-ux.md)
-  System prompt structure, dark-room testing, `Action:` error hints, post-MVP normalization
-- **Feedback channel** *(OPINIONATED)* — [references/feedback-tool.md](references/feedback-tool.md)
-  `submit_feedback` tool interface, operator CLI contract, data model, status lifecycle
-- **Security** *(UNIVERSAL)* — [references/security-threats.md](references/security-threats.md)
-  Prompt injection, transport security, annotation trust; threat model for benign servers:
-  data injection, arg validation, authn/authz, sessions, resource exhaustion, secret
-  hygiene, supply chain, release stability
-- **Observability** *(UNIVERSAL + OPINIONATED)* — [references/observability.md](references/observability.md)
-  Tool-usage logging; schema, storage patterns (JSONL / DB table / structured log),
-  privacy rules, reports for dead-tool / hot-tool / error-rate decisions
-- **Client compatibility** *(EMPIRICAL)* — [references/clients.md](references/clients.md)
-  Claude Desktop capabilities, notification behavior, timeouts — empirically verified 2026-04-28
-- **Audit checklist** *(MIXED; items are tagged)* — [references/audit-checklist.md](references/audit-checklist.md)
-  16-section checklist for auditing existing servers; apply item tags before severity
-- **Daemon architecture** `[STACK:stateful-backends]` — [references/daemon-architecture.md](references/daemon-architecture.md)
-  Daemon + on-demand split, Unix socket, crash isolation, when NOT to use
-- **Gateway aggregation** `[STACK:remote-multi-server]` — [references/gateway-aggregation.md](references/gateway-aggregation.md)
-  Docker MCP Gateway / registry pattern, shared OAuth edge, public tunnel, private backends,
-  tool-surface curation, smoke tests, failure modes
-- **Python notes** `[STACK:Python]` — [references/python-notes.md](references/python-notes.md)
-  Pydantic v2 `anyOf: null` recipes, `Annotated`/`Field` schema docs,
-  MCP Python SDK gotchas, return-type pitfalls, stdout/stderr logging
-- **FastMCP specifics** `[STACK:FastMCP]` — [references/fastmcp-notes.md](references/fastmcp-notes.md)
-  What FastMCP handles automatically, tool name override via `name=`, framework-only bugs
+| Reference | Scope | Content |
+|-----------|-------|---------|
+| [design-philosophy.md](references/design-philosophy.md) | UNIVERSAL | "Not an API wrapper" principles, antipatterns, Bad vs Good comparisons |
+| [tool-design.md](references/tool-design.md) | UNIVERSAL | Naming, classification, annotations, outputSchema, parameters, pagination, long-running ops |
+| [agent-ux.md](references/agent-ux.md) | UNIVERSAL + OPINIONATED | System prompt, dark-room testing, `Action:` error hints |
+| [feedback-tool.md](references/feedback-tool.md) | OPINIONATED | `submit_feedback` interface, CLI contract, data model, when-not-to-use |
+| [security-threats.md](references/security-threats.md) | UNIVERSAL | Prompt injection, authn/authz, sessions, DoS, secrets, supply chain |
+| [observability.md](references/observability.md) | UNIVERSAL + OPINIONATED | Per-call logging schema, storage patterns, privacy rules, report templates |
+| [clients.md](references/clients.md) | EMPIRICAL | Claude Desktop / Cursor capabilities, timeouts — verified 2026-04-28 |
+| [audit-checklist.md](references/audit-checklist.md) | MIXED | 16-section, ~80-item checklist; items tagged; HIGH/MEDIUM/LOW output |
+| [daemon-architecture.md](references/daemon-architecture.md) | STACK:stateful-backends | Daemon + on-demand split, Unix socket, crash isolation |
+| [gateway-aggregation.md](references/gateway-aggregation.md) | STACK:remote-multi-server | Docker MCP Gateway, shared OAuth edge, tool-surface curation |
+| [python-notes.md](references/python-notes.md) | STACK:Python | Pydantic v2 `anyOf:null`, `Annotated`/`Field`, SDK gotchas |
+| [fastmcp-notes.md](references/fastmcp-notes.md) | STACK:FastMCP | What FastMCP handles automatically, tool name override, framework bugs |
 
 ---
 
@@ -121,14 +124,19 @@ Load references by use case:
 
 ## Tool Design
 
-Quick rules:
+**Choose the right primitive first:**
+- Model decides when to invoke it → **Tool**
+- Stable, URI-addressable context the client pre-loads → **Resource** (see [tool-design.md §Three Primitives](references/tool-design.md#three-primitives))
+- User triggers an explicit reusable workflow by name → **Prompt** (see [tool-design.md §Three Primitives](references/tool-design.md#three-primitives))
 
+**Tool rules:**
 - Names: `snake_case`, verb_noun — `list_dialogs`, `get_entity_info`, `submit_feedback`
-- `title`: **mandatory** — 1–3 words, product language, sentence case, user-facing ("Search messages", not the raw tool name `search_messages`)
+- `title`: include on every tool `[OPINIONATED]` — spec marks it optional; in practice clients display it as user-facing prose. 1–3 words, product language, sentence case ("Search messages", not `search_messages`)
+- `icons`: optional `{src, mimeType, sizes?[]}` array on Tool/Resource/Prompt (SEP-973, 2025-11-25)
 - Classify each tool: `primary` (user-facing) or `secondary/helper` (plumbing)
 - Annotate explicitly: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
 - Mutating tools default to safe states: drafts, paused resources, dry-run, conservative limits
-- Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` (`structuredContent` is a sibling key to `content` in an MCP tool result that carries typed JSON data conforming to the declared `outputSchema`; see tool-design.md) on every call
+- Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` on every call (see glossary + tool-design.md)
 - Use `isError: true` for business errors (validation, API failures) — never raise protocol exceptions for domain errors
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
 - Flat parameter schemas — no nested objects; LLMs hallucinate nested key names
@@ -155,8 +163,7 @@ If you adopt the pattern:
 - Pair with a system-prompt directive: *"Use `submit_feedback` immediately when a tool
   response is wrong, surprising, or missing a useful capability."*
 
-→ Full interface spec (fields, severity, CLI contract, data model, when-not-to-use):
-[references/feedback-tool.md](references/feedback-tool.md)
+→ Full interface spec including severity, missing_capability, workaround_used, and the complete parameter contract: [references/feedback-tool.md](references/feedback-tool.md)
 
 ---
 
@@ -186,13 +193,12 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 - Server launched as a subprocess by Claude Desktop / a CLI host? → **`stdio`**
 - Network-accessible (inter-container Docker, HTTP-capable clients)? → **Streamable HTTP**
-- Exposed outside a trusted network? → **add an auth layer** on top (OAuth 2.1 per the spec; internal Docker networks with no untrusted neighbours can stay plaintext)
+- Exposed outside a trusted network? → **add an auth layer** (OAuth 2.1; tokens MUST include audience claim per RFC 8707 — see [references/security-threats.md](references/security-threats.md))
+- Internal Docker network with no untrusted neighbours? → plaintext is acceptable
 
-> **Streamable HTTP** is the current MCP network transport (spec 2025-11-25), replacing the deprecated HTTP+SSE transport — it uses standard HTTP with an SSE upgrade path and a session header.
+> **Streamable HTTP** (spec 2025-11-25, replacing deprecated HTTP+SSE): single endpoint, POST + GET. Server chooses `application/json` vs `text/event-stream` per response — SSE is for streaming multiple messages on one request, not always-on. Client MUST include `MCP-Protocol-Version: 2025-11-25` header; server SHOULD assume `2025-03-26` if absent, MUST respond 400 if invalid. `Mcp-Session-Id`: server MAY assign at init; client MUST include thereafter. DNS rebinding: server MUST validate `Origin` header (403 if invalid); SHOULD bind to localhost, not `0.0.0.0`. Source: [Transports spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
-- `stdio`: use for Claude Desktop and any client that launches subprocesses
-- Streamable HTTP: use for inter-container (Docker network) or HTTP-capable clients
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
 - For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. `[CONDITIONAL]` Exception: under the daemon + on-demand server pattern, stderr is piped to the MCP client (not the operator), so the MCP server must NOT write to stderr — it ships logs to the daemon over the socket. Canonical rule and rationale: [references/daemon-architecture.md](references/daemon-architecture.md)
 
@@ -209,19 +215,13 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 - **Annotation trust** — annotations are hints only; enforcement belongs in server access control, not client
 - **Input boundary** — validate all paths, shell arguments, URLs, tenant IDs, and secrets server-side
 
-→ Threat reference (data injection, authn/authz, sessions, DoS, secrets, supply chain, release stability):
-   [references/security-threats.md](references/security-threats.md)
+→ Threat reference (data injection, authn/authz, sessions, DoS, secrets, supply chain, release stability): [references/security-threats.md](references/security-threats.md)
 
 ---
 
 ## Observability *(UNIVERSAL + OPINIONATED)*
 
-Per-call usage logs drive three decisions no intuition can replace: which tools are dead
-(rewrite or delete), which are hot (invest description work there first), which are
-error-prone (agent-UX bug, not a backend bug). Minimum fields per call: `ts`,
-`tool_name`, `status`, `duration_ms`. Never log raw args or responses — secrets, PII,
-prompt-injected content. See [references/observability.md](references/observability.md)
-for schema, storage patterns, privacy rules, and report templates.
+Per-call logs drive dead-tool / hot-tool / error-rate decisions. Minimum fields: `ts`, `tool_name`, `status`, `duration_ms`. Never log raw args or responses (secrets, PII, prompt-injected content). → [references/observability.md](references/observability.md) for schema, storage patterns, privacy rules, report templates.
 
 ---
 
@@ -245,20 +245,25 @@ for schema, storage patterns, privacy rules, and report templates.
 
 Before shipping or handing off:
 
-- [ ] `title` set on every tool — 1–3 words, product language, sentence case, user-facing
-- [ ] Tools designed for outcomes (user goals), not 1:1 endpoint wrappers
-- [ ] Primary tool count scrutinised against the ≤10 signal *(OPINIONATED — see `references/tool-design.md` §Classification)*
-- [ ] Mutating tools are safe by default — draft/paused/dry-run unless explicit activation requested
-- [ ] *(if adopting feedback pattern — see `references/feedback-tool.md` §When NOT to use)* `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
-- [ ] *(if adopting feedback pattern)* System prompt includes feedback directive *(OPINIONATED)*, kept short, built dynamically
-- [ ] `outputSchema` declared tools always return `structuredContent` (MUST, not optional)
+- [ ] `title` set on every tool `[OPINIONATED]` — 1–3 words, sentence case, user-facing
+- [ ] Tools designed for outcomes, not 1:1 endpoint wrappers
+- [ ] Primary tool count scrutinised against the ≤10 signal `[OPINIONATED]` — see tool-design.md §Classification
+- [ ] Mutating tools safe by default — draft/paused/dry-run unless explicit activation
+- [ ] *(if adopting feedback pattern — see feedback-tool.md §When NOT to use)* `submit_feedback` present `[OPINIONATED]` — write-only, fire-and-forget; system prompt includes feedback directive
+- [ ] `outputSchema` declared tools always return `structuredContent` (MUST)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
 - [ ] For `stdio`, logs go to `stderr`, never `stdout`
-- [ ] Integration smoke test exists and passes against live server
+- [ ] Integration smoke test passes against live server
 - [ ] No nested objects in parameter schemas — flat primitives only
-- [ ] Per-call usage log in place — `ts`, `tool_name`, `status`, `duration_ms` minimum; no raw args / no responses logged *(OPINIONATED)*
+- [ ] Per-call usage log in place — `ts`, `tool_name`, `status`, `duration_ms` minimum; no raw args/responses `[OPINIONATED]`
 
 ---
+
+## What's Evolving
+
+- **MCP Apps** (SEP-1865, announced 2025-11-21): optional backwards-compatible extension adding `ui://` URI scheme, tool→UI metadata linking, sandboxed iframe rendering, bi-directional JSON-RPC over `postMessage`. Repo: [modelcontextprotocol/ext-apps](https://github.com/modelcontextprotocol/ext-apps). Blog: [2025-11-21 announcement](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/).
+- **Sampling deprecated** in DRAFT-2026-v1 (SEP-2596) — do not design new servers around it.
+- **Tasks** (SEP-1686) landed in 2025-11-25 as experimental — per-tool `execution.taskSupport` field; see glossary.
 
 ## External References
 

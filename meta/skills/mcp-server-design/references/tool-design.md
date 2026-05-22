@@ -41,13 +41,11 @@ mark_dialog_for_sync  search_messages    get_sync_status
 
 **Why snake_case:** the spec (2025-11-25) is permissive about casing, but snake_case is the established convention — GitHub's official MCP server, all official reference implementations, and the broader ecosystem follow it. Claude Desktop agents treat non-snake_case as inconsistent with ecosystem norms. PascalCase is essentially absent in practice.
 
-**Character set that Claude actually accepts:** `^[a-zA-Z0-9_]{1,64}$` — Claude's frontend validates this strictly. The spec permits hyphens and dots, but Claude rejects them. Stay within this set.
+**Character set — spec vs. clients:** The MCP spec (2025-11-25) says tool names SHOULD be 1–128 chars, limited to `[A-Za-z0-9_\-.]` — this is SHOULD, not MUST. The spec's range is more permissive than what most deployed clients enforce. Cross-client safe pattern: `^[a-zA-Z0-9_-]{1,64}$` (snake_case base with hyphens for namespacing). For client-specific enforcement details (Claude Desktop, Claude Frontend Remote MCP), see [clients.md](clients.md). Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 **Namespacing by service/resource** (multi-server environments): prefix with service name — `asana_search`, `jira_search`, `asana_projects_search`. Prefer prefix over suffix — the prefix establishes domain context before the verb, which aligns with how LLMs scan tool lists when selecting among multiple servers.
 
-**`title` field: mandatory.** Separate from `name` and `description`. Client UIs display it where the user sees tool activity — Claude Desktop shows it in the tool list and in "Claude is using tool…" blocks.
-
-Without `title`, clients fall back to the raw `name` — and raw names are internal identifiers, not user-facing text.
+**`title` field: OPTIONAL per spec, but include it.** `[OPINIONATED]` Spec marks `title` as optional. In practice: humans see `title` in Claude Desktop UI (tool list, "Claude is using…" blocks); agents see `name`. Both audiences need different framing — `name` is an internal identifier optimized for LLM selection, `title` is user-facing prose. Without `title`, clients fall back to the raw `name`. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 ```
 name:  "ozon_search"          →  Claude Desktop shows: "Claude is using tool ozon_search"  ← bad
@@ -72,15 +70,11 @@ Tools ship in two tiers.
 | `primary` | User-facing capability, the LLM should know it exists | Listed in tool catalogue |
 | `secondary` / `helper` | Supporting operation, plumbing | May be hidden from catalogue |
 
-**≤10 primary tools** is a signal, not a hard cap. More tools dilute LLM selection accuracy — every loaded tool description taxes the context window, even tools the agent never calls. Bias toward fewer.
+**≤10 primary tools.** `[OPINIONATED]` More tools dilute LLM selection accuracy — every loaded tool description taxes the context window, even tools the agent never calls. Keep primary tools to ≤10.
 
-The number is a trigger for scrutiny:
+Primary evidence: GitHub Copilot trimmed its default 40 built-in tools to 13 core tools, gaining +2–5 pp success rate on SWE-Lancer/SWEbench-Verified and cutting −400ms latency in A/B. Their MCP server alone exposes 93 tools at ~55k tokens before any user input — they route around this with embedding-guided clustering. Source: [GitHub Blog, Nov 19 2025](https://github.blog/ai-and-ml/github-copilot/how-were-making-github-copilot-smarter-with-fewer-tools/).
 
-- A server with sharply-distinct descriptions inside one tight domain can carry more than 10.
-- A server with overlapping descriptions across loose concerns will struggle below 10.
-- Past the signal, the question is always: can two tools merge, or can a tool be promoted to a parameter, before adding another?
-
-Real-world evidence: GitHub's MCP server collapsed 40 tools down to 3–10 focused ones; Block's Linear server went from 30+ to 2 over three iterations with performance improving at each step. The cliff is sharper than the slope suggests.
+Before adding a tool: can two tools merge? Can a tool be promoted to a parameter? Past ≤10, answer those questions first.
 
 ---
 
@@ -96,6 +90,8 @@ Four tool annotations. All default to worst-case — declare explicitly whenever
 | `openWorldHint` | `true` | Tool touches external services — set `false` for local-only operations |
 
 Clients use annotations to drive confirmation dialogs, auto-approval policies, and orchestrator trust decisions.
+
+> Defaults from MCP schema reference: `readOnlyHint=false`, `destructiveHint=true` (when not read-only), `idempotentHint=false`, `openWorldHint=true`. Pessimistic-by-default: unannotated tools are treated as most-dangerous. Hints are advisory, not security boundaries. Source: https://modelcontextprotocol.io/specification/2025-06-18/schema
 
 **Caveat:** annotations are hints, not contracts. A client MUST NOT treat them as security controls — a server can declare any values. Set them accurately; never use them to bypass client safety checks.
 
@@ -119,6 +115,8 @@ make the tool description state the default clearly.
 ---
 
 ## Writing Tool Descriptions
+
+<!-- canonical owner: "tools-are-prompts (how)" — the "why" rationale lives in agent-ux.md -->
 
 The description is a **prompt read by the LLM**. Answer three questions:
 
@@ -148,11 +146,13 @@ of stuffing it into every tool description.
 
 ## Structured Output — Prefer Schemas Over Text
 
+<!-- canonical owner: "outputSchema → structuredContent" -->
+
 **Default to structured output.** When a tool returns machine-parseable data (a list of entities, a status object, metadata), declare an `outputSchema` on the tool and return `structuredContent` alongside the text.
 
 Agents can validate against the schema, extract fields reliably without parsing, and clients can render typed data directly. Text-only puts parsing burden on the agent and introduces brittleness.
 
-**Spec requirement:** when `outputSchema` is declared, the server MUST return `structuredContent` conforming to it on every successful call — not just when convenient. A tool that declares a schema but conditionally returns text-only violates the protocol.
+**Spec requirement:** when `outputSchema` is declared, the server MUST return `structuredContent` conforming to it on every successful call — not just when convenient. A tool that declares a schema but conditionally returns text-only violates the protocol. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 **Use `outputSchema` when:**
 - Returning a list of objects
@@ -168,7 +168,7 @@ Agents can validate against the schema, extract fields reliably without parsing,
 - `structuredContent` — the typed, machine-parseable payload conforming to the schema
 - `text` (the `content` field) — a human-readable summary of the same data
 
-This redundancy is intentional — older clients that don't understand `structuredContent` fall back to reading the text block. It's a compatibility bridge, not documentation. A tool that declares a schema and omits either field is incomplete: `structuredContent` without `text` breaks legacy clients; `text` without `structuredContent` violates the protocol.
+This redundancy is intentional — older clients that don't understand `structuredContent` fall back to reading the text block. It's a compatibility bridge, not documentation. Per spec: `structuredContent` is MUST when `outputSchema` is declared; the text `content` block is SHOULD (backwards-compat). In practice, many SDKs reject responses without a text `content` block even though the spec is more permissive — always include both. A tool that declares a schema and returns text-only violates the protocol; `structuredContent` without text breaks legacy clients and most deployed SDKs.
 
 **Token economy for tabular data:** don't repeat large JSON blobs in the text `content`. For
 read-only tabular results, make `content` a compact preview such as CSV or a short table, while
@@ -176,6 +176,66 @@ keeping the full machine-readable data in `structuredContent` when an `outputSch
 If a tool needs a text export mode, use a small enum such as `response_format: "compact" | "json"`
 or `response_format: "csv" | "json"` and document which formats are intended for humans versus
 programmatic extraction. Never omit required `structuredContent` just to save tokens.
+
+### Full example
+
+Tool definition:
+
+```json
+{
+  "name": "search_orders",
+  "title": "Search orders",
+  "description": "Call when the user asks about their orders, order history, or shipment status. Searches orders by customer email and optional status filter. Returns a list of matching orders with id, status, total, and tracking number.",
+  "inputSchema": {
+    "type": "object",
+    "required": ["email"],
+    "additionalProperties": false,
+    "properties": {
+      "email":  { "type": "string", "description": "Customer email address to search by" },
+      "status": { "type": "string", "enum": ["pending", "shipped", "delivered", "cancelled"], "description": "Filter to orders with this status; omit to return all statuses" },
+      "limit":  { "type": "integer", "minimum": 1, "maximum": 50, "default": 10, "description": "Maximum number of orders to return" }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["orders", "total"],
+    "additionalProperties": false,
+    "properties": {
+      "orders": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "status", "total_usd", "tracking_number"],
+          "additionalProperties": false,
+          "properties": {
+            "id":             { "type": "string" },
+            "status":         { "type": "string", "enum": ["pending", "shipped", "delivered", "cancelled"] },
+            "total_usd":      { "type": "number" },
+            "tracking_number":{ "type": ["string", "null"] }
+          }
+        }
+      },
+      "total": { "type": "integer", "description": "Total matching orders before limit" }
+    }
+  },
+  "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
+}
+```
+
+Matching tool response:
+
+```json
+{
+  "structuredContent": {
+    "orders": [
+      { "id": "ORD-8821", "status": "shipped",   "total_usd": 59.99, "tracking_number": "1Z999AA10123456784" },
+      { "id": "ORD-8734", "status": "delivered",  "total_usd": 24.50, "tracking_number": "1Z999AA10123456001" }
+    ],
+    "total": 2
+  },
+  "content": [{ "type": "text", "text": "{\"orders\":[{\"id\":\"ORD-8821\",\"status\":\"shipped\",\"total_usd\":59.99,\"tracking_number\":\"1Z999AA10123456784\"},{\"id\":\"ORD-8734\",\"status\":\"delivered\",\"total_usd\":24.50,\"tracking_number\":\"1Z999AA10123456001\"}],\"total\":2}" }]
+}
+```
 
 ---
 
@@ -275,6 +335,8 @@ or "not found" are not enough for an agent to self-correct. Include the backend'
 validation details, request correlation ID, and relevant response body excerpt where safe.
 Do not truncate errors so aggressively that the cause disappears; do redact secrets, tokens,
 cookies, and tenant-private data.
+
+Note: what to record in server-side logs (including the "no raw args in logs" rule) is owned by `observability.md §What to record` — do not duplicate here.
 
 ---
 
@@ -377,14 +439,19 @@ Merge when:
 
 ## Dynamic Tool Sets — `listChanged`
 
-**Most servers don't need this.** If your tool set is fixed at startup, skip this capability entirely — it adds complexity with no benefit.
+**Declare the `tools` capability whenever your server supports tools — it is MUST.** The `listChanged` flag on that capability is OPTIONAL. `"tools": {}` is valid for basic tool support; `"tools": {"listChanged": true}` additionally signals that the tool list can change at runtime. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
-Only declare `listChanged` if your server conditionally exposes tools at runtime (e.g., different tools before and after auth, or based on feature flags). When you do, emit the `notifications/tools/list_changed` notification whenever the set changes — otherwise clients cache the initial tool list and never learn about additions or removals.
+Only add `listChanged: true` if your tool list actually mutates after initialization (e.g., different tools before and after auth, feature-flag gating). If you declare it, the server SHOULD emit `notifications/tools/list_changed` whenever the set changes — otherwise clients cache the initial list and never learn about updates.
 
 ```python
-# capabilities declaration
+# Basic tool support — always required when the server has tools
+{"tools": {}}
+
+# Dynamic tool support — only if your list mutates at runtime
 {"tools": {"listChanged": True}}
 
 # emit after tool set changes
 await session.send_tool_list_changed()
 ```
+
+Note: security-threats.md may recommend emitting `list_changed` on certain events (e.g., principal change); Claude Desktop is documented in clients.md as likely ignoring it. Declare `listChanged: true` only if the rest of your design depends on it being delivered.

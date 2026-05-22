@@ -19,14 +19,14 @@
 - [ ] * `[UNIVERSAL]` **No thin API wrapper** — for each tool, ask: "does this map 1:1 to a backend endpoint?" If yes, it should bundle the downstream calls internally instead.
 - [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. `track_latest_order`, not `get_order_status`.
 - [ ] `[UNIVERSAL]` **One server, one job** — can you describe the server's purpose in one sentence? If not, scope is too broad.
-- [ ] * `[OPINIONATED]` **80/20 check** — are there tools nobody calls? Run a dead-tool query against the usage log (30+ days, hundreds of calls minimum). Tools with ~0 calls: rewrite description first, delete next review cycle if still dead. See [observability.md](observability.md). If no usage log exists, that is itself a finding — fix observability first, then audit.
+- [ ] * `[OPINIONATED]` **80/20 check** — **N/A for new servers.** This audit requires ≥30 days of production tool-call logs. Recheck at 30 days; until then, focus on items §2 onward. Once logs exist: are there tools nobody calls? Run a dead-tool query against the usage log (30+ days, hundreds of calls minimum). Tools with ~0 calls: rewrite description first, delete next review cycle if still dead. See [observability.md](observability.md). If no usage log exists, that is itself a finding — fix observability first, then audit.
 
 ---
 
 ## 2. Tool Naming and Classification
 
 - [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — e.g. `list_dialogs`, `get_entity_info`, `submit_feedback`. No `getData`, `RunQuery`, `handle_request` (too generic), no spaces or special chars. Characters: `^[a-zA-Z0-9_]{1,64}$` — what Claude's frontend validates.
-- [ ] * `[UNIVERSAL]` **`title` field set on every tool** — 1–3 words, in the product's language, sentence case, user-facing. Claude Desktop shows this in "Claude is using…" blocks and the tool list. Without it the raw `name` is shown (`ozon_search`, `get_my_recent_activity`) which leaks internal naming to users. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status".
+- [ ] * `[OPINIONATED]` **`title` field set on every tool** — `title` is optional per the MCP spec ([Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)); this is the skill's production recommendation, not a protocol requirement. Rationale: humans see `title` in Claude Desktop UI ("Claude is using…" blocks and the tool list); agents see `name` in their context. Both audiences are served by keeping these separate. Without `title`, the raw `name` is shown to users (`ozon_search`, `get_my_recent_activity`), leaking internal naming. 1–3 words, sentence case, in the product's language. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status".
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail.
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
 
@@ -114,14 +114,14 @@
 - [ ] `[OPINIONATED]` **Feedback directive present** — "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability."
 - [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow.
 - [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time.
-- [ ] `[OPINIONATED]` **System prompt is minimal, not maximal** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt`) — every directive justified by an observed agent failure without it. Growth is a smell: either the missing piece is a tool, or the directive belongs in a tool description.
+- [ ] `[OPINIONATED]` **System prompt is minimal, not maximal** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt as Configuration Surface`) — every directive justified by an observed agent failure without it. Growth is a smell: either the missing piece is a tool, or the directive belongs in a tool description.
 
 ---
 
 ## 12. Transport and Logging
 
 - [ ] * `[UNIVERSAL]` **No HTTP+SSE transport (2024-11-05)** — deprecated. Only `stdio` or Streamable HTTP.
-- [ ] * `[CONDITIONAL]` **All logging goes to `stderr`** — for stdio servers, no `print()` or logger writing to `stdout`. Any `stdout` output corrupts the transport silently. **Exception:** if the architecture uses a separate logging daemon (see [daemon-architecture.md](daemon-architecture.md)), the MCP server must NOT write to `stderr` — the daemon owns logging.
+- [ ] * `[UNIVERSAL]` **All logging goes to `stderr`** — no `print()` or logger writing to `stdout`. Any `stdout` output corrupts the stdio transport silently. N/A only for Streamable HTTP servers (no stdio). **Exception:** under the daemon + on-demand pattern (see [daemon-architecture.md](daemon-architecture.md)), the MCP server must NOT write to `stderr` either — the daemon owns logging via socket.
 - [ ] `[UNIVERSAL]` **Transport matches deployment** — `stdio` for subprocess clients (Claude Desktop), Streamable HTTP for inter-container or HTTP-capable clients.
 
 ---
@@ -160,7 +160,7 @@
 ## 15. Testing
 
 - [ ] `[UNIVERSAL]` **Integration smoke test exists** — calls every tool through the actual transport against a live server. Unit tests alone don't cover transport or schema serialisation.
-- [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Agent UX Testing`
+- [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Test`
 
 ---
 

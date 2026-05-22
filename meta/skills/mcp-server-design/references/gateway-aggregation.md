@@ -184,16 +184,18 @@ filter. The ≤10 signal applies to gateways too — see
 
 ## Security Requirements
 
-- Gateway and backends are private-network services only.
-- Auth edge is the only public HTTP service.
+Gateway-specific trust boundary rules:
+
+- Gateway and backends are private-network services only. Auth edge is the only public HTTP service.
 - Backends still validate all model-controlled input. Outer OAuth does not make tool arguments
-  trustworthy.
-- Secrets stay in backend secret stores or environment, not in catalog URLs.
-- Logs must redact authorization headers, cookies, tokens, OAuth codes, and tool arguments that
-  can contain secrets.
+  trustworthy — the gateway is not a validation layer.
 - Public scanners will hit the ingress. Confirm they get `401` and cannot reach gateway health,
   catalog, backend ports, or config files.
 - If the gateway has Docker socket access, treat gateway compromise as host compromise.
+
+Generic rules (per-principal tokens, secret redaction, no secrets in URLs) apply here as they do
+everywhere — see [security-threats.md §3 — Authentication and authorization](security-threats.md#3-authentication-and-authorization)
+and [security-threats.md §6 — Secret hygiene](security-threats.md#6-secret-hygiene).
 
 ---
 

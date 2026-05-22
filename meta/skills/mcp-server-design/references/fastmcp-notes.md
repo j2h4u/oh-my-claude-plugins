@@ -23,13 +23,17 @@ types, required[] inference, $schema header), see `python-notes.md`.
 
 ---
 
-## What FastMCP Does NOT Handle
+## `anyOf: [T, null]` from `Optional[T]` — fixed in v2.13.0
 
-**`anyOf: [T, null]` from `Optional[T]` — not stripped automatically.**
+**Historical issue (≤ v2.12.x):** FastMCP emitted raw Pydantic v2 `Optional[T]` → `anyOf: [T, null]` schemas without cleanup. Claude Desktop rejected these. Issue #2040, closed 2025-10-14.
 
-A common assumption is that FastMCP cleans up the Pydantic `Optional[T]` → `anyOf: [T, null]` serialisation before exposing the schema. It does not (FastMCP issues #2040, #2153). FastMCP emits standard Pydantic v2 schemas; Claude Desktop rejects `anyOf` null variants. The fix is your responsibility even when using FastMCP.
+**Current behavior (v2.13.0+):** PR #2073 (commit `e036cba`, merged 2025-10-14) shipped Pydantic-compatible input validation as the new default. Released in v2.13.0 "Cache Me If You Can" (2025-11-15): <https://github.com/PrefectHQ/fastmcp/releases/tag/v2.13.0>. The `anyOf: [T, null]` rejection no longer applies.
 
-→ Concrete recipes: `python-notes.md §anyOf: [T, null]`
+FastMCP also exposes a Pydantic validation toggle (added in v2.13.0 via PR #2073). The table above shows `strict_input_validation=True` as the strict opt-in — but that exact flag name was not confirmed in release notes. Verify against current <https://gofastmcp.com> docs before relying on the flag name. The capability is real; the option name needs a check.
+
+**v3.x note:** Latest stable is **v3.3.1** (2026-05-15). Repo moved `jlowin/fastmcp` → `PrefectHQ/fastmcp` with v3.0. PyPI + import path unchanged. v3.0 introduces provider/transform architecture (`FileSystemProvider`, `OpenAPIProvider`, `ProxyProvider`, `SkillsProvider`), `ResourcesAsTools`/`PromptsAsTools` adapters, component versioning (`@tool(version="2.0")`), session state (`ctx.set_state()`/`get_state()`), tool timeouts, MCP-compliant pagination, and `--reload` dev mode. For anything beyond v2.x patterns, point at the v3 release notes and <https://gofastmcp.com>.
+
+→ If hitting schema rejection on v2.12.x or older: `python-notes.md §anyOf: [T, null]`
 
 ---
 
@@ -79,9 +83,11 @@ data. Keep long static reference material in MCP Resources, not in every tool do
 
 ## FastMCP-Specific Gotchas
 
-**`compress_schema` silently strips `additionalProperties: false`**
+**`compress_schema` silently strips `additionalProperties: false` — fixed in v2.14.6**
 
-FastMCP's internal schema compression (`prune_additional_properties=True` by default) removes `additionalProperties: false`. Currently no public config knob to disable — known bug (#3008).
+Bug existed in v2.14.4–v2.14.5: FastMCP's internal schema compression (`prune_additional_properties=True` by default) removed `additionalProperties: false`, breaking MCP client compatibility. User-visible failure: `Invalid schema for function ...: 'additionalProperties' is required to be supplied and to be false`. Issue #3008 (<https://github.com/PrefectHQ/fastmcp/issues/3008>), PR #3102 (<https://github.com/PrefectHQ/fastmcp/pull/3102>), merged 2026-02-06.
+
+**Fix shipped in v2.14.6** (2026-03-27) and all v3.x releases. If pinned to v2.14.5 or older, pass the flag explicitly: `compress_schema(schema, prune_additional_properties=False)`.
 
 **`structured_output=False` to opt out of auto-inference**
 

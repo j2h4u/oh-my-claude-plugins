@@ -131,3 +131,22 @@ The above applies to tools that expose domain operations. The **daemon+stateless
 (see daemon-architecture.md) is a different kind of "thin" — the MCP server process stays thin (no state,
 no resources) while the *tool implementation* does the orchestration. That split is correct
 architecture; it doesn't contradict this philosophy.
+
+---
+
+## `server.instructions` — Agent Orientation Block
+
+Returned in the `initialize` response. The agent reads it once at session start; it is not re-sent on tool calls. Keep it under 80 words: what the server does, which tools to reach for, and one disambiguation hint.
+
+Example for an order-management server:
+
+```yaml
+instructions: |
+  This server manages customer orders and shipments. Use `search_orders` to look up
+  orders by email or status; use `get_order_detail` for line items and tracking.
+  Conventions: all monetary values are USD floats; dates are ISO 8601 UTC.
+  When the user asks about a specific order number, call `get_order_detail` directly —
+  do not search first.
+```
+
+Omit if there is nothing domain-specific to say — an empty or near-empty block wastes tokens and signals nothing.
