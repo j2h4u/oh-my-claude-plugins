@@ -72,7 +72,7 @@ Tools ship in two tiers.
 | `primary` | User-facing capability, the LLM should know it exists | Listed in tool catalogue |
 | `secondary` / `helper` | Supporting operation, plumbing | May be hidden from catalogue |
 
-Target **≤10 primary tools** as a rule of thumb — more tools dilute LLM selection accuracy; aim for ≤10 with a strong bias toward fewer. Real-world evidence supports this: GitHub's MCP server collapsed 40 tools down to 3–10 focused ones. Past ≤10, ask what can be merged or promoted to a parameter before adding another tool.
+Target **≤10 primary tools** as a rule of thumb — more tools dilute LLM selection accuracy; aim for ≤10 with a strong bias toward fewer. Real-world evidence supports this: GitHub's MCP server collapsed 40 tools down to 3–10 focused ones. The ceiling is not absolute: a server with sharply-distinct descriptions inside one tight domain can carry more than ≤10; a server with overlapping descriptions spanning loose concerns will struggle below it. The number is a signal that the surface needs scrutiny, not a hard cap. Past ≤10, ask what can be merged or promoted to a parameter before adding another tool.
 
 ---
 

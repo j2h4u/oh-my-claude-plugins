@@ -25,8 +25,10 @@ This skill intentionally mixes universal MCP guidance with narrower production r
 the tags below as binding when applying the references:
 
 - **UNIVERSAL** — applies to any MCP server, independent of language, SDK, transport, or host
-- **OPINIONATED** — recommended default from production practice; adapt or skip when it does not
-  match the project
+- **OPINIONATED** — recommended default distilled from one or a handful of real production
+  servers, not from controlled studies. Treat as a strong starting point worth measuring on
+  your own surface; adapt or skip when it does not match the project. Items that cite a
+  specific study or n-of-servers do so inline.
 - **STACK-SPECIFIC** — applies only to the named stack, framework, client, or deployment shape; inline as `[STACK:label]` where `label` names the specific stack (e.g. `[STACK:Python]`, `[STACK:stateful-backends]`)
 - **EMPIRICAL** — observed client behaviour; verify when the client version or date matters
 - **CONDITIONAL** — applies when the named precondition holds (specific transport, deployment
@@ -35,6 +37,24 @@ the tags below as binding when applying the references:
 When in doubt, enforce UNIVERSAL rules first. Do not treat OPINIONATED or STACK-SPECIFIC recipes
 as protocol requirements.
 
+## Glossary
+
+One-liners for the MCP-specific terms used throughout this skill. Full mechanics live in
+the references they link to.
+
+| Term | One-line meaning |
+|------|------------------|
+| `stdio` transport | MCP over a process's stdin/stdout; the host launches the server as a subprocess. Default for Claude Desktop and CLI hosts. |
+| `Streamable HTTP` transport | The current MCP network transport (spec 2025-11-25): standard HTTP with an SSE upgrade and a session header. Replaces deprecated HTTP+SSE. |
+| `outputSchema` | JSON Schema declared on a tool that types its structured output. When declared, the server MUST return `structuredContent` on every successful call. |
+| `structuredContent` | Sibling of `content` in a tool result — carries typed JSON conforming to `outputSchema`. Lets clients render/parse without re-parsing text. |
+| `isError` | Boolean on the tool result. `true` = business/validation error the agent can recover from. Distinct from protocol exceptions (transport-level failures). |
+| `server.instructions` | The server-declared system prompt — first-class config surface for shaping agent behaviour without adding tools. Paid per request; keep tight. |
+| Tool `annotations` | Protocol hints on a tool: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`. Hints to clients/agents, not enforced server-side. |
+| `posture` (primary / secondary) | Project-level classification: *primary* tools = user-facing capabilities; *secondary/helper* tools = plumbing the agent uses to support primary calls. Not a protocol field. |
+
+---
+
 ## References
 
 Load references by use case:
@@ -42,7 +62,7 @@ Load references by use case:
 | Use case | Read |
 |----------|------|
 | **Auditing** an existing server | audit-checklist plus the UNIVERSAL refs; add conditional refs only when the stack matches |
-| **Designing** a new server | design-philosophy, tool-design, agent-ux, feedback-tool, security-threats, observability; then choose opinionated modules deliberately |
+| **Designing** a new server | design-philosophy, tool-design, agent-ux, feedback-tool, security-threats, observability, clients; then choose opinionated modules deliberately |
 | **Security review** | security-threats, clients, audit-checklist (§14 Security, §12 Transport and Logging, §5 Parameter Schemas) |
 | **Tool-surface review / 80-20 audit** | observability, audit-checklist (§1 Design Philosophy) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
@@ -138,7 +158,7 @@ For self-owned production servers with a maintainer who reads the queue, exposin
 ## Agent UX
 
 - Tool descriptions serve two audiences: LLM (reads as prompt) and human (sees in UI). Write for LLM first
-- System prompt (`server.instructions`): keep short (rule of thumb: a few hundred tokens), ALL-CAPS named workflow patterns, built dynamically at startup
+- System prompt (`server.instructions`): keep minimal — grow only when you see agents making wrong decisions without the directive. ALL-CAPS named workflow patterns, built dynamically at startup
 - Dark-room UX test: agent + server + real task + no briefing → review feedback queue
 - Error messages: include `Action:` hint for every recoverable error — agents act on error text directly
 
@@ -157,7 +177,11 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 ## Transport
 
-**Decision tree:** stdio (launched as subprocess by Claude Desktop / CLI) → Streamable HTTP (shared between containers or accessed over a network) → add auth layer (exposed outside a trusted network).
+**Decision tree** (apply in order — first matching branch wins, then keep walking for the auth layer):
+
+- Server launched as a subprocess by Claude Desktop / a CLI host? → **`stdio`**
+- Network-accessible (inter-container Docker, HTTP-capable clients)? → **Streamable HTTP**
+- Exposed outside a trusted network? → **add an auth layer** on top (OAuth 2.1 per the spec; internal Docker networks with no untrusted neighbours can stay plaintext)
 
 > **Streamable HTTP** is the current MCP network transport (spec 2025-11-25), replacing the deprecated HTTP+SSE transport — it uses standard HTTP with an SSE upgrade path and a session header.
 
@@ -220,7 +244,7 @@ Before shipping or handing off:
 - [ ] Tools designed for outcomes (user goals), not 1:1 endpoint wrappers
 - [ ] Primary tool count within the ceiling in `references/tool-design.md` *(OPINIONATED)*
 - [ ] Mutating tools are safe by default — draft/paused/dry-run unless explicit activation requested
-- [ ] `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back (for session-task tracking via `declare_session_task`, see `references/feedback-tool.md`)
+- [ ] `submit_feedback` present *(OPINIONATED)* — write-only, fire-and-forget, no read-back
 - [ ] System prompt includes feedback directive *(OPINIONATED)*, kept short, built dynamically
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST, not optional)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions

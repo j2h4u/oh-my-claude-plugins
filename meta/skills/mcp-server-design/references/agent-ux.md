@@ -17,8 +17,9 @@ Tool name + description reaches two distinct readers:
 | **LLM (agent)** | reads at inference to decide when/how to call | When to call, what NOT to do, how to interpret output |
 | **Human (operator/user)** | sees it in client UIs — tool panels, hover tooltips | What the tool does in one sentence, side effects |
 
-Write for the LLM first — it's the harder constraint. An LLM-optimal description
-is also informative to humans; the reverse is not guaranteed.
+Write for the LLM first — it's the harder constraint. Heuristic, not measured: a
+description precise enough for an LLM (when to call, what NOT to do, field semantics)
+is usually scannable enough for humans too; the reverse is less reliable.
 
 **Structure that satisfies both:**
 
@@ -89,8 +90,11 @@ Key workflows:
 - FIND DIALOG IDS: Use `list_dialogs` to get exact numeric dialog ids.
 ```
 
-Named patterns give the LLM stable vocabulary to refer to internally. Agents
-will literally invoke "the SEARCH THEN READ workflow" in their reasoning.
+Named patterns give the LLM stable, compact vocabulary to refer to multi-step flows.
+The mechanism is plausible (a labelled pattern is easier to retrieve and reason about
+than re-deriving the steps), but this skill does not have measured data on how often
+agents actually cite the labels back. Treat as a candidate pattern worth testing on
+your own surface, not a guaranteed outcome.
 
 **Dynamic data injection:** build the system prompt at startup, not at deploy time.
 Inject live server state (connected account, current limits, active features) so
@@ -170,7 +174,11 @@ than issues discovered mid-task by real users.
 
 ---
 
-## Post-MVP Tool Surface Normalization
+## Agent CustDev: Post-Release Tool Surface Review
+
+**The shortest framing:** this is customer development — for agents. You ship the first
+version of the tool surface, then run a dedicated session interviewing capable agents
+*about the API itself*, not about any task. The agent is your user; treat them like one.
 
 After the first working version ships, do a dedicated tool surface review with agents —
 not task-based, but explicitly about the API itself.
@@ -224,6 +232,6 @@ the feedback queue.
 The operator reviews the queue async, no ceremony required. Over time the feedback
 queue becomes a signal for what to fix next.
 
-For deeper analysis — correlating feedback with specific task types — pair with
-`declare_session_task`: agent declares intent before work, all calls and feedback
-are auto-correlated. → `feedback-tool.md §Session-Level Task Tracking`
+For clustering submissions by task type, instruct the agent to populate the `task`
+field of `submit_feedback` with the user's original request verbatim
+(see `feedback-tool.md` parameter table).

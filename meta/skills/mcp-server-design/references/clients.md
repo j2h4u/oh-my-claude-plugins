@@ -90,7 +90,7 @@ In order of reliability:
 
 **Tool call duration:**
 - Target <20s. Anything longer risks connection drop.
-- For slow operations: return a partial result immediately; agent can poll via a follow-up call.
+- For slow operations: use the async-handle pattern (return `id` + `status: "working"` immediately, expose a separate polling tool for state). Canonical recipe: [tool-design.md §Long-Running Operations](tool-design.md). Do not block the call waiting for completion.
 - "Server busy" with remaining time estimate is visible to the agent — write informative busy messages.
 
 **Tool names:**

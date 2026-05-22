@@ -13,10 +13,15 @@ A production MCP server is a UI for agents — and like any UI, you cannot tune 
 usage data. Three concrete decisions need numbers, not intuition:
 
 1. **Dead tools** — surface bloat hides high-value tools. Tools called 0–2 times across
-   thousands of sessions are not discoverable, not useful, or both. Either rewrite the
-   description (likely cause: agents do not understand when to call it) or remove it.
-2. **Hot tools** — the top 3 tools usually account for the bulk of traffic. Their
-   descriptions and error messages have the highest leverage. Invest there first.
+   thousands of sessions are usually not discoverable, not useful, or both. **Caveat:** a
+   correctness-critical tool can legitimately fire rarely (emergency rollback, one-shot
+   setup, fallback for an unusual error path). Before deleting, confirm low frequency is
+   not "low frequency of *needing* it". Otherwise, rewrite the description first (likely
+   cause: agents do not understand when to call it); remove if a follow-up window still
+   shows zero calls.
+2. **Hot tools** — traffic typically concentrates in a handful of tools (commonly the top
+   3–5, sometimes more depending on surface shape). Their descriptions and error messages
+   have the highest leverage. Find your own top-N from the log and invest there first.
 3. **Error-prone tools** — high error rate per call signals an agent UX bug, not a backend
    bug. Look at the `Action:` hint, parameter shape, or required prerequisites.
 
@@ -60,7 +65,15 @@ and log the hash. Same args → same hash, no recoverable values.
 
 ## Where to store *(OPINIONATED defaults)*
 
-Three patterns, pick the one that matches the project:
+Three patterns, pick the one that matches the project. Decision summary:
+
+| Situation | Pattern |
+|-----------|---------|
+| No DB, want minimum moving parts | **A** — JSONL on disk |
+| Server already has SQLite or Postgres | **B** — separate `tool_calls` table |
+| OTel / Loki / Datadog already operated for other services | **C** — structured log to existing stack |
+
+If unsure, start with **A**. JSONL migrates cleanly into B or C later; B/C do not migrate cleanly back to A. Do not adopt Pattern C just because it sounds production-grade — it is overhead unless the pipeline already exists.
 
 ### Pattern A — JSONL on disk *(stateless servers, no DB)*
 

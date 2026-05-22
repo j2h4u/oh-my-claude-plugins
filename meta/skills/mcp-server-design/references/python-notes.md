@@ -68,7 +68,7 @@ class ToolInput(BaseModel):
 
 `SkipJsonSchema[None]` removes the null arm; the callable drops the leaked `"default": null`. Verify with `ToolInput.model_json_schema()` — some older Pydantic v2 releases had a bug where `SkipJsonSchema` silently did nothing.
 
-### Fix 2 — Drop `Optional`, use bare default (quick workaround)
+### Fix 2 — Drop `Optional`, use bare default (fallback when Fix 1 isn't available)
 
 ```python
 # Breaks Claude Desktop — generates anyOf: [int, null]:

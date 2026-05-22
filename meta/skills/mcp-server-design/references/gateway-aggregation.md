@@ -1,5 +1,9 @@
 # Remote Gateway Aggregation
 
+> **Skip this file entirely if you are building a single MCP server.** This document is
+> about aggregating *multiple* MCP servers behind one shared gateway with OAuth/OIDC,
+> a tunnel, and curated tool surface — a deployment shape, not a default design.
+>
 > **Load when:** Designing or auditing a deployment where multiple MCP servers are exposed
 > through one remote MCP endpoint with a shared OAuth/OIDC edge, especially with Docker MCP
 > Gateway, an auth proxy, and a public tunnel or ingress.
@@ -174,7 +178,8 @@ Rules:
 
 As a rough audit trigger: if the aggregated endpoint exposes more than 10 primary tools, ask
 whether the endpoint should be split or filtered. See `tool-design.md` for the rationale behind
-the ≤10 primary-tool limit.
+the ≤10 primary-tool rule of thumb (the ceiling is a signal, not a hard cap — it depends on
+how sharply tools are described and how tight the domain is).
 
 ---
 

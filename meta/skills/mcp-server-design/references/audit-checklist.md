@@ -114,7 +114,7 @@
 - [ ] `[OPINIONATED]` **Feedback directive present** — "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability."
 - [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow.
 - [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time.
-- [ ] `[OPINIONATED]` **Description budget: a few hundred tokens** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt`) — estimate token count. Over budget = directive that should be moved into a tool description or a missing tool.
+- [ ] `[OPINIONATED]` **System prompt is minimal, not maximal** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt`) — every directive justified by an observed agent failure without it. Growth is a smell: either the missing piece is a tool, or the directive belongs in a tool description.
 
 ---
 

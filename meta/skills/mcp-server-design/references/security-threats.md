@@ -142,9 +142,17 @@ caps + content-type signalling raise the floor.
 
 ## 2. Untrusted tool arguments from the agent
 
-Every argument the agent passes you is **model output**, not user input. It can be
-shape-controlled by anyone who can prompt the agent — including the upstream data your
-*other* tool just returned. Treat agent params with the same suspicion as a public HTTP API.
+The attack classes below look like OWASP top-10 — and they are. The difference is **where
+the poisoned input comes from**. In a normal HTTP API, you defend against a malicious
+human at the keyboard. In MCP, every argument the agent passes you is **model output**,
+not user input. It can be shape-controlled by anyone who can prompt the agent —
+including the upstream data your *other* tool just returned to that same agent. A
+prompt-injection payload sitting in a Telegram message your `search_messages` returned
+can come back as the next call's `path=` parameter, without the user ever seeing it.
+
+Treat every agent param with the same suspicion as a public HTTP API — and remember the
+attacker may already be inside the loop, planting future arguments through your prior
+responses.
 
 **Attack classes:**
 
@@ -307,26 +315,14 @@ Active hygiene measures:
 ## 7. Supply chain — defending your own package
 
 Your server's threat surface includes everything you ship: source, dependencies, build
-pipeline, registry account. For general supply-chain hygiene (branch protection, 2FA,
-signed releases, dependency pinning) see standard resources; below is the MCP-specific
-addition.
+pipeline, registry account. For general supply-chain hygiene (lockfiles, dependency
+audits, 2FA, branch protection, signed releases) follow your ecosystem's standard
+guidance — these are not MCP-specific and the same rules apply as for any published
+package. The MCP-specific addition is:
 
-### Dependencies
-
-- **Pin transitive dependencies.** Lockfile committed (`uv.lock`, `package-lock.json`,
-  `pnpm-lock.yaml`). `npm install` / `pip install` without a lockfile is a future
-  incident.
-- **Audit at build.** `npm audit`, `pip-audit`, `osv-scanner`, or `dependabot` /
-  `renovate` running on the repo. Treat advisories ≥ HIGH as build-failing.
-- **Avoid optional/large surface area.** Each dependency is an account on a registry that
-  can be hijacked.
-
-### MCP-specific namespace and provenance
-
-- **Publish provenance** for publicly distributed servers (npm provenance, PyPI Trusted Publishing, Sigstore) so downstream consumers can verify origin.
-- **Tool-surface stability via semver.** Adding, renaming, or removing a tool or changing
-  a parameter schema is a minor or major bump — never patch. Silent surface changes are
-  indistinguishable from malicious rug-pulls from a defender's vantage point.
+- **Publish provenance** for publicly distributed servers (npm provenance, PyPI Trusted
+  Publishing, Sigstore) so downstream consumers can verify origin. Defenders' tooling
+  treats unverifiable provenance the same as malicious — see §8 on rug-pull defence.
 
 ---
 
