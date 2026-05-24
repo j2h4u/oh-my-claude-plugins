@@ -49,7 +49,7 @@ mark_dialog_for_sync  search_messages    get_sync_status
 - Avoid generic names: `get_data`, `run_query` — useless to the LLM
 - Watch for namespace collisions with the client: `get_me` intercepted by some clients → use `get_my_account`
 
-**Pattern:** `^[a-z0-9_]{1,64}$` (snake_case + underscores for namespacing). The 2025-11-25 spec character class is `^[a-zA-Z0-9_-]{1,128}$` — wider (mixed case, hyphens, 128 chars), but ecosystem convention is the narrower snake_case form. Dots are **not** in the spec character class.
+**Pattern:** `^[a-z0-9_]{1,64}$` (snake_case + underscores for namespacing). The MCP spec character class is wider (mixed case, hyphens, length up to 128) — check the [spec tools page](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) for the exact class current at your target spec date. Real clients (Claude Desktop, Claude Code, Cursor) routinely reject dots even when an older draft allowed them — stick to `[a-z0-9_]` for portability.
 
 **Namespacing in multi-server environments:** prefix the service — `asana_search`, `jira_issue_get`. Prefix before verb (LLMs scan domain-first when picking between servers).
 
@@ -315,4 +315,4 @@ Merge when:
 
 ## Dynamic Tool Sets — `listChanged`
 
-Declare `"tools": {"listChanged": true}` **only if the tool set actually mutates after init** (auth gating, feature flags, multi-tenant). Static surfaces declaring it mislead defenders into watching for events that never fire. When declared, emit `notifications/tools/list_changed` on every change — **but don't depend on delivery**: per the [clients.md matrix](clients.md#cross-client-capability-matrix), Claude Desktop is `⚠️ likely dropped` (no matching capability declared) and Claude Code receives it (v2.1.0+). If a tool must be present for a flow to succeed, register it from the start; treat the notification as audit-trail hygiene only ([security-threats.md §8](security-threats.md)).
+Declare `"tools": {"listChanged": true}` **only if the tool set actually mutates after init** (auth gating, feature flags, multi-tenant). Static surfaces declaring it mislead defenders into watching for events that never fire. When declared, emit `notifications/tools/list_changed` on every change — **but don't depend on delivery**: per the [clients.md matrix](clients.md#cross-client-capability-matrix), Claude Desktop is `⚠️ likely dropped` (no matching capability declared) and Claude Code receives it. If a tool must be present for a flow to succeed, register it from the start; treat the notification as audit-trail hygiene only ([security-threats.md §8](security-threats.md#8-release-hygiene-and-surface-stability)).

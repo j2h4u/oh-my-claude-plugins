@@ -16,7 +16,7 @@
 
 ## 2. Tool Naming and Classification
 
-- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. This audit enforces the **convention** pattern `^[a-z0-9_]{1,64}$`. The 2025-11-25 spec accepts a wider range (`^[a-zA-Z0-9_-]{1,128}$` — no dots) — a server using the wider range isn't spec-broken, but mark it as a convention finding so the auditee can decide. → [tool-design.md §Naming](tool-design.md#naming)
+- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. This audit enforces the **convention** pattern `^[a-z0-9_]{1,64}$`. The MCP spec accepts a wider class (mixed case, hyphens, longer length — check the spec at your target date). A server using the wider class isn't spec-broken, but mark it as a convention finding so the auditee can decide. → [tool-design.md §Naming](tool-design.md#naming)
 - [ ] * `[OPINIONATED]` **`title` field set on every tool** — 1–3 words, sentence case, product language. Not a reformatted `name` ("Search Ozon", not `"Search Ozon"` = `ozon_search`). *Skip when:* no client in your target matrix surfaces `title` distinctly from `name`.
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail. *Skip when:* surface has <5 tools (no posture distinction is load-bearing).
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
@@ -111,8 +111,8 @@
 
 ## 12. Transport and Logging
 
-- [ ] * `[UNIVERSAL]` **No HTTP+SSE transport (2024-11-05)** — deprecated. Only `stdio` or Streamable HTTP.
-- [ ] * `[UNIVERSAL]` **All logging goes to `stderr`** — no `print()` or logger writing to `stdout`. Any `stdout` output corrupts the stdio transport silently. N/A only for Streamable HTTP servers (no stdio). **Exception:** under the daemon + on-demand pattern (see [daemon-architecture.md](daemon-architecture.md)), the MCP server must NOT write to `stderr` either — the daemon owns logging via socket.
+- [ ] * `[UNIVERSAL]` **No HTTP+SSE transport** — deprecated in spec 2025-03-26 (it was introduced in 2024-11-05). Only `stdio` or Streamable HTTP.
+- [ ] * `[UNIVERSAL]` **`stdout` is JSON-RPC only on stdio** — no `print()` or logger writing to `stdout`. Any `stdout` output corrupts the stdio transport silently. Diagnostic / human-readable logs go to `stderr`; structured event logs (JSONL) go to a file the server owns ([observability.md §Where to store](observability.md#where-to-store-opinionated-defaults)). N/A only for Streamable HTTP servers (no stdio). **Exception:** under the daemon + on-demand pattern (see [daemon-architecture.md](daemon-architecture.md)), the MCP server must NOT write to `stderr` either — the daemon owns logging via socket.
 - [ ] `[UNIVERSAL]` **Transport matches deployment** — `stdio` for subprocess clients (Claude Desktop), Streamable HTTP for inter-container or HTTP-capable clients.
 
 ---
@@ -145,9 +145,8 @@
 ### 14b. Network exposure and transport
 
 - [ ] `[UNIVERSAL]` **Local server not exposed on public interface** — binds to `127.0.0.1` or Unix socket, or has authentication if network-accessible.
-- [ ] `[CONDITIONAL]` **Origin header validation for Streamable HTTP** — server rejects requests with invalid `Origin` (HTTP 403). Usually handled by SDK — verify it's not disabled.
-- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. *Smell: session ID from `time.time()`, PID, counter, or `random.random()` instead of `secrets.token_urlsafe`.* → [security-threats.md §4 Session and transport security](security-threats.md)
-- [ ] `[CONDITIONAL]` **`Host` header validated against allowlist** — defends localhost-bound HTTP servers against DNS rebinding. → [security-threats.md §4 Session and transport security](security-threats.md)
+- [ ] * `[CONDITIONAL]` **`Host` + `Origin` validation for Streamable HTTP** — server rejects requests with invalid `Host` *or* `Origin` (HTTP 403). `Host` is the load-bearing DNS-rebinding defence; `Origin` is defence in depth. *Smell: SDK protection silently bypassed because the server binds to `0.0.0.0` or mutates `host` after construction — see footgun list in [security-threats.md §0](security-threats.md#http-origin--host-validation-dns-rebinding-defence).*
+- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. *Smell: session ID from `time.time()`, PID, counter, or `random.random()` instead of `secrets.token_urlsafe`.* → [security-threats.md §4 Session and transport security](security-threats.md#4-session-and-transport-security)
 
 ### 14c. Authorization
 

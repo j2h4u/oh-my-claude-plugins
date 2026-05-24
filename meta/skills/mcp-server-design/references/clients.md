@@ -150,7 +150,7 @@ Capability statuses are in the cross-client matrix above; design implications be
 
 ### Tool Name Constraints
 
-No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. The 2025-11-25 spec character class for tool names is `^[a-zA-Z0-9_-]{1,128}$` (alphanumerics, underscore, hyphen; **dots are not in the spec class** — older drafts allowed them). The snake_case convention pattern lives in [tool-design.md §Naming](tool-design.md#naming).
+No stricter-than-spec enforcement observed in Claude Code's CHANGELOG. The MCP spec character class for tool names is mixed-case alphanumerics plus underscore and hyphen, up to 128 chars — verify against the [spec tools page](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) at your target spec date, since the exact class has shifted across drafts (dots in particular came and went). The snake_case convention pattern lives in [tool-design.md §Naming](tool-design.md#naming).
 
 ---
 

@@ -27,11 +27,17 @@ Any process on the host can send requests.
 
 ### HTTP Origin + Host validation (DNS-rebinding defence)
 
-For Streamable HTTP transport, reject requests with invalid `Origin` **and** `Host` headers — return HTTP 403. Without both, a malicious web page can issue cross-site requests to a locally-running server (CSRF), and a DNS-rebinding attack can bypass `Origin` alone (browser sends the rebound IP as `Host`, while `Origin` still names a trusted site). `Host` validation is the load-bearing defence; `Origin` is defence in depth.
+For Streamable HTTP transport, reject requests with invalid `Origin` **and** `Host` headers — return HTTP 403. Without both, a malicious web page can issue cross-site requests to a locally-running server (CSRF), and a DNS-rebinding attack can bypass `Origin` alone (browser sends the rebound IP as `Host`, while `Origin` still names a trusted site). `Host` validation is the load-bearing defence (browser cannot forge `Host` on the rebound IP); `Origin` is defence in depth.
 
-**SDK defaults are not safe.** FastMCP and `@modelcontextprotocol/sdk-typescript` HTTP transports do **not** ship with an `Origin` / `Host` allow-list enabled by default — you must configure it. Check your SDK's current defaults before relying on them ([rmcp DNS-rebinding advisory](https://github.com/modelcontextprotocol/rust-sdk/security/advisories/GHSA-89vp-x53w-74fx), [CardinalOps — MCP defaults](https://cardinalops.com/blog/mcp-defaults-hidden-dangers-of-remote-deployment/)).
+**SDK defaults — verify, don't assume.** Recent FastMCP / Python `mcp` releases enable DNS-rebinding protection *only when the server is bound to a loopback host* (`127.0.0.1`, `localhost`, `::1`), with an allow-list locked to loopback. The footguns:
 
-**Probes** (both must return 403):
+- **Binding `0.0.0.0` (or any non-loopback host)** skips the default protection entirely — allow-list is not extended automatically.
+- **Mutating `mcp.settings.host` after construction** does not refresh the allow-list — the loopback-only list stays in place even though the server now answers on a public interface ([getzep/graphiti#1205](https://github.com/getzep/graphiti/issues/1205)).
+- **TS SDK and other SDKs** ship different defaults — verify before relying.
+
+References: [python-sdk GHSA-9h52-p55h-vw2f](https://github.com/modelcontextprotocol/python-sdk/security/advisories/GHSA-9h52-p55h-vw2f), [rmcp GHSA-89vp-x53w-74fx](https://github.com/modelcontextprotocol/rust-sdk/security/advisories/GHSA-89vp-x53w-74fx).
+
+**Probes** (both must return 403 against a server claiming to enforce):
 - `curl -i -H 'Origin: http://evil.test' <your-endpoint>`
 - `curl -i -H 'Host: attacker.example' <your-endpoint>`
 
@@ -55,9 +61,7 @@ principal owns the scope), secrets (never in URLs, logs, tool responses, or feed
 
 ### Transport choice and stderr
 
-**The HTTP+SSE transport (spec 2024-11-05) is deprecated.** Do not implement it in new
-servers. Use stdio for subprocess clients (Claude Desktop, CLI hosts) or Streamable HTTP
-for network-accessible deployments.
+**The HTTP+SSE transport (introduced in spec 2024-11-05, deprecated in spec 2025-03-26) is no longer recommended.** Do not implement it in new servers. Use stdio for subprocess clients (Claude Desktop, CLI hosts) or Streamable HTTP for network-accessible deployments.
 
 | Transport | Exposure | When to use |
 |-----------|----------|-------------|
@@ -296,4 +300,4 @@ Even with sections 1–8 applied, incidents happen. Be ready.
 
 ## Quick threat-review checklist
 
-Item-level checklist lives in [audit-checklist.md §14 Security](audit-checklist.md) (paired with §12 Transport and Logging, §5 Parameter Schemas). No copy here — single source of truth.
+Item-level checklist lives in [audit-checklist.md §14 Security](audit-checklist.md#14-security) (paired with §12 Transport and Logging, §5 Parameter Schemas). No copy here — single source of truth.
