@@ -71,10 +71,12 @@ the references they link to.
 **Designing a new server — the single canonical reading order:**
 
 ```
-design-philosophy → tool-design → agent-ux → feedback-tool → security-threats → observability → clients
+design-philosophy → tool-design → clients → agent-ux → feedback-tool → security-threats → observability
 ```
 
-Read sequentially. Add stack-specific refs (daemon-architecture, gateway-aggregation) when they match your deployment — see "Load by use case" below. For SDK/framework recipes (Pydantic schema quirks, FastMCP decorator options, etc.) consult upstream docs — those move version-to-version and this skill stays design-level.
+Read sequentially. `clients` is third on purpose: it shapes downstream choices (timeouts, async pattern, which notifications to wire) made in `agent-ux`, `feedback-tool`, and `security-threats`. Reading it last means absorbing consequences before constraints. Add stack-specific refs (daemon-architecture, gateway-aggregation) when they match your deployment — see "Load by use case" below. For SDK/framework recipes (Pydantic schema quirks, FastMCP decorator options, etc.) consult upstream docs — those move version-to-version and this skill stays design-level.
+
+**Auditing an existing server:** read [audit-checklist.md](references/audit-checklist.md) first; jump into the linked ref on each ❌ finding rather than re-reading the spine.
 
 **Load by use case:**
 
@@ -96,7 +98,7 @@ Read sequentially. Add stack-specific refs (daemon-architecture, gateway-aggrega
 | [feedback-tool.md](references/feedback-tool.md) | OPINIONATED | `submit_feedback` interface, CLI contract, data model, when-not-to-use |
 | [security-threats.md](references/security-threats.md) | UNIVERSAL | Prompt injection, authn/authz, sessions, DoS, secrets, supply chain |
 | [observability.md](references/observability.md) | UNIVERSAL + OPINIONATED | Per-call logging schema, storage patterns, privacy rules, report templates |
-| [clients.md](references/clients.md) | EMPIRICAL | Claude Desktop / Cursor capabilities, timeouts — verified 2026-04-28 |
+| [clients.md](references/clients.md) | EMPIRICAL | Claude Desktop, Claude Code capabilities + timeouts + cross-client matrix — verified 2026-04-28 / 2026-05-22 |
 | [audit-checklist.md](references/audit-checklist.md) | MIXED | 16-section, ~80-item checklist; items tagged; HIGH/MEDIUM/LOW output |
 | [daemon-architecture.md](references/daemon-architecture.md) | STACK:stateful-backends | Daemon + on-demand split, Unix socket, crash isolation |
 | [gateway-aggregation.md](references/gateway-aggregation.md) | STACK:remote-multi-server | Docker MCP Gateway, shared OAuth edge, tool-surface curation |
@@ -136,7 +138,8 @@ Read sequentially. Add stack-specific refs (daemon-architecture, gateway-aggrega
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
 - Flat parameter schemas — no nested objects; LLMs hallucinate nested key names
 - Hard-cap all list responses; include pagination token when truncated
-- ≤10 primary tools is a signal, not a hard cap *(OPINIONATED — rationale and exceptions in `references/tool-design.md` §Classification)*
+- ≤10 primary tools is a signal, not a hard cap *(OPINIONATED — rationale and exceptions in `references/tool-design.md` §Classification)*. Diagnostic tools (`health`, `version`), polling tools paired with async handles or `taskSupport: required`, and the `submit_feedback` channel are *secondary* — they don't count against the ≤10 budget.
+- Declare `tools: {}` unconditionally; add `"tools": {"listChanged": true}` only if your tool set mutates after init (auth gating, feature flags, multi-tenant surfaces). Static surfaces that declare `listChanged: true` mislead defenders into watching for events that never fire. Delivery is not guaranteed across clients — see [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) and [tool-design.md §Dynamic Tool Sets](references/tool-design.md#dynamic-tool-sets--listchanged).
 
 → Full conventions: [references/tool-design.md](references/tool-design.md)
 
@@ -187,11 +190,20 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 **Decision tree** (apply in order — first matching branch wins, then keep walking for the auth layer):
 
 - Server launched as a subprocess by Claude Desktop / a CLI host? → **`stdio`**
+- Remote SaaS endpoint consumed by Claude Code (or any HTTP-capable client) over the public internet? → **Streamable HTTP + OAuth 2.1** (see [clients.md §Claude Code](references/clients.md#claude-code) for the supported OAuth shape)
 - Network-accessible (inter-container Docker, HTTP-capable clients)? → **Streamable HTTP**
 - Exposed outside a trusted network? → **add an auth layer** (OAuth 2.1; tokens MUST include audience claim per RFC 8707 — see [references/security-threats.md](references/security-threats.md))
 - Internal Docker network with no untrusted neighbours? → plaintext is acceptable
 
-> **Streamable HTTP** (spec 2025-11-25, replacing deprecated HTTP+SSE): single endpoint, POST + GET. Server chooses `application/json` vs `text/event-stream` per response — SSE is for streaming multiple messages on one request, not always-on. Client MUST include `MCP-Protocol-Version: 2025-11-25` header; server SHOULD assume `2025-03-26` if absent, MUST respond 400 if invalid. `Mcp-Session-Id`: server MAY assign at init; client MUST include thereafter. DNS rebinding: server MUST validate `Origin` header (403 if invalid); SHOULD bind to localhost, not `0.0.0.0`. Source: [Transports spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
+**Worked pairings** (deployment shape → transport → auth):
+
+| Deployment shape | Transport | Auth |
+|------------------|-----------|------|
+| Claude Desktop launches your server as a subprocess | `stdio` | none (process boundary) |
+| Docker MCP gateway behind shared OAuth edge | `streamable-http` on `0.0.0.0:<port>` inside the docker network | OAuth 2.1 terminated at the gateway, not per backend |
+| Remote SaaS server for external users (incl. Claude Code) | `streamable-http` + TLS | OAuth 2.1 per-principal; narrow scopes; audience-bound tokens |
+
+> **Streamable HTTP** (spec 2025-11-25, replacing deprecated HTTP+SSE): single endpoint, POST + GET. Server chooses `application/json` vs `text/event-stream` per response — SSE is for streaming multiple messages on one request, not always-on. Client MUST include `MCP-Protocol-Version: 2025-11-25` header; server SHOULD assume `2025-03-26` if absent, MUST respond 400 if invalid. `Mcp-Session-Id`: server MAY assign at init; client MUST include thereafter. DNS rebinding: server MUST validate `Origin` header (403 if invalid); SHOULD bind to localhost, not `0.0.0.0`, or use a Unix domain socket (browsers cannot reach Unix sockets — strongest mitigation). Source: [Transports spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
@@ -199,7 +211,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
 → Security per transport: [references/security-threats.md](references/security-threats.md)
-→ Client limitations (Claude Desktop, Cursor): [references/clients.md](references/clients.md)
+→ Client capabilities and limitations (Claude Desktop, Claude Code) + cross-client matrix: [references/clients.md](references/clients.md)
 
 ---
 

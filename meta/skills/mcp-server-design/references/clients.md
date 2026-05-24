@@ -9,6 +9,36 @@
 
 ---
 
+## Cross-client capability matrix
+
+> **Use:** pick the safe surface for a server targeting more than one client — the
+> intersection of ✅ cells is what you can rely on. Per-client detail below.
+> Source for the Claude Code column: `anthropics/claude-code` CHANGELOG.md, accessed 2026-05-22.
+
+| Capability / Notification | Claude Desktop (2026-04-28) | Claude Code (v2.1.148, 2026-05-22) |
+|---------------------------|------------------------------|-------------------------------------|
+| Tools | ✅ | ✅ |
+| Resources | ✅ | ✅ (`@server:proto://path` mention) |
+| Prompts | ✅ | ✅ (`/mcp__<server>__<prompt>` slash) |
+| `elicitation` (mid-call user input) | ❌ not declared | ✅ since v2.1.76 |
+| `roots` | ❌ not declared | ⚠️ unverified |
+| `sampling` (deprecated DRAFT-2026-v1) | ❌ + deprecated | ❌ + deprecated |
+| `completions` | ❌ not declared | ⚠️ unverified |
+| `notifications/tools/list_changed` | ⚠️ likely dropped | ✅ since v2.1.0 |
+| `notifications/message` (logging → model) | ❌ silently dropped | ⚠️ unverified |
+| `notifications/progress` | ❌ no `progressToken` sent | ⚠️ unverified |
+| `tasks` (SEP-1686) | ⚠️ not observed in `initialize` | ⚠️ unverified |
+| OAuth 2.1 for remote servers | n/a (subprocess client) | ✅ since v1.0.27 (RFC 9728 + CIMD) |
+| Tool-call timeout knob | ~20s defensive (single 26s observation) | `MCP_TOOL_TIMEOUT` env var, no default |
+| Output budget | not published | `MAX_MCP_OUTPUT_TOKENS=25000`, warn at 10000 |
+
+**Safe-surface rule when targeting both:** assume only the non-interactive subset works
+(Tools, Resources, Prompts, `isError`, `server.instructions`, tool descriptions). Push
+state through tool responses, not push notifications. Defer to async-handle pattern for
+anything >20s.
+
+---
+
 ## Claude Desktop
 
 **Verified:** 2026-04-28 (empirical, mcp-server-ozon) | **Recheck:** ~2026-07-01
