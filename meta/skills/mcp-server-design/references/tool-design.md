@@ -22,6 +22,24 @@ If the model decides when to call it — Tool. If it's stable, addressable conte
 
 Most servers start tools-only. Add Resources when you have stable URI-addressable data. Add Prompts when you find yourself writing the same system-prompt boilerplate repeatedly.
 
+**Decision tree** (walk top-to-bottom; first matching branch wins):
+
+1. **Does the model decide *when* to call it (mid-conversation, based on its own judgement)?** → **Tool**
+2. **Does the user invoke it explicitly by name (slash command, picker)?** → **Prompt**
+3. **Does it mutate state or have side effects?** → **Tool**
+4. **Is it static reference content the client can pre-load per session (file, schema, profile)?** → **Resource**
+5. **Otherwise** (dynamic data the model fetches on demand) → **Tool**
+
+**One-line worked examples:**
+
+| Primitive | Example | Why this primitive |
+|-----------|---------|--------------------|
+| Tool | `search_messages(query="invoice")` | Model decides when to search; result is dynamic. |
+| Tool | `mark_dialog_for_sync(dialog_id=42)` | Mutates server state. |
+| Resource | `@profile://current-user` | Stable per session, client pre-loads at startup. |
+| Resource | `@github:issue://123` | URI-addressable static reference, user/app selects. |
+| Prompt | `/draft-reply` slash command | User invokes explicitly by name; reusable template. |
+
 ---
 
 ## Naming
@@ -358,8 +376,17 @@ Synchronous tools that block for more than a few seconds hold the connection and
 For anything slow (file analysis, data migration, external API with high latency), do not block —
 return a handle and let the client poll.
 
-There are two ways to do this. **Prefer the spec primitive when the client supports it; fall
-back to the roll-your-own pattern when it doesn't.**
+**Choose by expected p95 duration** (not best case — clients abort on the long tail):
+
+| p95 duration | Pattern | Notes |
+|--------------|---------|-------|
+| < 2 s        | Synchronous | Most read tools fall here. No special handling. |
+| 2–20 s       | Synchronous, with a timeout-warning note in the description | Watch the client's tool-call timeout — see [clients.md](clients.md). Some hosts abort at 30 s; some users abort sooner. |
+| 20 s – 2 min | `taskSupport: "optional"` if any target client supports Tasks; else roll-your-own handle | `optional` keeps synchronous fallback working. Roll-your-own = submit tool returns a handle + separate polling tool. |
+| > 2 min      | `taskSupport: "required"` once your target clients negotiate `tasks` at `initialize`; until then, roll-your-own handle | Synchronous calls will be aborted by client timeouts. Marking `required` on a client that doesn't support Tasks breaks the tool — verify the [clients.md cross-client matrix](clients.md#cross-client-capability-matrix) first. |
+
+There are two ways to expose the non-synchronous patterns. **Prefer the spec primitive when the
+client supports it; fall back to the roll-your-own pattern when it doesn't.**
 
 ### Spec primitive — Tasks (spec **2025-11-25**, experimental, [SEP-1686](https://modelcontextprotocol.io/community/seps/1686-tasks))
 

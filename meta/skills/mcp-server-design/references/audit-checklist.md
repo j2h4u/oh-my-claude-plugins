@@ -139,17 +139,36 @@
 
 ## 14. Security
 
+> Sub-grouped by concern so the auditor can triage one category at a time.
+> `*`-marked items carry an inline *smell pattern* — the shape of a failing
+> implementation. Use it to pass/fail from the checklist alone; dive into
+> `security-threats.md` only when the smell matches.
+
+### 14a. Inputs and data handling
+
 - [ ] `[UNIVERSAL]` **Untrusted content delimited in responses** — message bodies, file contents, DB rows wrapped in explicit framing, not injected raw into tool output.
 - [ ] `[UNIVERSAL]` **Tools that fetch external content flagged in descriptions** — agents know to treat results as data, not instructions.
-- [ ] * `[UNIVERSAL]` **Inputs validated at system boundary** — paths, shell arguments, URLs, tenant IDs, and command flags are allowlisted/normalised before use.
+- [ ] * `[UNIVERSAL]` **Inputs validated at system boundary** — paths, shell arguments, URLs, tenant IDs, and command flags are allowlisted/normalised before use. *Smell: raw tool args flowing into `open()`, `subprocess`, or HTTP fetches with no allowlist.*
 - [ ] `[UNIVERSAL]` **Secrets never leak** — tokens, cookies, API keys, OAuth codes absent from URLs, logs, tool responses, and feedback records.
+
+### 14b. Network exposure and transport
+
 - [ ] `[UNIVERSAL]` **Local server not exposed on public interface** — binds to `127.0.0.1` or Unix socket, or has authentication if network-accessible.
 - [ ] `[CONDITIONAL]` **Origin header validation for Streamable HTTP** — server rejects requests with invalid `Origin` (HTTP 403). Usually handled by SDK — verify it's not disabled.
-- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. → [security-threats.md §4 Session and transport security](security-threats.md)
+- [ ] * `[CONDITIONAL]` **Streamable HTTP session IDs are CSPRNG** — ≥ 128 bits entropy, not derived from time/counter/PID. *Smell: session ID from `time.time()`, PID, counter, or `random.random()` instead of `secrets.token_urlsafe`.* → [security-threats.md §4 Session and transport security](security-threats.md)
 - [ ] `[CONDITIONAL]` **`Host` header validated against allowlist** — defends localhost-bound HTTP servers against DNS rebinding. → [security-threats.md §4 Session and transport security](security-threats.md)
-- [ ] * `[CONDITIONAL]` **OAuth: per-principal tokens, narrow scopes, no pass-through** — applies to servers acting as OAuth client or authorization server. → [security-threats.md §3 Authentication and authorization](security-threats.md)
-- [ ] * `[UNIVERSAL]` **Authorization checked per call, not only at search** — every read/write tool joins against the authenticated principal; no IDOR via `*_id` arguments. → [security-threats.md §3 Authentication and authorization](security-threats.md)
+
+### 14c. Authorization
+
+- [ ] * `[CONDITIONAL]` **OAuth: per-principal tokens, narrow scopes, no pass-through** — applies to servers acting as OAuth client or authorization server. *Smell: one shared upstream token for all users, no per-principal audit trail.* → [security-threats.md §3 Authentication and authorization](security-threats.md)
+- [ ] * `[UNIVERSAL]` **Authorization checked per call, not only at search** — every read/write tool joins against the authenticated principal; no IDOR via `*_id` arguments. *Smell: `search_*` filters by principal, but `get_*`/`update_*` returns/writes by ID alone.* → [security-threats.md §3 Authentication and authorization](security-threats.md)
+
+### 14d. Resource limits (DoS)
+
 - [ ] `[UNIVERSAL]` **Per-tool timeout + concurrency cap + request/response size cap** — bounded resources prevent DoS by a buggy or hostile caller. → [security-threats.md §5 Resource exhaustion and DoS](security-threats.md)
+
+### 14e. Release stability and supply chain
+
 - [ ] `[UNIVERSAL]` **Tool surface changes go through semver + changelog** — no silent renames, no annotation flips, no description-only behaviour changes. → [security-threats.md §8 Release hygiene and surface stability](security-threats.md)
 - [ ] `[UNIVERSAL]` **Lockfile committed; dependency audit (`npm audit`, `pip-audit`) gates CI.** → [security-threats.md §7 Supply chain — defending your own package](security-threats.md)
 
