@@ -168,8 +168,8 @@ If you adopt the pattern:
 ## Agent UX
 
 - Tool descriptions serve two audiences: LLM (reads as prompt) and human (sees in UI). Write for LLM first
-- System prompt (`server.instructions`): keep minimal — grow only when you see agents making wrong decisions without the directive. ALL-CAPS named workflow patterns, built dynamically at startup
-- Dark-room UX test: agent + server + real task + no briefing → review feedback queue
+- System prompt (`server.instructions`): keep minimal — grow only when you see agents making wrong decisions without the directive. ALL-CAPS named workflow patterns, built dynamically at startup. Canonical ~100-word example covering all four content types: [agent-ux.md §System Prompt as Configuration Surface](references/agent-ux.md#system-prompt-as-configuration-surface)
+- Dark-room UX test: agent + server + real task + no briefing → review feedback queue. Copy-paste prompt template: [agent-ux.md §Dark-Room Test](references/agent-ux.md#dark-room-test)
 - Error messages: include `Action:` hint for every recoverable error — agents act on error text directly
 
 → Full patterns: [references/agent-ux.md](references/agent-ux.md)

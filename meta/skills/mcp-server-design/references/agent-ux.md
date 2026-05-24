@@ -81,21 +81,37 @@ then folded into the host's system prompt for the rest of the conversation — k
 **What does NOT belong here:** parameter docs, field walkthroughs, data that changes
 between requests (those are tool responses).
 
-**Format: named workflow patterns in ALL-CAPS, one per line.**
+**Canonical example** — one block showing all four content types together
+(domain authority, live state injected at startup, named workflows, stable
+context hint, feedback directive). Treat the shape, not the wording, as the
+template. This is the single canonical instance referenced from `SKILL.md
+§Agent UX` and `design-philosophy.md §server.instructions`.
 
 ```
+Read-only access to message history via a local sync cache. If results look stale,
+call `get_sync_status` to check lag; `mark_dialog_for_sync` refreshes a dialog.
+
+Connected account: id=42, name="Mila".
+
 Key workflows:
-- SEARCH THEN READ: Use `search_messages` (omit dialog= for global) to find. Use
-  `list_messages(anchor_message_id=M)` to read context around any hit.
-- BROWSE: Use `list_messages` with navigation="newest" or a next_navigation token.
-  Continue calling until next_navigation is absent.
-- FIND DIALOG IDS: Use `list_dialogs` to get exact numeric dialog ids.
+- SEARCH THEN READ: `search_messages` (omit dialog= for global) finds hits;
+  `list_messages(anchor_message_id=M)` reads context around any hit.
+- BROWSE: `list_messages` with navigation="newest" or a next_navigation token;
+  continue until next_navigation is absent.
+- FIND DIALOG IDS: `list_dialogs` returns exact numeric dialog ids.
+
+`dialog_id` is stable for the session — cache it, don't re-resolve on every call.
+
+Use `submit_feedback` immediately when a tool response is wrong, surprising, or
+missing a useful capability — don't wait until end of session.
 ```
 
-Named patterns give the LLM stable, compact vocabulary to refer to multi-step flows.
-A labelled pattern is easier to retrieve and reason about than re-deriving the steps
-from scratch. Measure whether agents cite the labels back on your own surface — the
-benefit is strongest on complex multi-step flows where step order matters.
+**Format rule for the workflow section:** ALL-CAPS labels, one named pattern
+per line. Named patterns give the LLM stable, compact vocabulary to refer to
+multi-step flows. A labelled pattern is easier to retrieve and reason about
+than re-deriving the steps from scratch. Measure whether agents cite the
+labels back on your own surface — the benefit is strongest on complex
+multi-step flows where step order matters.
 
 **Dynamic data injection:** build the system prompt at startup, not at deploy time.
 Inject live server state (connected account, current limits, active features) so
@@ -156,6 +172,29 @@ then after major redesigns.
 ### Dark-Room Test
 
 Give the agent the server with no briefing, assign a real task, then read the feedback queue.
+
+**Dark-room prompt template** — paste verbatim into a fresh agent session with
+your target MCP server connected. No briefing, no tool walkthrough.
+
+```
+You have been given access to an MCP server. You have not been briefed on what
+it does, what tools it exposes, or what conventions it follows. Discover that
+yourself from the tool list and descriptions as you work.
+
+Task: <a real user-style task — e.g. "find my unread messages from this week",
+"summarise what I was discussing with Mila yesterday", "draft a reply to the
+last support ticket I received">.
+
+Meta-instructions:
+- Use `submit_feedback` proactively, in the moment, for anything surprising,
+  confusing, missing, ambiguous, or wrong. Quote what you tried, name the tool,
+  and say what you expected vs. got.
+- Do not ask me for clarification about the server itself. Treat unclear tool
+  behaviour as feedback, not as a question for me.
+- When you finish (or get stuck), submit one final `submit_feedback` titled
+  "session summary": what felt intuitive, what was a WTF moment, what capability
+  you wished existed but didn't.
+```
 
 **Protocol:**
 
