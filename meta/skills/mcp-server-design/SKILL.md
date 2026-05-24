@@ -74,7 +74,7 @@ the references they link to.
 design-philosophy → tool-design → agent-ux → feedback-tool → security-threats → observability → clients
 ```
 
-Read sequentially. Add stack-specific refs (python-notes, fastmcp-notes, daemon-architecture, gateway-aggregation) when they match your deployment — see "Load by use case" below.
+Read sequentially. Add stack-specific refs (daemon-architecture, gateway-aggregation) when they match your deployment — see "Load by use case" below. For SDK/framework recipes (Pydantic schema quirks, FastMCP decorator options, etc.) consult upstream docs — those move version-to-version and this skill stays design-level.
 
 **Load by use case:**
 
@@ -86,8 +86,6 @@ Read sequentially. Add stack-specific refs (python-notes, fastmcp-notes, daemon-
 | **Security review** | security-threats, clients, audit-checklist (§14 Security, §12 Transport and Logging, §5 Parameter Schemas) |
 | **Tool-surface review / 80-20 audit** | observability, audit-checklist (§1 Design Philosophy) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
-| **Python/Pydantic implementation** | python-notes, tool-design |
-| **FastMCP framework** | python-notes, fastmcp-notes, tool-design |
 | **Remote multi-server gateway** | gateway-aggregation, security-threats, clients, audit-checklist |
 
 | Reference | Scope | Content |
@@ -102,8 +100,6 @@ Read sequentially. Add stack-specific refs (python-notes, fastmcp-notes, daemon-
 | [audit-checklist.md](references/audit-checklist.md) | MIXED | 16-section, ~80-item checklist; items tagged; HIGH/MEDIUM/LOW output |
 | [daemon-architecture.md](references/daemon-architecture.md) | STACK:stateful-backends | Daemon + on-demand split, Unix socket, crash isolation |
 | [gateway-aggregation.md](references/gateway-aggregation.md) | STACK:remote-multi-server | Docker MCP Gateway, shared OAuth edge, tool-surface curation |
-| [python-notes.md](references/python-notes.md) | STACK:Python | Pydantic v2 `anyOf:null`, `Annotated`/`Field`, SDK gotchas |
-| [fastmcp-notes.md](references/fastmcp-notes.md) | STACK:FastMCP | What FastMCP handles automatically, tool name override, framework bugs |
 
 ---
 

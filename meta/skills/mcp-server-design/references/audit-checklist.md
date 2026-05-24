@@ -58,8 +58,8 @@
 - [ ] * `[UNIVERSAL]` **No nested objects** — parameters are flat top-level primitives. No `filters: dict`, no `options: object`. Use prefixed flat names instead (`filter_from`, `filter_status`).
 - [ ] `[UNIVERSAL]` **Enums over free strings** — closed value sets use `Literal` / `enum`, not free `str`.
 - [ ] `[UNIVERSAL]` **Optional parameters have sensible defaults** — optional means meaningful behaviour without the argument, not "nullable required".
-- [ ] `[STACK:Python]` **Python parameters self-document where needed** — FastMCP/Pydantic tools use `Annotated` + `Field(description=..., pattern=..., examples=...)` for IDs, dates, limits, and ambiguous strings.
-- [ ] `[EMPIRICAL]` **`anyOf`/null variants stripped** `[Claude Desktop, Claude Code ≥ 2.0.21]` — schemas with `anyOf: [T, null]` (typical when nullable/optional types in language SDKs serialize to JSON Schema) break Claude Desktop; top-level `anyOf` in `input_schema` causes a hard 400 in Claude Code ≥ 2.0.21. → Fix: `tool-design.md §Schema Compatibility Gotcha: anyOf with null`
+- [ ] `[UNIVERSAL]` **Non-obvious parameters self-document** — IDs, dates, limits, and ambiguous strings carry a description/pattern/example in the schema, not just a type. Use whatever idiom your SDK exposes for this.
+- [ ] `[EMPIRICAL]` **`anyOf`/null variants stripped** `[Claude Desktop]` — schemas with `anyOf: [T, null]` (typical when nullable/optional types in language SDKs serialize to JSON Schema) break Claude Desktop. Other clients may reject top-level `anyOf` in `input_schema` too — test your target client matrix. → Fix: `tool-design.md §Schema Compatibility Gotcha: anyOf with null`
 - [ ] `[UNIVERSAL]` **`min_length=1` is not enough** — whitespace-only strings checked explicitly; `"   "` passes `min_length=1`.
 
 ---

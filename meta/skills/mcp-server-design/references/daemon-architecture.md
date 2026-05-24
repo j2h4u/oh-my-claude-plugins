@@ -34,8 +34,8 @@ MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
 
 ## Stderr Rule — Reversed Under This Pattern
 
-This is the canonical source for the stderr-inversion rule (SKILL.md, security-threats.md, and
-python-notes.md link here):
+This is the canonical source for the stderr-inversion rule (SKILL.md and security-threats.md link
+here):
 
 - **Standard stdio rule:** log to `stderr`, never `stdout` — stdout carries JSON-RPC and any other
   byte corrupts the transport.

@@ -254,7 +254,7 @@ Several MCP clients reject schemas where an optional parameter is exposed as `{"
 | Client | Symptom |
 |--------|---------|
 | Claude Desktop | Validation error — optional param treated as required, fails with "not valid under any of the given schemas" |
-| Claude Code ≥ 2.0.21 | Hard 400 if `anyOf` appears at **top level** of `input_schema` |
+| Some MCP clients | Reject schemas where `anyOf` appears at the top level of `input_schema`. Test against your target clients; the matrix moves version-to-version. |
 
 This typically arises from how language SDKs serialise nullable/optional types into JSON Schema. The fix is conceptual: strip the null variant from `anyOf` before exposing the schema; collapse single-non-null `anyOf` to the bare type; drop `"default": null`. Apply at schema generation time when possible, or as a post-processing pass before constructing the `Tool` descriptor.
 
@@ -280,8 +280,7 @@ This typically arises from how language SDKs serialise nullable/optional types i
 }
 ```
 
-→ **Python/Pydantic recipes**: `python-notes.md §anyOf: [T, null]`
-→ **FastMCP behavior**: `fastmcp-notes.md` — does **not** auto-strip; the fix is your responsibility
+Apply the fix at schema generation time using your SDK's idioms. Most language SDKs do not auto-strip the `null` arm — consult upstream SDK/framework docs for the current behaviour.
 
 ### Argument Flattening
 
