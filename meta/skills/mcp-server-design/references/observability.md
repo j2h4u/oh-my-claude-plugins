@@ -37,18 +37,18 @@ audit without it.
 
 ## What to record per call
 
-Minimal, useful, safe:
+Minimal, useful, safe. The four-field minimum (`ts`, `tool_name`, `status`, `duration_ms`) is the bar SKILL.md enforces; the rest are upgrades.
 
-| Field | Purpose | Notes |
-|-------|---------|-------|
-| `ts` | When | ISO-8601 or epoch ms |
-| `tool_name` | Which tool | Exact registered name |
-| `caller_id` | Who | Session/principal/agent id if available; null is fine |
-| `duration_ms` | Latency | Measure server-side, not transport |
-| `status` | `ok` / `error` | Mirror `isError` |
-| `error_class` | Kind of failure | Short label: `validation`, `upstream_timeout`, `not_found`, `permission`, etc. Not the full message |
-| `args_shape` | Optional, schema-only | `["dialog_id", "limit"]` — which args were provided, NOT their values |
-| `result_size` | Optional | Bytes or item count, for pagination tuning |
+| Field | Required? | Purpose | Notes |
+|-------|-----------|---------|-------|
+| `ts` | **required** | When | ISO-8601 or epoch ms |
+| `tool_name` | **required** | Which tool | Exact registered name |
+| `status` | **required** | `ok` / `error` | Mirror `isError` |
+| `duration_ms` | **required** | Latency | Measure server-side, not transport |
+| `caller_id` | optional | Who | Authenticated principal where available, else session id, else null. Required if per-principal rate-limits in [security-threats.md §5](security-threats.md#5-resource-exhaustion-and-dos) are in scope — `null` is fine for the log but not enough for principal-level limits. |
+| `error_class` | optional | Kind of failure | Short label: `validation`, `upstream_timeout`, `not_found`, `permission`, etc. Not the full message |
+| `args_shape` | optional | Schema-only | `["dialog_id", "limit"]` — which args were provided, NOT their values |
+| `result_size` | optional | Pagination tuning | Bytes or item count |
 
 Do **NOT** log:
 

@@ -268,9 +268,11 @@ Before shipping or handing off:
 
 ## What's Evolving
 
-- **MCP Apps** (SEP-1865, announced 2025-11-21): optional backwards-compatible extension adding `ui://` URI scheme, tool→UI metadata linking, sandboxed iframe rendering, bi-directional JSON-RPC over `postMessage`. Repo: [modelcontextprotocol/ext-apps](https://github.com/modelcontextprotocol/ext-apps). Blog: [2025-11-21 announcement](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/).
-- **Sampling deprecated** in DRAFT-2026-v1 (SEP-2596) — do not design new servers around it.
-- **Tasks** (SEP-1686) landed in 2025-11-25 as experimental — per-tool `execution.taskSupport` field; see glossary.
+Each bullet ends in an action you can take *now*, not "watch this space".
+
+- **MCP Apps** (SEP-1865, announced 2025-11-21): optional backwards-compatible extension adding `ui://` URI scheme, tool→UI metadata linking, sandboxed iframe rendering, bi-directional JSON-RPC over `postMessage`. *Action now:* if your tool returns HTML/JSON intended for rendering, keep `structuredContent` schema-stable so MCP Apps adoption later is a non-breaking addition, not a rewrite. Repo: [modelcontextprotocol/ext-apps](https://github.com/modelcontextprotocol/ext-apps). Blog: [2025-11-21 announcement](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/).
+- **Sampling deprecated** in DRAFT-2026-v1 (SEP-2596). *Action now:* do not design new servers around `sampling/createMessage`; remove any optimistic capability checks for it.
+- **Tasks** (SEP-1686) landed in 2025-11-25 as experimental — per-tool `execution.taskSupport` field; see glossary. *Action now:* declare `taskSupport: optional` on tools that already exceed your ~20s budget — that's safe today; reserve `taskSupport: required` until [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) shows your target clients negotiating `tasks` at `initialize`.
 
 ## External References
 

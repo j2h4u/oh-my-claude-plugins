@@ -70,9 +70,9 @@ operator — see [daemon-architecture.md](daemon-architecture.md). A single log 
 stdout corrupts the framing and silently breaks the connection. Configure your logger with
 `stream=sys.stderr` (or equivalent) before starting the server loop.
 
-Remote servers need authentication. The spec supports OAuth 2.1 for this (OAuth 2.1 is the
-consolidated successor to OAuth 2.0 — see [RFC 9700](https://datatracker.ietf.org/doc/rfc9700/)
-for the spec). For internal Docker networks, no auth is needed if the network itself is trusted.
+*Stdout-cleanliness test:* run `your_server </dev/null >/tmp/out 2>/dev/null & sleep 1; kill %1; wc -c /tmp/out` and confirm 0 bytes — any non-JSON-RPC byte on stdout (a stray `print()` in a third-party lib, a debug dump on import) corrupts the transport silently.
+
+Remote-server authentication shape (OAuth 2.1, audience-bound tokens, per-principal scoping) is the domain of §3. For internal Docker networks, no auth is needed if the network itself is trusted.
 
 ---
 
@@ -117,7 +117,7 @@ are the conduit.
 - Hidden Unicode tag-character payloads in issue titles fetched by issue-tracker tool
   (invisible to humans, parsed by LLM)
 - `<system>` / `<instructions>` XML in DB free-text fields, working as fake system messages
-- Markdown link `[click here](javascript:...)` rendered by some MCP clients
+- Markdown link `[click here](javascript:...)` rendered by some MCP clients — note this is a **client-render** vulnerability (the host turning your response into clickable HTML), distinct from the LLM-following-instructions class; mitigate by stripping `javascript:` / `data:` URI schemes from outgoing markdown
 - Tool-call directives embedded in PDF metadata fetched by file-tool
 
 **Mitigations (defence in depth — apply all):**
@@ -204,7 +204,9 @@ function that consumes the value — boundary-only validation breaks when call p
 ## 3. Authentication and authorization
 
 If your server exposes Streamable HTTP, authentication is your responsibility — the host
-will not add it for you. The MCP spec (2025-11-25) recommends OAuth 2.1 for remote servers.
+will not add it for you. The MCP spec (2025-11-25) recommends OAuth 2.1 for remote servers
+(OAuth 2.1 is the consolidated successor to OAuth 2.0 — see
+[RFC 9700](https://datatracker.ietf.org/doc/rfc9700/)).
 
 ### Authentication pitfalls
 
@@ -250,8 +252,9 @@ The spec says session IDs SHOULD be unguessable. Real incidents reported in 2025
 generated session IDs from `time()` or short integers, allowing attackers to predict /
 brute-force active sessions and hijack them.
 
-- Use `secrets.token_urlsafe(32)` (Python) or equivalent CSPRNG, ≥ 128 bits of entropy
-  (32 bytes = 256 bits, well above the 128-bit floor)
+- Use `secrets.token_urlsafe(32)` (Python) or equivalent CSPRNG, ≥ 128 bits of entropy.
+  The `32` is `nbytes` — 32 random bytes (256 bits) base64url-encoded to ~43 characters,
+  well above the 128-bit floor
 - Never derive from timestamps, counters, hostname, PID, or user data
 - Tie the session to the authenticated principal — reject if the bearer/origin no longer
   matches

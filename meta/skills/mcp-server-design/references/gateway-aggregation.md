@@ -211,7 +211,9 @@ curl -i http://mcp-gateway:8811/mcp \
 ```
 
 Then send `notifications/initialized` and call `tools/list` with the returned
-`Mcp-Session-Id`. Check:
+`Mcp-Session-Id`. If the gateway response does not include `Mcp-Session-Id` (some
+configurations are stateless), omit the header on subsequent calls — sending an
+unrecognised session id makes the gateway reject the request. Check:
 
 - Server info identifies the gateway, not a backend.
 - `tools/list` includes only the intended servers.
