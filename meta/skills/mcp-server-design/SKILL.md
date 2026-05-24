@@ -34,25 +34,21 @@ as protocol requirements.
 
 ## Glossary
 
-One-liners for the MCP-specific terms used throughout this skill. Full mechanics live in
-the references they link to.
+Design meaning of the MCP terms used throughout this skill — what the term implies for *your decisions*, not what the spec says about it. Full protocol mechanics live in the spec; the references linked in each row hold the design rule.
 
-| Term | One-line meaning |
-|------|------------------|
-| `stdio` transport | MCP over a process's stdin/stdout; the host launches the server as a subprocess. Default for Claude Desktop and CLI hosts. |
-| `Streamable HTTP` transport | The current MCP network transport (spec 2025-11-25): single endpoint, POST + GET. Server returns `application/json` or `text/event-stream` per response. Client MUST send `MCP-Protocol-Version` header. Replaces deprecated HTTP+SSE. |
-| **Resource** | Read-only addressable content the client/application selects and injects. Stable, URI-addressable. In Claude Code: `@server:proto://path` mention syntax (e.g. `@github:issue://123`). → [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt) |
-| **Prompt** | Parameterized text snippet the user invokes by name. Surfaces in Claude Code as `/mcp__<server>__<prompt>` slash command. → [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt) |
-| `outputSchema` | JSON Schema declared on a tool that types its structured output. When declared, the server MUST return `structuredContent` on every successful call. |
-| `structuredContent` | Sibling of `content` in a tool result — carries typed JSON conforming to `outputSchema`. Lets clients render/parse without re-parsing text. |
-| `isError` | Boolean on the tool result. `true` = business/validation error the agent can recover from. Distinct from protocol exceptions (transport-level failures). |
-| `execution.taskSupport` | Per-tool field (spec **2025-11-25**, experimental, SEP-1686): `forbidden` (default) \| `optional` \| `required`. Declares whether the client may (or must) augment a `tools/call` with a `task` param to run it as a polled task via `tasks/get` / `tasks/result`. Spec primitive for long-running ops. SDK + client support is rolling out — check [clients.md](references/clients.md) before marking `required`. |
-| Tasks two-layer handshake | Tasks (SEP-1686) requires **both** sides to opt in: the server declares the `tasks` capability at `initialize` (`{"tasks": {"requests": {"tools/call": true}}}`), AND the client must declare matching capability. Per-tool `execution.taskSupport` only fires when both sides negotiated `tasks`. As of 2026-05, no tracked client negotiates `tasks` — see [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix). Roll-your-own async handle is the working default today. Full wire-shape: [tool-design.md §Long-Running Operations](references/tool-design.md#long-running-operations). |
-| `server.instructions` | The server-declared system prompt — first-class config surface for shaping agent behaviour without adding tools. Sent at `initialize` (once per session); the host then folds it into its system prompt for the conversation. Keep it tight. |
-| Tool `annotations` | Protocol hints on a tool: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`. Hints to clients/agents, not enforced server-side. **Asymmetric default:** `destructiveHint` defaults to `true` (opt-out — you set `false` to declare additive/safe). The other three default to the *pessimistic* value (`readOnly:false`, `idempotent:false`, `openWorld:true`) and you opt *in* to the safer property. Forgetting to set `destructiveHint: false` on additive writes (e.g. `submit_feedback`) silently marks them destructive. → [tool-design.md §Annotations](references/tool-design.md#annotations). |
-| `posture` (primary / secondary) | Project-level classification: *primary* tools = user-facing capabilities; *secondary/helper* tools = plumbing the agent uses to support primary calls. Not a protocol field. |
-| `resource_link` | Tool result content type (`{type:"resource_link", uri, name, mimeType}`) introduced in 2025-11-25. Tools return a URI pointer instead of inlining content. Not guaranteed to appear in `resources/list`. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). |
-| `icons` (tool/resource/prompt field) | Optional array `{src, mimeType, sizes?[]}` on Tool, Resource, ResourceTemplate, Prompt. Added in 2025-11-25 (SEP-973). Source: [Changelog 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/changelog). |
+| Term | Design meaning |
+|------|----------------|
+| `stdio` / `Streamable HTTP` | The two MCP transports. Pick by who-launches-whom — see §Transport. Spec details belong in the spec; this skill cares only about the choice. |
+| **Resource** | A primitive that is *selected and injected by the client*, not invoked by the model. Use when context is stable and URI-addressable. → [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt) |
+| **Prompt** | A primitive *the user* invokes by name (slash command in Claude Code). Use for reusable workflows the user explicitly triggers. → [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt) |
+| `outputSchema` + `structuredContent` | Declaring `outputSchema` is a server contract: every successful call MUST return `structuredContent` conforming to it. Agents extract fields by key instead of parsing text. Design rule: declare for any tool returning machine-parseable data; always pair with a compact text preview. |
+| `isError` | The right channel for *business / validation* errors (agent can self-correct). Protocol exceptions are for malformed requests, not domain failures. |
+| Tasks (SEP-1686) | Spec primitive for long-running ops. **Design implication:** as of 2026-05 no tracked client negotiates it ([clients.md](references/clients.md#cross-client-capability-matrix)), so the roll-your-own async handle (submit returns an `id`, separate polling tool) is the working default. Switch to the spec primitive when the matrix flips. → [tool-design.md §Long-Running Operations](references/tool-design.md#long-running-operations). |
+| `server.instructions` | The server-declared system prompt — a configuration surface for shaping agent behaviour without adding tools. Keep it tight; budget rules in [agent-ux.md](references/agent-ux.md#system-prompt-as-configuration-surface). |
+| Tool `annotations` | Posture hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`) — advisory, not security. **Asymmetric default to remember:** `destructiveHint` defaults to `true` (opt-out). Forgetting to set it to `false` on an additive write (e.g. `submit_feedback`) silently marks the tool destructive. → [tool-design.md §Annotations](references/tool-design.md#annotations). |
+| `posture` (primary / secondary) | Project-level classification used by this skill (not a protocol field). Primary = user-facing capability; secondary = plumbing. Drives the ≤10 budget. |
+| `resource_link` (2025-11-25) | Tool result type that returns a URI pointer instead of inlining content. Design use: large payloads, already-addressable resources. Not guaranteed to appear in `resources/list`. |
+| `icons` (2025-11-25, SEP-973) | Optional icon array on Tool/Resource/Prompt. Pure presentation — design implication only when targeting clients that render them. |
 
 ---
 
@@ -175,15 +171,11 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 ## Transport
 
-**Default: `stdio`.** Pick a network transport only when a concrete reason rules `stdio` out (multi-process clients on the same host, remote consumers, gateway aggregation, container-network access from sibling containers). `stdio` has no port allocation, no Origin headers, no DNS-rebinding surface, no session-id semantics — pick the simpler thing first.
+**Decision tree** — pick by *who launches the server and how the client reaches it*; first matching branch wins, then keep walking for the auth layer.
 
-**Decision tree** (apply in order — first matching branch wins, then keep walking for the auth layer):
-
-- Server launched as a subprocess by Claude Desktop / a CLI host (including local Claude Code via `.mcp.json` with a `command`)? → **`stdio`**
-- Remote SaaS endpoint consumed by Claude Code (or any HTTP-capable client) over the public internet? → **Streamable HTTP + TLS + OAuth 2.1** (per-principal, narrow scopes, audience-bound tokens — see [clients.md §Claude Code](references/clients.md#claude-code) for the supported OAuth shape; full requirements in the worked-pairings table below and `security-threats.md §3`)
-- Need to be reached by sibling containers / non-subprocess clients on the same host (Docker network, separate host process)? → **Streamable HTTP**
-- Exposed outside a trusted network? → **add an auth layer** (OAuth 2.1; tokens MUST include audience claim per RFC 8707 — see [references/security-threats.md](references/security-threats.md))
-- Internal Docker network with no untrusted neighbours? → plaintext is acceptable
+- Single client launches the server as a subprocess on its own host (Claude Desktop; Claude Code via `.mcp.json` with a `"command"` entry; any CLI host)? → **`stdio`**. Same-machine, single-consumer, no port allocation, no Origin/DNS-rebinding surface.
+- Server runs as a long-lived process and *multiple* / *remote* clients need to reach it (SaaS-style, or sibling containers, or any client that connects rather than launches)? → **Streamable HTTP**. Add **TLS + OAuth 2.1 per-principal, narrow scopes, audience-bound tokens** (RFC 8707) for any non-trusted-network exposure; see worked-pairings table and `security-threats.md §3`.
+- Internal Docker network with no untrusted neighbours? → plaintext on the network is acceptable; auth terminated at the gateway (worked pairing row 2).
 
 **Worked pairings** (deployment shape → transport → auth):
 
