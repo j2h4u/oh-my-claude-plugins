@@ -38,8 +38,9 @@ The one-liner is what humans scan. The LLM reads the entire block.
 
 Tool selection is dominated by **description content**, not structural tags. Faghih
 et al. (EMNLP 2025) tested nine description-edit types across 17 models on BFCL and
-saw single-token edits shift tool usage by 10× — descriptions are the single strongest
-lever an MCP author has. There is **no evidence** that structural prefix tags like
+showed that small, surface-level edits to descriptions move selection rates more than
+any structural change they measured — descriptions are the single strongest lever an
+MCP author has. There is **no evidence** that structural prefix tags like
 `[primary] ` / `[secondary/helper] ` change selection. Use the levers below instead.
 
 | Lever | What it is | Where it lives in this skill |
@@ -52,7 +53,7 @@ lever an MCP author has. There is **no evidence** that structural prefix tags li
 
 > Background: [Anthropic — Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents);
 > [Faghih et al. 2025 — Tool Preferences in Agentic LLMs are Unreliable](https://arxiv.org/abs/2505.18135);
-> [MCP tool annotations reference](https://modelcontextprotocol.io/specification/2025-11-25).
+> [MCP tool annotations reference](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 If you're tempted to add a `[primary]` / `[secondary/helper]` prefix to descriptions:
 that is **not** the validated lever. Spend the same effort on the description body
@@ -64,7 +65,8 @@ this tool from siblings).
 ## System Prompt as Configuration Surface
 
 The system prompt (`server.instructions` in MCP) is a first-class knob for shaping
-agent behaviour without adding tools. Every request pays the token cost — keep it tight.
+agent behaviour without adding tools. It's sent at `initialize` (once per session),
+then folded into the host's system prompt for the rest of the conversation — keep it tight.
 
 **What belongs here:**
 
@@ -73,7 +75,7 @@ agent behaviour without adding tools. Every request pays the token cost — keep
 | Domain authority | "Read-only access to message history via a local sync cache." |
 | Named workflow patterns | "SEARCH THEN READ: use search_messages to find, then list_messages to read context" |
 | Stable context hints | "`dialog_id` is stable for the session — cache it, don't re-resolve on every call" |
-| Feedback directive | "Use submit_feedback immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session" |
+| Feedback directive | <a id="feedback-directive"></a>"Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session." |
 | Error recovery hints | "If get_entity_info returns access_error, the dialog may need mark_dialog_for_sync first" |
 
 **What does NOT belong here:** parameter docs, field walkthroughs, data that changes
@@ -111,7 +113,7 @@ async def _build_server_instructions() -> str:
     return base
 ```
 
-**Budget principle:** every token in the system prompt is paid per request. Start minimal — add a directive only when you observe agents making the wrong decision without it. If the system prompt keeps growing, a missing tool is probably the real fix, not more text.
+**Budget principle:** the instructions occupy real estate in the host's system prompt for the entire conversation, so they compete with the user's own context. Start minimal — add a directive only when you observe agents making the wrong decision without it. If the system prompt keeps growing, a missing tool is probably the real fix, not more text.
 
 ---
 
@@ -209,14 +211,10 @@ redesign. This is a design review, not a QA step — run it before the surface s
 ## The submit_feedback + System Prompt Combination
 
 A useful pattern for servers with an active maintainer: the system prompt instructs
-agents to submit feedback proactively, which turns every production session into a
-dark-room test automatically. This works well when there is someone regularly reviewing
-the feedback queue.
-
-```
-"Use submit_feedback immediately when a tool response is wrong,
- surprising, or missing a useful capability — don't wait until end of session."
-```
+agents to submit feedback proactively (the canonical directive line is in the
+[System Prompt table](#feedback-directive) above), which turns every production session
+into a dark-room test automatically. This works well when there is someone regularly
+reviewing the feedback queue.
 
 The operator reviews the queue async, no ceremony required. Over time the feedback
 queue becomes a signal for what to fix next.
