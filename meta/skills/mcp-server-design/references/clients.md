@@ -177,7 +177,7 @@ Source: <https://code.claude.com/docs/en/mcp> and `anthropics/claude-code` CHANG
 
 ### Tool Name Constraints
 
-No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. Safe cross-client pattern: `^[a-zA-Z0-9_-]{1,64}$`.
+No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. The spec range (`^[A-Za-z0-9_\-.]{1,128}$`) is what Claude Code accepts; the snake_case convention pattern lives in [tool-design.md §Character set](tool-design.md).
 
 ---
 

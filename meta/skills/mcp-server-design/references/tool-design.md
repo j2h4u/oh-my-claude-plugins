@@ -41,7 +41,7 @@ mark_dialog_for_sync  search_messages    get_sync_status
 
 **Why snake_case:** the spec (2025-11-25) is permissive about casing, but snake_case is the established convention — GitHub's official MCP server, all official reference implementations, and the broader ecosystem follow it. Claude Desktop agents treat non-snake_case as inconsistent with ecosystem norms. PascalCase is essentially absent in practice.
 
-**Character set — spec vs. clients:** The MCP spec (2025-11-25) says tool names SHOULD be 1–128 chars, limited to `[A-Za-z0-9_\-.]` — this is SHOULD, not MUST. The spec's range is more permissive than what most deployed clients enforce. Cross-client safe pattern: `^[a-zA-Z0-9_-]{1,64}$` (snake_case base with hyphens for namespacing). For client-specific enforcement details (Claude Desktop, Claude Frontend Remote MCP), see [clients.md](clients.md). Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+**Character set:** The MCP spec (2025-11-25) says tool names SHOULD be 1–128 chars, matching `^[A-Za-z0-9_\-.]{1,128}$` — this is SHOULD, not MUST. No client tracked in [clients.md](clients.md) is known to narrow the spec range. Convention pattern: `^[a-z0-9_]{1,64}$` (snake_case, underscores for word breaks and prefix namespacing — `asana_search`, `jira_issue_get`). Hyphens and dots are spec-allowed but vanishingly rare in the ecosystem — prefer underscores for namespacing. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 **Namespacing by service/resource** (multi-server environments): prefix with service name — `asana_search`, `jira_search`, `asana_projects_search`. Prefer prefix over suffix — the prefix establishes domain context before the verb, which aligns with how LLMs scan tool lists when selecting among multiple servers.
 
@@ -82,12 +82,14 @@ Before adding a tool: can two tools merge? Can a tool be promoted to a parameter
 
 Four tool annotations. All default to worst-case — declare explicitly whenever you can do better.
 
-| Annotation | Default | Set to `true` when |
-|------------|---------|-------------------|
-| `readOnlyHint` | `false` | Tool makes no state changes |
-| `destructiveHint` | `true` | Tool's write is destructive — set `false` for purely additive writes |
-| `idempotentHint` | `false` | Same args → same result, safe to retry |
-| `openWorldHint` | `true` | Tool touches external services — set `false` for local-only operations |
+| Annotation | Default | Declare explicitly when |
+|------------|---------|------------------------|
+| `readOnlyHint` | `false` | Tool makes no state changes → set `true` |
+| `destructiveHint` | `true` | Write is purely additive → set `false`. **Only meaningful when `readOnlyHint: false`** — read-only tools have no destructive semantics. |
+| `idempotentHint` | `false` | Same args → same result, safe to retry → set `true` |
+| `openWorldHint` | `true` | Tool is local-only, no external services → set `false` |
+
+`destructiveHint` is the one annotation that defaults to the "worse" value (`true`) and is opt-out, not opt-in — every other hint defaults to the pessimistic side and you flip it on to declare a safer property.
 
 Clients use annotations to drive confirmation dialogs, auto-approval policies, and orchestrator trust decisions.
 
@@ -152,8 +154,6 @@ of stuffing it into every tool description.
 
 Agents can validate against the schema, extract fields reliably without parsing, and clients can render typed data directly. Text-only puts parsing burden on the agent and introduces brittleness.
 
-**Spec requirement:** when `outputSchema` is declared, the server MUST return `structuredContent` conforming to it on every successful call — not just when convenient. A tool that declares a schema but conditionally returns text-only violates the protocol. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
-
 **Use `outputSchema` when:**
 - Returning a list of objects
 - Returning a status or metadata object
@@ -164,11 +164,9 @@ Agents can validate against the schema, extract fields reliably without parsing,
 - Error messages and confirmations
 - Content the agent reads but doesn't structurally process
 
-**When `outputSchema` is declared, always return BOTH:**
-- `structuredContent` — the typed, machine-parseable payload conforming to the schema
-- `text` (the `content` field) — a human-readable summary of the same data
+**Spec rule** (2025-11-25): when `outputSchema` is declared, `structuredContent` conforming to it is **MUST** on every successful call; a text `content` block is **SHOULD** (backwards-compat). A tool that declares a schema and returns text-only violates the protocol. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
-This redundancy is intentional — older clients that don't understand `structuredContent` fall back to reading the text block. It's a compatibility bridge, not documentation. Per spec: `structuredContent` is MUST when `outputSchema` is declared; the text `content` block is SHOULD (backwards-compat). In practice, many SDKs reject responses without a text `content` block even though the spec is more permissive — always include both. A tool that declares a schema and returns text-only violates the protocol; `structuredContent` without text breaks legacy clients and most deployed SDKs.
+**Pragmatic rule: always return both.** The Python and TypeScript SDKs (and clients built on them) reject responses missing the text `content` block even though the spec is more permissive. Older clients that don't understand `structuredContent` fall back to reading the text block. Including both is the safe shape across the ecosystem.
 
 **Token economy for tabular data:** don't repeat large JSON blobs in the text `content`. For
 read-only tabular results, make `content` a compact preview such as CSV or a short table, while
@@ -363,10 +361,23 @@ return a handle and let the client poll.
 There are two ways to do this. **Prefer the spec primitive when the client supports it; fall
 back to the roll-your-own pattern when it doesn't.**
 
-### Spec primitive — Tasks (spec **2025-11-25**, experimental, [SEP-1686](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1686))
+### Spec primitive — Tasks (spec **2025-11-25**, experimental, [SEP-1686](https://modelcontextprotocol.io/community/seps/1686-tasks))
 
 The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`,
-`elicitation/create`). Declare per-tool with `execution.taskSupport`:
+`elicitation/create`). Two declarations are required — top-level capability at `initialize`, plus per-tool intent.
+
+**1. Declare the `tasks` capability at `initialize`** — without this, clients won't augment any call:
+
+```jsonc
+{
+  "capabilities": {
+    "tools": {},
+    "tasks": { "requests": { "tools/call": true } }
+  }
+}
+```
+
+**2. Declare per-tool with `execution.taskSupport`:**
 
 ```jsonc
 {
@@ -400,8 +411,9 @@ Notes:
 - The receiver generates the task ID and may shorten the requested `ttl`.
 - Clients poll. `notifications/tasks/status` is optional — requestors must not rely on it.
 - Bind tasks to the session / auth context; use high-entropy IDs.
-- SDK support is rolling out — check [clients.md](clients.md) and your SDK's release notes before
-  marking a tool `taskSupport: "required"`.
+- As of 2026-05, no client tracked in [clients.md](clients.md) has confirmed Tasks support. Treat
+  `taskSupport: "required"` as future-leaning — probe the target client first, or expose `optional`
+  so synchronous fallback still works.
 
 ### Fallback — roll-your-own async handle
 
