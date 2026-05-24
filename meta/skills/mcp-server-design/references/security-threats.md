@@ -63,14 +63,11 @@ for network-accessible deployments.
 | `stdio` | None — local subprocess | Claude Desktop; any client that launches subprocesses |
 | Streamable HTTP | Network-accessible | Inter-container (Docker); any HTTP-capable client |
 
-**stdio stdout rule / stderr logging:** JSON-RPC protocol runs over stdout. Log to stderr
-by default. Exception: when your architecture splits logging via a separate daemon, the MCP
-server should NOT write to stderr because that stream is consumed by the client, not the
-operator — see [daemon-architecture.md](daemon-architecture.md). A single log line on
-stdout corrupts the framing and silently breaks the connection. Configure your logger with
-`stream=sys.stderr` (or equivalent) before starting the server loop.
+**stdio stdout rule:** JSON-RPC framing runs over stdout — a single non-protocol byte
+corrupts the transport silently. Canonical rule, the stderr-inversion exception for
+the daemon pattern, and the configuration snippet: [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
-*Stdout-cleanliness test:* run `your_server </dev/null >/tmp/out 2>/dev/null & sleep 1; kill %1; wc -c /tmp/out` and confirm 0 bytes — any non-JSON-RPC byte on stdout (a stray `print()` in a third-party lib, a debug dump on import) corrupts the transport silently.
+*Stdout-cleanliness test (transport-level diagnostic):* run `your_server </dev/null >/tmp/out 2>/dev/null & sleep 1; kill %1; wc -c /tmp/out` and confirm 0 bytes — any non-JSON-RPC byte on stdout (a stray `print()` in a third-party lib, a debug dump on import) corrupts the transport silently.
 
 Remote-server authentication shape (OAuth 2.1, audience-bound tokens, per-principal scoping) is the domain of §3. For internal Docker networks, no auth is needed if the network itself is trusted.
 

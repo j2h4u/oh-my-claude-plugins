@@ -207,7 +207,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
-- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. Canonical rule, transport table, and the daemon-pattern exception: [references/security-threats.md §Transport choice and stderr](references/security-threats.md).
+- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. Canonical rule + daemon-pattern stderr inversion: [references/daemon-architecture.md §Stderr Rule](references/daemon-architecture.md#stderr-rule-reversed-under-this-pattern). Transport table: [references/security-threats.md §Transport choice and stderr](references/security-threats.md).
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
 → Security per transport: [references/security-threats.md](references/security-threats.md)
