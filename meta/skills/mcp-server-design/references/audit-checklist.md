@@ -16,8 +16,8 @@
 
 ## 2. Tool Naming and Classification
 
-- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — e.g. `list_dialogs`, `get_entity_info`, `submit_feedback`. No `getData`, `RunQuery`, `handle_request` (too generic), no spaces or special chars. Convention pattern: `^[a-z0-9_]{1,64}$` (snake_case, underscores for namespacing). Spec range is wider (`^[A-Za-z0-9_\-.]{1,128}$`) and no tracked client narrows it — but underscores are the ecosystem convention; see [tool-design.md §Character set](tool-design.md).
-- [ ] * `[OPINIONATED]` **`title` field set on every tool** — `title` is optional per the MCP spec ([Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)); this is the skill's production recommendation, not a protocol requirement. Rationale: humans see `title` in Claude Desktop UI ("Claude is using…" blocks and the tool list); agents see `name` in their context. Both audiences are served by keeping these separate. Without `title`, the raw `name` is shown to users (`ozon_search`, `get_my_recent_activity`), leaking internal naming. 1–3 words, sentence case, in the product's language. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status". *Skip when:* no client in your target matrix surfaces `title` distinctly from `name` (verify against [clients.md](clients.md)).
+- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. Pattern: `^[a-z0-9_]{1,64}$`. → [tool-design.md §Naming](tool-design.md)
+- [ ] * `[OPINIONATED]` **`title` field set on every tool** — 1–3 words, sentence case, product language. Not a reformatted `name` ("Search Ozon", not `"Search Ozon"` = `ozon_search`). *Skip when:* no client in your target matrix surfaces `title` distinctly from `name`.
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail. *Skip when:* surface has <5 tools (no posture distinction is load-bearing).
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
 
@@ -50,7 +50,7 @@
 - [ ] `[UNIVERSAL]` **Enums over free strings** — closed value sets use `Literal` / `enum`, not free `str`.
 - [ ] `[UNIVERSAL]` **Optional parameters have sensible defaults** — optional means meaningful behaviour without the argument, not "nullable required".
 - [ ] `[UNIVERSAL]` **Non-obvious parameters self-document** — IDs, dates, limits, and ambiguous strings carry a description/pattern/example in the schema, not just a type. Use whatever idiom your SDK exposes for this.
-- [ ] `[EMPIRICAL]` **`anyOf`/null variants stripped** `[Claude Desktop]` — schemas with `anyOf: [T, null]` (typical when nullable/optional types in language SDKs serialize to JSON Schema) break Claude Desktop. Other clients may reject top-level `anyOf` in `input_schema` too — test your target client matrix. → Fix: `tool-design.md §Schema Compatibility Gotcha: anyOf with null`
+- [ ] `[EMPIRICAL]` **`anyOf:[T, null]` stripped** `[Claude Desktop]` — fix + SDK auto-strip status: `tool-design.md §Schema Compatibility Gotcha`
 - [ ] `[UNIVERSAL]` **`min_length=1` is not enough** — whitespace-only strings checked explicitly; `"   "` passes `min_length=1`.
 
 ---

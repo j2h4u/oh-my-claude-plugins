@@ -53,13 +53,11 @@ mark_dialog_for_sync  search_messages    get_sync_status
 - Avoid generic names: `get_data`, `run_query` — useless to the LLM
 - Watch for namespace collisions with the client: `get_me` intercepted by some clients → use `get_my_account`
 
-**Case:** snake_case. The spec is permissive about casing; the ecosystem (GitHub official MCP, all reference implementations) is uniform on snake_case — match it.
+**Pattern:** `^[a-z0-9_]{1,64}$` (snake_case + underscores for namespacing). Spec allows more (hyphens, dots, 128 chars); ecosystem uses this narrower form — match it.
 
-**Character set:** The MCP spec (2025-11-25) says tool names SHOULD be 1–128 chars, matching `^[A-Za-z0-9_\-.]{1,128}$` — this is SHOULD, not MUST. No client tracked in [clients.md](clients.md) is known to narrow the spec range. Convention pattern: `^[a-z0-9_]{1,64}$` (snake_case, underscores for word breaks and prefix namespacing — `asana_search`, `jira_issue_get`). Hyphens and dots are spec-allowed but vanishingly rare in the ecosystem — prefer underscores for namespacing. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+**Namespacing in multi-server environments:** prefix the service — `asana_search`, `jira_issue_get`. Prefix before verb (LLMs scan domain-first when picking between servers).
 
-**Namespacing by service/resource** (multi-server environments): prefix with service name — `asana_search`, `jira_search`, `asana_projects_search`. Prefer prefix over suffix — the prefix establishes domain context before the verb, which aligns with how LLMs scan tool lists when selecting among multiple servers.
-
-**`title` field: OPTIONAL per spec, but include it.** `[OPINIONATED]` Spec marks `title` as optional. In practice: humans see `title` in Claude Desktop UI (tool list, "Claude is using…" blocks); agents see `name`. Both audiences need different framing — `name` is an internal identifier optimized for LLM selection, `title` is user-facing prose. Without `title`, clients fall back to the raw `name`. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+**`title` field — set on every tool. `[OPINIONATED]`** Humans see `title` in the client UI; agents see `name`. Without `title`, clients show the raw `name`.
 
 ```
 name:  "ozon_search"          →  Claude Desktop shows: "Claude is using tool ozon_search"  ← bad
@@ -86,7 +84,7 @@ Tools ship in two tiers.
 
 **≤10 primary tools.** `[OPINIONATED]` More tools dilute LLM selection accuracy — every loaded tool description taxes the context window, even tools the agent never calls. Keep primary tools to ≤10.
 
-Primary evidence: GitHub Copilot trimmed its default 40 built-in tools to 13 core tools, gaining +2–5 pp success rate on SWE-Lancer/SWEbench-Verified and cutting −400ms latency in A/B. Their MCP server alone exposes 93 tools at ~55k tokens before any user input — they route around this with embedding-guided clustering. Source: [GitHub Blog, Nov 19 2025](https://github.blog/ai-and-ml/github-copilot/how-were-making-github-copilot-smarter-with-fewer-tools/).
+Evidence: GitHub Copilot trimmed 40 default tools to 13, +2–5pp success / −400ms latency ([GitHub Blog, Nov 19 2025](https://github.blog/ai-and-ml/github-copilot/how-were-making-github-copilot-smarter-with-fewer-tools/)).
 
 Before adding a tool: can two tools merge? Can a tool be promoted to a parameter? Past ≤10, answer those questions first.
 
@@ -103,11 +101,7 @@ Four tool annotations. All default to worst-case — declare explicitly whenever
 | `idempotentHint` | `false` | Same args → same result, safe to retry → set `true` |
 | `openWorldHint` | `true` | Tool is local-only, no external services → set `false` |
 
-Clients use annotations to drive confirmation dialogs, auto-approval policies, and orchestrator trust decisions.
-
-> Schema defaults: `readOnlyHint=false`, `destructiveHint=true` (when not read-only), `idempotentHint=false`, `openWorldHint=true`. Source: https://modelcontextprotocol.io/specification/2025-11-25/schema
-
-**Caveat:** annotations are hints, not contracts. A client MUST NOT treat them as security controls — a server can declare any values. Set them accurately; never use them to bypass client safety checks.
+Clients use annotations to drive confirmation dialogs, auto-approval policies, and orchestrator trust decisions. Hints, not contracts — a client MUST NOT treat them as security controls (a server can declare any value). Set accurately; do not use to bypass client safety checks.
 
 ---
 
@@ -174,9 +168,7 @@ Agents can validate against the schema, extract fields reliably without parsing,
 - Error messages and confirmations
 - Content the agent reads but doesn't structurally process
 
-**Spec rule** (2025-11-25): when `outputSchema` is declared, `structuredContent` conforming to it is **MUST** on every successful call; a text `content` block is **SHOULD** (backwards-compat). A tool that declares a schema and returns text-only violates the protocol. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
-
-**Pragmatic rule — promote SHOULD to MUST in your code: always return both.** Some SDK/client combinations reject responses missing the text `content` block; older clients that don't understand `structuredContent` only read the text block. Behaviour drifts by SDK version (Python `mcp`/FastMCP and `@modelcontextprotocol/sdk-typescript` have both changed handling across releases) — `verify against your target SDK version + client matrix in `clients.md` before relying on `structuredContent`-only`. Including both is the safe default.
+**Contract:** declaring `outputSchema` makes `structuredContent` MUST on every successful call. Spec also marks the text `content` block SHOULD; **treat it as MUST in your code** — older clients and some SDK versions only read the text path. Including both is the safe default.
 
 **Token economy for tabular data:** don't repeat large JSON blobs in the text `content`. For
 read-only tabular results, make `content` a compact preview such as CSV or a short table, while
@@ -201,45 +193,17 @@ programmatic extraction. Never omit required `structuredContent` just to save to
 
 ### Schema Compatibility Gotcha: `anyOf` with null
 
-Several MCP clients reject schemas where an optional parameter is exposed as `{"anyOf": [{"type": "T"}, {"type": "null"}]}`:
+Claude Desktop (and some other clients) reject schemas where an optional parameter is exposed as `{"anyOf": [{"type": "T"}, {"type": "null"}]}`. Fix: strip the null variant, collapse single-non-null `anyOf` to the bare type, drop `"default": null`.
 
-| Client | Symptom |
-|--------|---------|
-| Claude Desktop | Validation error — optional param treated as required, fails with "not valid under any of the given schemas" |
-| Some MCP clients | Reject schemas where `anyOf` appears at the top level of `input_schema`. Test against your target clients; the matrix moves version-to-version. |
-
-This typically arises from how language SDKs serialise nullable/optional types into JSON Schema. The fix is conceptual: strip the null variant from `anyOf` before exposing the schema; collapse single-non-null `anyOf` to the bare type; drop `"default": null`. Apply at schema generation time when possible, or as a post-processing pass before constructing the `Tool` descriptor.
-
-**Before (broken — Claude Desktop rejects this):**
 ```json
-{
-  "name": "limit",
-  "schema": {
-    "anyOf": [{"type": "integer"}, {"type": "null"}],
-    "default": null
-  }
-}
+// broken
+{ "name": "limit", "schema": { "anyOf": [{"type":"integer"},{"type":"null"}], "default": null } }
+
+// fixed
+{ "name": "limit", "schema": { "type": "integer", "default": 20 } }
 ```
 
-**After (fixed — bare type, no null variant):**
-```json
-{
-  "name": "limit",
-  "schema": {
-    "type": "integer",
-    "default": 20
-  }
-}
-```
-
-Apply the fix at schema generation time using your SDK's idioms.
-
-**SDK status (2026-05):**
-- **FastMCP / Python `mcp`** — fixed in **FastMCP v2.13.0** (2025-11-15) via PR #2073; Pydantic-compatible input validation strips the `null` arm automatically. **If you're on ≥ v2.13.0, do not hand-patch — the SDK already emits a clean schema.** ≤ v2.12.x: hand-patch required.
-- **`@modelcontextprotocol/sdk-typescript`** — verify against your version; behaviour drifts release-to-release.
-- **Other SDKs / raw schema construction** — assume no auto-strip; apply the fix above.
-
-**Related FastMCP gotcha — `additionalProperties: false` stripped by `compress_schema`:** issue [#3008](https://github.com/PrefectHQ/fastmcp/issues/3008), fixed in **v2.14.6** (2026-03-27). Symptom: `Invalid schema for function ...: 'additionalProperties' is required to be supplied and to be false`. ≤ v2.14.5: pass `prune_additional_properties=False` to `compress_schema` explicitly. ≥ v2.14.6: no action.
+**SDK shortcut:** FastMCP / Python `mcp` strips the null arm automatically since **v2.13.0** — don't hand-patch on newer versions. TypeScript SDK and others: verify per version. Related FastMCP gotcha: `compress_schema` stripped `additionalProperties: false` until **v2.14.6** — upgrade or pass `prune_additional_properties=False`.
 
 ### Argument Flattening
 
@@ -257,9 +221,7 @@ def list_messages(
 ) -> str: ...
 ```
 
-**Typed nested models at one level deep are fine** when the group is logically cohesive and the sub-schema fully declares `properties`. The failure mode is schema-less dicts, not typed sub-models.
-
-Use prefixed flat names (`filter_from`, `filter_status`) instead of a nested object when the group is small (≤3 fields) or when you observe hallucination in practice. For larger, coherent parameter groups, a typed nested model with all fields declared is preferable to a long flat namespace. Never go two levels deep — that's where hallucination reliably appears regardless of typing.
+Typed nested models at ≤1 level deep are fine when `properties` is fully declared. Never two levels — hallucination reliably appears regardless of typing. For small groups (≤3 fields) prefer prefixed flat names (`filter_from`, `filter_status`) over a nested object.
 
 ---
 
@@ -331,13 +293,9 @@ return a handle and let the client poll.
 There are two ways to expose the non-synchronous patterns. **Prefer the spec primitive when the
 client supports it; fall back to the roll-your-own pattern when it doesn't.**
 
-### Spec primitive — Tasks (spec **2025-11-25**, experimental, [SEP-1686](https://modelcontextprotocol.io/community/seps/1686-tasks))
+### Spec primitive — Tasks ([SEP-1686](https://modelcontextprotocol.io/community/seps/1686-tasks))
 
-> ⚠️ **As of 2026-05, no client tracked in [clients.md](clients.md) has confirmed Tasks support, and the major SDKs (`mcp`/FastMCP, `@modelcontextprotocol/sdk-typescript`) do not yet expose first-class registration helpers for the wire shapes below — they may need to be hand-emitted in the capabilities/tool payload. Use the roll-your-own pattern below as the default today; treat this section as future-leaning. Verify the cross-client matrix and your SDK version before shipping.**
-
-The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`, `elicitation/create`). **Two declarations are required** — top-level `tasks` capability at `initialize`, plus per-tool intent via `execution.taskSupport` (`forbidden` default | `optional` | `required`).
-
-→ Full wire shape (`initialize` payload, per-tool declaration, `tools/call` augmentation, `tasks/get` / `tasks/result` / `tasks/cancel` polling): [`examples/long-running-tasks-wire-shape.md`](../examples/long-running-tasks-wire-shape.md). Server-side invariants (ID generation, `ttl` shortening, polling-only contract, session binding) live there too.
+Two declarations: top-level `tasks` capability at `initialize` + per-tool `execution.taskSupport` (`forbidden` default | `optional` | `required`). Status today is owned by [clients.md](clients.md) — check before shipping. Wire shape + server-side invariants: [`examples/long-running-tasks-wire-shape.md`](../examples/long-running-tasks-wire-shape.md).
 
 ### Fallback — roll-your-own async handle
 
@@ -365,19 +323,4 @@ Merge when:
 
 ## Dynamic Tool Sets — `listChanged`
 
-**Declare the `tools` capability whenever your server supports tools — it is MUST.** The `listChanged` flag on that capability is OPTIONAL. `"tools": {}` is valid for basic tool support; `"tools": {"listChanged": true}` additionally signals that the tool list can change at runtime. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
-
-Only add `listChanged: true` if your tool list actually mutates after initialization (e.g., different tools before and after auth, feature-flag gating). If you declare it, the server SHOULD emit `notifications/tools/list_changed` whenever the set changes — otherwise clients cache the initial list and never learn about updates.
-
-```python
-# Basic tool support — always required when the server has tools
-{"tools": {}}
-
-# Dynamic tool support — only if your list mutates at runtime
-{"tools": {"listChanged": True}}
-
-# emit after tool set changes
-await session.send_tool_list_changed()
-```
-
-**Client delivery is not guaranteed.** Claude Desktop is documented in [clients.md](clients.md) as likely dropping `list_changed` notifications. Treat the emission as hygiene (defenders/auditors watch for it on a mutating surface — see [security-threats.md §8](security-threats.md)), not as the mechanism your correctness depends on. If a tool must be present for a flow to succeed, declare it from the start instead of relying on a post-init update arriving.
+Declare `"tools": {"listChanged": true}` **only if the tool set actually mutates after init** (auth gating, feature flags, multi-tenant). Static surfaces declaring it mislead defenders into watching for events that never fire. When declared, emit `notifications/tools/list_changed` on every change — **but don't depend on delivery**: Claude Desktop drops it ([clients.md](clients.md)). If a tool must be present for a flow to succeed, register it from the start; treat the notification as audit-trail hygiene only ([security-threats.md §8](security-threats.md)).

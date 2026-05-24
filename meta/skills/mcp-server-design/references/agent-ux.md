@@ -17,28 +17,21 @@ The one-liner doubles as the human tooltip; the LLM reads the entire block.
 
 ---
 
-## What Actually Moves Tool Selection *(empirically validated)*
+## What Actually Moves Tool Selection
 
-Tool selection is dominated by **description content**, not structural tags. Faghih
-et al. (EMNLP 2025) tested nine description-edit types across 17 models on BFCL and
-showed that small, surface-level edits to descriptions move selection rates more than
-any structural change they measured — descriptions are the single strongest lever an
-MCP author has. There is **no evidence** that structural prefix tags like
-`[primary] ` / `[secondary/helper] ` change selection. Use the levers below instead.
+Description content moves tool selection; structural tags don't. Levers, in rough order of impact:
 
-| Lever | What it is | Where it lives in this skill |
-|-------|-----------|------------------------------|
-| **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Writing Tool Descriptions` (the three-question structure), Faghih et al. found this single most effective |
-| **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` line 46 (Anthropic engineering recommendation) |
-| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title` — the protocol's own posture channel | `audit-checklist.md §3 Tool Annotations` |
-| **Sharper, distinct descriptions** | Each tool's description is semantically distant from others; near-duplicates collapse selection | `tool-design.md §Writing Tool Descriptions` — answer "When?" / "What?" / "What NOT?" |
-| **Toolsets / config-level grouping** | Let operators enable/disable groups of tools at install time | GitHub MCP `--toolsets`; an organizational pattern, not a description pattern |
-
-> Background: [Anthropic — Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents);
-> [Faghih et al. 2025 — Tool Preferences in Agentic LLMs are Unreliable](https://arxiv.org/abs/2505.18135);
-> [MCP tool annotations reference](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+| Lever | What it is | Lives in |
+|-------|------------|----------|
+| **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Writing Tool Descriptions` |
+| **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` |
+| **Sharper, distinct descriptions** | Each description semantically distant from others; near-duplicates collapse selection | `tool-design.md §Writing Tool Descriptions` |
+| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title` | `audit-checklist.md §3` |
+| **Toolsets / config-level grouping** | Let operators enable/disable groups at install time (e.g. GitHub MCP `--toolsets`) | organisational pattern |
 
 Do not prefix descriptions with `[primary]` / `[secondary/helper]` — not a validated lever.
+
+> Evidence: Faghih et al. 2025 — *Tool Preferences in Agentic LLMs are Unreliable* (arxiv.org/abs/2505.18135); Anthropic — *Writing tools for agents*.
 
 ---
 
@@ -61,7 +54,7 @@ then folded into the host's system prompt for the rest of the conversation — k
 **What does NOT belong here:** parameter docs, field walkthroughs, data that changes
 between requests (those are tool responses).
 
-**Canonical example — maximum shape, not minimum.** Shows all content types together (domain authority, live-injected state, named workflows, stable context hint, feedback directive) so the template is complete. Your server's actual `server.instructions` should start with only the types you observed agents needing — the budget principle below applies. Treat the shape, not the wording, as the template. Single canonical instance, referenced from `SKILL.md §Agent UX`.
+**Canonical example — maximum shape.** Your server should start with only the types you observed agents needing (budget principle below). Treat the shape, not the wording, as the template.
 
 ```
 Read-only access to message history via a local sync cache. If results look stale,
@@ -168,16 +161,7 @@ Meta-instructions:
   you wished existed but didn't.
 ```
 
-**Protocol:**
-
-1. Give the agent a **real task** (not a toy: "find my unread messages from this week",
-   "summarise what I was discussing with X yesterday")
-2. No briefing — don't explain tools, names, or conventions
-3. Instruction: *"As you work, use `submit_feedback` for anything surprising, confusing,
-   or missing. At the end, submit a session summary: what felt intuitive, what was a
-   WTF moment, what capability you wished existed."*
-4. Let it run
-5. Review `<server> feedback list` after the session
+After the session, review `<server> feedback list`.
 
 **Signals to look for:**
 
@@ -219,21 +203,6 @@ redesign. This is a design review, not a QA step — run it before the surface s
 
 ---
 
-## The submit_feedback + System Prompt Combination
+## submit_feedback + system prompt — turns production into continuous dark-room
 
-A useful pattern for servers with an active maintainer: the system prompt instructs
-agents to submit feedback proactively (the canonical directive line is in the
-[System Prompt table](#feedback-directive) above), which turns every production session
-into a dark-room test automatically. This works well when there is someone regularly
-reviewing the feedback queue.
-
-The operator reviews the queue async, no ceremony required. Over time the feedback
-queue becomes a signal for what to fix next.
-
-For clustering submissions by task type, instruct the agent to populate the `task`
-field of `submit_feedback` with the user's original request verbatim
-(see `feedback-tool.md` parameter table).
-
-**Do not deploy this pattern blindly.** It assumes an active maintainer, a non-adversarial
-environment, and a deployment lifetime long enough for review cycles to matter. See
-[feedback-tool.md §When NOT to use](feedback-tool.md#when-not-to-use).
+When `submit_feedback` is deployed and the feedback directive is in `server.instructions`, every production session feeds the queue. To cluster submissions by task type, instruct the agent to populate `submit_feedback`'s `task` field with the user's original request verbatim (`feedback-tool.md` parameter table). Gating: assumes an active maintainer, non-adversarial environment, long-enough deployment lifetime — [feedback-tool.md §When NOT to use](feedback-tool.md#when-not-to-use).

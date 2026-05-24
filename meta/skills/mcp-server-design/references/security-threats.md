@@ -62,13 +62,11 @@ for network-accessible deployments.
 | `stdio` | None — local subprocess | Claude Desktop; any client that launches subprocesses |
 | Streamable HTTP | Network-accessible | Inter-container (Docker); any HTTP-capable client |
 
-**stdio stdout rule:** JSON-RPC framing runs over stdout — a single non-protocol byte
-corrupts the transport silently. Canonical rule, the stderr-inversion exception for
-the daemon pattern, and the configuration snippet: [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+**stdio stdout rule** + daemon-pattern stderr inversion — canonical in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
-*Stdout-cleanliness test (transport-level diagnostic):* run `your_server </dev/null >/tmp/out 2>/dev/null & sleep 1; kill %1; wc -c /tmp/out` and confirm 0 bytes — any non-JSON-RPC byte on stdout (a stray `print()` in a third-party lib, a debug dump on import) corrupts the transport silently.
+Diagnostic: `your_server </dev/null >/tmp/out 2>/dev/null & sleep 1; kill %1; wc -c /tmp/out` should print 0.
 
-Remote-server authentication shape (OAuth 2.1, audience-bound tokens, per-principal scoping) is the domain of §3. For internal Docker networks, no auth is needed if the network itself is trusted.
+Remote-server auth shape is §3. Internal Docker networks with no untrusted neighbours can be plaintext.
 
 ---
 
@@ -141,47 +139,15 @@ responses.
 | Argument confusion | `--config=/etc/shadow` passed to CLI tool | Use `--` separator. Allowlist flags. |
 | Tenant/object ref | `account_id=42` not owned by caller | Resolve relative to authenticated principal, not as a free-form ID. See section 4. |
 
-Defensive URL validation for outbound calls from tools:
+Outbound URL validation must (a) allowlist schemes, (b) reject private / loopback / link-local IPs after **DNS-resolving the hostname yourself** (DNS recheck defeats TOCTOU — the attacker controls TTLs).
 
-```python
-import ipaddress, urllib.parse
-
-ALLOWED_SCHEMES = {"https"}
-
-def validate_outbound_url(url: str) -> None:
-    p = urllib.parse.urlparse(url)
-    if p.scheme not in ALLOWED_SCHEMES:
-        raise ValueError(f"Scheme '{p.scheme}' not allowed")
-    if not p.hostname:
-        raise ValueError("URL has no hostname")
-    try:
-        addr = ipaddress.ip_address(p.hostname)
-        _reject_private(addr)
-    except ValueError:
-        import socket
-        resolved = socket.getaddrinfo(p.hostname, None)
-        for *_, sockaddr in resolved:
-            _reject_private(ipaddress.ip_address(sockaddr[0]))
-
-def _reject_private(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> None:
-    if addr.is_loopback or addr.is_link_local or addr.is_private:
-        raise ValueError(f"Address {addr} is not routable")
-```
-
-DNS recheck after resolution prevents TOCTOU: the name could resolve differently between validation and the actual request if the attacker controls DNS TTLs.
-
-**General principle:** validate at the boundary, in the server, before the value touches
-the filesystem, shell, network, DB, or rendering pipeline. Repeat validation at the
-function that consumes the value — boundary-only validation breaks when call paths refactor.
+**General principle:** validate at the boundary, before the value touches filesystem, shell, network, DB, or rendering. Repeat validation at the consuming function — boundary-only validation breaks when call paths refactor.
 
 ---
 
 ## 3. Authentication and authorization
 
-If your server exposes Streamable HTTP, authentication is your responsibility — the host
-will not add it for you. The MCP spec (2025-11-25) recommends OAuth 2.1 for remote servers
-(OAuth 2.1 is the consolidated successor to OAuth 2.0 — see
-[RFC 9700](https://datatracker.ietf.org/doc/rfc9700/)).
+If your server exposes Streamable HTTP, authentication is your responsibility — the host will not add it. Spec recommends OAuth 2.1 for remote servers.
 
 ### Authentication pitfalls
 
@@ -226,40 +192,12 @@ Specific to Streamable HTTP transport.
 
 ### Session ID generation
 
-The spec says session IDs SHOULD be unguessable. Real incidents reported in 2025: servers
-generated session IDs from `time()` or short integers, allowing attackers to predict /
-brute-force active sessions and hijack them.
+- CSPRNG only (`secrets.token_urlsafe(32)` or equivalent), ≥ 128 bits entropy. Never derive from timestamps, counters, hostname, PID, or user data — predictable session IDs were a real 2025 incident class.
+- Tie the session to the authenticated principal — reject if the bearer/origin no longer matches.
 
-- Use `secrets.token_urlsafe(32)` (Python) or equivalent CSPRNG, ≥ 128 bits of entropy.
-  The `32` is `nbytes` — 32 random bytes (256 bits) base64url-encoded to ~43 characters,
-  well above the 128-bit floor
-- Never derive from timestamps, counters, hostname, PID, or user data
-- Tie the session to the authenticated principal — reject if the bearer/origin no longer
-  matches
+### Origin / Host validation, DNS rebinding
 
-### Origin / Host validation
-
-For HTTP transport, the spec requires rejecting requests with invalid `Origin` — return
-403. Without it, a malicious webpage can issue cross-origin requests to your locally bound
-server (CSRF).
-
-Most SDKs handle this; verify it is not disabled. Validate `Host` too: it defends against
-some DNS rebinding variants.
-
-### DNS rebinding
-
-A victim visits attacker-controlled page. The page resolves `evil.example` to a public IP
-initially, then re-resolves to `127.0.0.1` after the browser has cached the origin. Now
-the attacker's JS can call `http://evil.example:8080/...` and hit *your* localhost-bound
-MCP server with the browser's allowed origin.
-
-Defences (apply in combination):
-
-- **Validate `Host` header** against an allowlist of exact hostnames you expect (`localhost`,
-  `127.0.0.1`)
-- **Require authentication** even on `127.0.0.1`. Localhost is not a trust boundary in a
-  browser-attacker model.
-- **Prefer Unix domain sockets** for purely-local servers — browsers cannot reach them.
+Canonical rule + SDK status + curl probe live in §0 *HTTP Origin validation*. The DNS-rebinding twist: validate `Host` (not only `Origin`) against an exact-hostname allowlist (`localhost`, `127.0.0.1`); require authentication even on `127.0.0.1` (localhost is not a trust boundary in a browser-attacker model); prefer a Unix domain socket for purely-local servers (browsers cannot reach it).
 
 ### TLS for non-loopback HTTP
 
@@ -342,15 +280,7 @@ the user's trust. To not look malicious you must behave non-malicious **visibly*
   Add a new tool, keep the old one, remove on next major.
 - **No description-only behaviour changes.** The description is part of the surface for
   the LLM. Changing "use only for X" → "also use for Y" silently is a behaviour change.
-- **Notify on tool list changes — when your design actually mutates the surface.** If your
-  server adds/removes tools mid-session (e.g. login unlocks tools, feature flag flips),
-  declare `"tools": {"listChanged": true}` and emit `notifications/tools/list_changed`
-  on every change. Defenders watch for these emissions; hosts that support them re-fetch.
-  Do **not** declare `listChanged: true` on a static surface — it adds no value and
-  misleads defenders into expecting events that will never fire. Delivery is not guaranteed
-  across clients (Claude Desktop is documented as likely dropping it — see
-  [clients.md](clients.md)); treat the notification as hygiene, not as the mechanism your
-  correctness depends on. See [tool-design.md §Dynamic Tool Sets](tool-design.md#dynamic-tool-sets--listchanged).
+- **Notify on tool list changes — only on a mutating surface.** Static surface declaring `listChanged: true` misleads defenders into expecting events that never fire. Full rule (when to declare, what to emit, why delivery is unreliable): canonical in [tool-design.md §Dynamic Tool Sets](tool-design.md#dynamic-tool-sets--listchanged).
 - **Publish a public stable URL** for your tool catalogue (e.g. via MCP Resources), so
   defenders can diff between versions. *(Applies when serving multiple clients or as part
   of a published distribution. For local/personal servers, irrelevant.)*

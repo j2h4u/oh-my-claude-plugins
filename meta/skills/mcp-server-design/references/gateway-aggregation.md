@@ -188,43 +188,11 @@ and [security-threats.md §6 — Secret hygiene](security-threats.md#6-secret-hy
 
 ## Smoke Test Protocol
 
-Run these checks from the same Docker network as the gateway:
+Run from a container attached to the backend network — not from the host.
 
-```bash
-curl -i http://mcp-gateway:8811/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
-```
-
-Then send `notifications/initialized` and call `tools/list` with the returned
-`Mcp-Session-Id`. If the gateway response does not include `Mcp-Session-Id` (some
-configurations are stateless), omit the header on subsequent calls — sending an
-unrecognised session id makes the gateway reject the request. Check:
-
-- Server info identifies the gateway, not a backend.
-- `tools/list` includes only the intended servers.
-- Tool count is acceptable for the target client.
-- Backend schemas survive aggregation (`title`, annotations, `outputSchema`, no incompatible
-  nullable schemas).
-
-Auth edge checks:
-
-```bash
-curl -i http://mcp-auth-proxy/healthz
-curl -i http://mcp-auth-proxy/mcp
-```
-
-Expected unauthenticated `/mcp`: `401 Unauthorized`.
-
-Backend reachability checks:
-
-```bash
-curl -i http://docs-mcp:8080/health
-curl -i http://docs-mcp:8080/mcp
-```
-
-Run them from a container attached to the gateway's backend network, not from the host.
+1. **Gateway `initialize`** — `curl -i http://mcp-gateway:8811/mcp` with a JSON-RPC `initialize` body (see [SKILL.md §Testing](../SKILL.md#testing-and-validation) for the payload shape). Then `notifications/initialized` + `tools/list` with the returned `Mcp-Session-Id` (omit if stateless). Verify: gateway in `serverInfo`, `tools/list` matches `--servers`, tool count below your client's budget, backend schemas survive (`title`, annotations, `outputSchema`).
+2. **Auth proxy** — `curl -i http://mcp-auth-proxy/mcp` unauthenticated must return `401`.
+3. **Backends reachable** — `curl -i http://<backend>:<port>/mcp` from inside the network.
 
 ---
 

@@ -30,17 +30,14 @@ MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
 
 ## Stderr Rule — Reversed Under This Pattern
 
-This is the canonical source for the stderr-inversion rule (SKILL.md and security-threats.md link
-here):
+Canonical source (SKILL.md, security-threats.md, observability.md link here).
 
-- **Standard stdio rule:** log to `stderr`, never `stdout` — stdout carries JSON-RPC and any other
-  byte corrupts the transport.
-- **Under the daemon pattern:** the MCP server is launched by the client (`docker exec -i`),
-  so its `stderr` is piped to the **MCP client**, not the operator. Writing logs there leaks them
-  into the client's diagnostic stream and the operator never sees them. The MCP server must NOT
-  write to stderr; it ships logs to the daemon over the Unix socket, and the daemon writes the sink.
-- Net effect for this pattern: stdin = JSON-RPC in, stdout = JSON-RPC out, stderr = silent,
-  socket = logs + RPC to daemon.
+| Pattern | `stdin` | `stdout` | `stderr` | Logs go to |
+|---|---|---|---|---|
+| Standard stdio | JSON-RPC in | JSON-RPC out | logs | stderr |
+| Daemon + on-demand | JSON-RPC in | JSON-RPC out | **silent** | daemon (via Unix socket) |
+
+Why the inversion: the daemon-pattern MCP server is launched by the client (`docker exec -i`), so its `stderr` pipes into the **client's** diagnostic stream — the operator never sees it. Logs must travel to the daemon over the socket; the daemon writes the sink.
 
 ## When NOT to Use This Pattern
 

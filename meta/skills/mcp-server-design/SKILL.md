@@ -185,9 +185,11 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 | Docker MCP gateway behind shared OAuth edge | `streamable-http` on `0.0.0.0:<port>` inside the docker network | OAuth 2.1 terminated at the gateway, not per backend |
 | Remote SaaS server for external users (incl. Claude Code) | `streamable-http` + TLS | OAuth 2.1 per-principal; narrow scopes; audience-bound tokens |
 
-> **Streamable HTTP** (spec 2025-11-25, replacing deprecated HTTP+SSE): single endpoint, POST + GET. Server chooses `application/json` vs `text/event-stream` per response — SSE is for streaming multiple messages on one request, not always-on. Client MUST include `MCP-Protocol-Version: 2025-11-25` header; server SHOULD assume `2025-03-26` if absent, MUST respond 400 if invalid. *(FastMCP / Python `mcp` and `@modelcontextprotocol/sdk-typescript` handle this header negotiation transparently; only matters for raw / framework-direct HTTP implementations.)* `Mcp-Session-Id`: server MAY assign at init; client MUST include thereafter. DNS rebinding: server MUST validate `Origin` header (403 if invalid). Spec says SHOULD bind to localhost rather than `0.0.0.0`; this skill treats it as **MUST for default deployments** — only relax when a private-container-network + auth-gateway pairing makes `0.0.0.0` safe (see worked-pairings table). Strongest mitigation is a Unix domain socket (browsers cannot reach it). Source: [Transports spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
+**Streamable HTTP — design-binding rules** (the rest of the protocol shape is in the spec):
 
-- **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
+- Server MUST validate `Origin` (403 if invalid). FastMCP / Python `mcp` and TS SDK do this by default; verify it's not disabled. Allow-list must match what your client actually sends.
+- Bind to localhost (not `0.0.0.0`) by default — relax only for the docker-network + auth-gateway pairing in the table above. Unix domain socket is the strongest mitigation (browsers cannot reach it).
+- The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it.
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
 - For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. Canonical rule + daemon-pattern inversion: [references/daemon-architecture.md §Stderr Rule](references/daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
@@ -280,9 +282,9 @@ Before shipping or handing off:
 
 Each bullet ends in an action you can take *now*, not "watch this space".
 
-- **MCP Apps** (SEP-1865, announced 2025-11-21): optional backwards-compatible extension adding `ui://` URI scheme, tool→UI metadata linking, sandboxed iframe rendering, bi-directional JSON-RPC over `postMessage`. *Action now:* if your tool returns HTML/JSON intended for rendering, keep `structuredContent` schema-stable so MCP Apps adoption later is a non-breaking addition, not a rewrite. Repo: [modelcontextprotocol/ext-apps](https://github.com/modelcontextprotocol/ext-apps). Blog: [2025-11-21 announcement](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/).
-- **Sampling deprecated** in DRAFT-2026-v1 (SEP-2596). *Action now:* do not design new servers around `sampling/createMessage`; remove any optimistic capability checks for it.
-- **Tasks** (SEP-1686) landed in 2025-11-25 as experimental — per-tool `execution.taskSupport` field; see glossary. *Action now:* declare `taskSupport: optional` on tools that already exceed Claude Desktop's *defensive ~20s guidance* (single 26s observation, not a documented budget — see [clients.md §Claude Desktop §Timeouts](references/clients.md#timeouts)). Reserve `taskSupport: required` until [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) shows target clients negotiating `tasks` at `initialize`.
+- **If your tool returns HTML/JSON for rendering — keep `structuredContent` schema-stable.** MCP Apps ([SEP-1865](https://github.com/modelcontextprotocol/ext-apps)) is rolling out a `ui://` rendering extension; stable schemas keep its later adoption non-breaking.
+- **Do not design new servers around `sampling/createMessage`.** Deprecated protocol-wide; remove optimistic capability checks.
+- **Declare `taskSupport: optional` on tools above Claude Desktop's defensive ~20s window** (see [clients.md §Timeouts](references/clients.md#timeouts)). Reserve `taskSupport: required` until the [cross-client matrix](references/clients.md#cross-client-capability-matrix) shows a target client negotiating `tasks`. Background on Tasks itself: glossary entry.
 
 ## External References
 

@@ -112,18 +112,9 @@ different table.
 
 ### Pattern C — structured log to existing stack *(Loki, OTel, Datadog already in place)*
 
-**When this is worth it:** multi-service deployment, distributed traces across process
-boundaries, or when you already operate an OTel collector. **Skip if:** single-server MCP,
-low volume, no existing OTel infrastructure — Pattern A or B will give you more signal per
-hour of work.
+**Worth it when:** multi-service deployment, distributed traces across process boundaries, or an OTel collector is already running. **Skip if:** single-server MCP, low volume, no existing infrastructure — A or B will pay back faster.
 
-Emit JSON events; let the existing pipeline handle storage, retention, and dashboards. Use
-Loki/Promtail labels or OTel attributes for `tool_name` and `status` so queries fan out
-correctly.
-
-For OTel servers, also emit a span per call: span name = `mcp.tool.<tool_name>`, attributes
-include `mcp.tool.status` and `mcp.tool.error_class`. The MCP host can correlate to upstream
-spans automatically.
+Emit JSON events; pipeline owns storage, retention, dashboards. Use the stack's native labels/attributes for `tool_name` and `status` so queries fan out. For OTel, also emit one span per call so the MCP host correlates to upstream traces automatically.
 
 ---
 

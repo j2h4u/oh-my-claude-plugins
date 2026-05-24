@@ -13,7 +13,7 @@ Data flows in one direction — agent → operator. There is no return channel.
 
 ## MCP Tool: `submit_feedback`
 
-**Canonical annotations** (additive write, not destructive — flip `destructiveHint` off explicitly because it defaults to `true`):
+**Canonical annotations** — `destructiveHint: false` is the load-bearing opt-out (asymmetric default; see SKILL.md glossary).
 
 ```json
 "annotations": {
@@ -24,8 +24,6 @@ Data flows in one direction — agent → operator. There is no return channel.
   "title": "Submit feedback"
 }
 ```
-
-`destructiveHint: false` is the load-bearing one — the asymmetric default would otherwise mark the tool destructive. `idempotentHint: false` because repeated submissions create separate records (intentional — duplicate signal is itself signal). `openWorldHint: false` — feedback is stored locally, not in an open external system.
 
 **When the agent should call it** — write this into the tool description verbatim:
 - A tool returned unexpected or incorrect output
@@ -47,11 +45,7 @@ Data flows in one direction — agent → operator. There is no return channel.
 | `model` | string | no | 200 chars | Agent model name, e.g. `claude-opus-4-7` |
 | `harness` | string | no | 200 chars | Client/environment, e.g. `Claude Desktop`, `Cursor`, `Codex CLI` |
 
-**Response to agent:** plain text confirmation (`"Feedback recorded."` or equivalent).
-No ID, no status — fire and forget.
-
-**Invariant:** no tool exists for the agent to read feedback back. This is intentional —
-it avoids creating the illusion of a dialogue where there is none.
+**Response to agent:** plain text confirmation (`"Feedback recorded."` or equivalent). No ID, no status — fire and forget. (Write-only invariant — see Design Principles below.)
 
 ---
 

@@ -42,36 +42,11 @@ Source: MCP debug log (raw JSON-RPC frames) + `sendLoggingMessage` probes + dire
 
 ---
 
-### Handshake
+`tools/list` is called on every new connection — dynamic tool descriptions work.
 
-Claude Desktop sends on every connect:
+Capability statuses are in the cross-client matrix above; design implications below.
 
-```
-Client → initialize  (protocolVersion: "2025-11-25")
-Server ← result      (protocolVersion, capabilities, instructions)
-Client → notifications/initialized
-Client → tools/list
-Server ← result      (tools array)
-```
-
-`tools/list` is called on **every new connection** — dynamic tool descriptions work.
-
----
-
-### Capabilities Declared by Claude Desktop
-
-| Capability | Status | Consequence for server |
-|------------|--------|------------------------|
-| `sampling` | ❌ NOT declared — ⚠️ Deprecated in DRAFT-2026-v1 (SEP-2596) | Server cannot call `sampling/createMessage`. Moot: capability not declared AND protocol-level deprecated. Do not design around sampling for new servers. |
-| `elicitation` | ❌ NOT declared | Server cannot prompt the user mid-execution |
-| `roots` | ❌ NOT declared | Server cannot request workspace root directories |
-| `completions` | ❌ NOT declared | Parameter autocompletion not supported |
-| `io.modelcontextprotocol/ui` | ✅ declared | Proprietary — likely HTML/React artefact rendering in UI. Does not affect tool UX. |
-| `tasks` (SEP-1686) | ⚠️ Not declared — probed 2026-04-28, absent from `initialize` response | Treat as unsupported. Roll-your-own async handle for long-running operations — see §Design Implications. Recheck periodically. |
-
-**Bottom line:** Claude Desktop does not declare the interactive server-to-client capabilities (sampling, elicitation, roots, completions). Tools, Resources, and Prompts still work — the surface is the non-interactive subset of MCP.
-
-> **Sampling deprecation note:** As of DRAFT-2026-v1 (SEP-2596), sampling is formally deprecated protocol-wide with a 1-year support window and no named replacement. Source: [draft sampling spec](https://modelcontextprotocol.io/specification/draft/client/sampling). New servers must not design around sampling.
+Notable Claude-Desktop-only signal: `io.modelcontextprotocol/ui` capability is declared (proprietary — likely HTML/React artefact rendering; does not affect tool UX).
 
 ---
 
@@ -110,7 +85,7 @@ In order of reliability:
 | `notifications/message` | ❌ Dropped | — |
 | `notifications/progress` | ⚠️ Unknown | Only if client sends `progressToken` |
 | `elicitation/create` | ❌ Not supported | — |
-| `sampling/createMessage` | ❌ Not supported — ⚠️ Deprecated in DRAFT-2026-v1 (SEP-2596) | — |
+| `sampling/createMessage` | ❌ Not supported, deprecated protocol-wide | — |
 
 ---
 
@@ -118,7 +93,7 @@ In order of reliability:
 
 **Tool call duration:**
 - Target <20s. Anything longer risks connection drop.
-- For slow operations: do not block the call. Claude Desktop has not (as of 2026-04-28) been observed to declare the `tasks` capability — until a probe confirms otherwise, assume Tasks (SEP-1686) is unsupported and use the roll-your-own async-handle fallback (return `id` + `status: "working"` immediately, expose a separate polling tool for state). Canonical recipe and the spec-primitive alternative: [tool-design.md §Long-Running Operations](tool-design.md).
+- For slow operations: do not block. Roll-your-own async handle (Tasks not negotiated) — recipe in [tool-design.md §Long-Running Operations](tool-design.md).
 - "Server busy" with remaining time estimate is visible to the agent — write informative busy messages.
 
 **Tool names:**
@@ -132,10 +107,8 @@ In order of reliability:
 **What NOT to implement for Claude Desktop:**
 - Push progress notifications (model won't see them)
 - `elicitation` mid-execution (not supported)
-- `sampling/createMessage` (not supported, and deprecated protocol-wide in DRAFT-2026-v1 — SEP-2596)
+- `sampling/createMessage` (not supported, deprecated protocol-wide)
 - Resource subscriptions (likely dropped, unverified)
-
----
 
 ---
 
@@ -147,25 +120,10 @@ Source: <https://code.claude.com/docs/en/mcp> and `anthropics/claude-code` CHANG
 
 ---
 
-### Capabilities Declared by Claude Code
+Capability statuses are in the cross-client matrix above; design implications below. Two Claude-Code-specific notes:
 
-| Capability | Status | Details |
-|------------|--------|---------|
-| `elicitation` | ✅ since v2.1.76 | Server can request structured mid-task user input via an interactive dialog (form fields or browser URL). |
-| `roots` | ⚠️ UNVERIFIED | Not confirmed in docs or CHANGELOG. |
-| `sampling` | ❌ No evidence — ⚠️ Deprecated in DRAFT-2026-v1 (SEP-2596) | No mention in docs or CHANGELOG. Treat as unsupported. |
-| `completions` | ⚠️ UNVERIFIED | Not confirmed. |
-| OAuth 2.1 (remote servers) | ✅ since v1.0.27 | Full RFC 9728, CIMD (SEP-991 static client registration), `--client-id`/`--client-secret`, `oauth.authServerMetadataUrl` override, step-up auth, proactive token refresh, `headersHelper` dynamic-header script alternative. |
-
----
-
-### Notifications
-
-| Notification | Status | Details |
-|---|---|---|
-| `notifications/tools/list_changed` | ✅ since v2.1.0 | Servers can update tool/prompt/resource lists without reconnection. Declare `"tools": {"listChanged": true}` in capabilities. |
-| `notifications/message` (logging) | ⚠️ UNVERIFIED | Not confirmed in docs. |
-| `notifications/progress` | ⚠️ UNVERIFIED | Not confirmed in docs. |
+- **OAuth 2.1 (since v1.0.27)** — full RFC 9728 with dynamic client registration, plus a `headersHelper` script alternative for non-OAuth scenarios (see *Dynamic Headers* below).
+- **`elicitation` works** — server can request structured mid-task user input via an interactive dialog.
 
 ---
 
@@ -178,11 +136,10 @@ Source: <https://code.claude.com/docs/en/mcp> and `anthropics/claude-code` CHANG
 
 ### Timeouts and Output Limits
 
-| Knob | Value | Notes |
-|------|-------|-------|
-| `MCP_TOOL_TIMEOUT` | no default published | Per-server tool-call timeout in **milliseconds**. Set as env var. |
-| `MCP_TIMEOUT` | 5 000 ms | Server **startup** timeout (not tool-call). |
-| `MAX_MCP_OUTPUT_TOKENS` | 25 000 (default) | Warning logged at 10 000. Per-tool override: `anthropic/maxResultSizeChars` ≤ 500 KB. |
+| Knob | Value | Design implication |
+|------|-------|--------------------|
+| `MCP_TOOL_TIMEOUT` | ms, no default | Operators set per-server; design slow tools to fit or use async-handle pattern. |
+| `MAX_MCP_OUTPUT_TOKENS` | 25 000 default, warn at 10 000 | Paginate / compress before this; per-tool override via `anthropic/maxResultSizeChars` (≤ 500 KB). |
 
 ---
 
@@ -203,7 +160,7 @@ No stricter-than-spec enforcement observed. CHANGELOG references tool-name issue
 
 ### Dynamic Headers
 
-`"headersHelper": "/path/to/script"` in `.mcp.json` — script is invoked per request. Env vars exposed to helper: `CLAUDE_CODE_MCP_SERVER_NAME`, `CLAUDE_CODE_MCP_SERVER_URL`. Use for token refresh or per-call signing without OAuth.
+`"headersHelper": "/path/to/script"` in `.mcp.json` invokes a script per request — use for token refresh or per-call signing when OAuth doesn't fit.
 
 ---
 
