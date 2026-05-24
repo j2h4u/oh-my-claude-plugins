@@ -313,41 +313,32 @@ in a loop. Bound everything.
 
 ---
 
-## 6. Secret hygiene
+## 6. Secret hygiene — MCP-specific leak surfaces
 
-Secrets in unexpected places are the easiest way to turn an information disclosure into
-account takeover.
+General secret hygiene (env-only storage, secret-shape redaction filters, no startup
+config dumps, leakage tests) applies as for any service and is out of scope here. The
+MCP-specific leak surfaces — places general guidance won't catch because they are
+unique to the protocol — are:
 
-Never include tokens, cookies, API keys, OAuth codes, refresh tokens, signed URLs with
-embedded credentials, or full-blob PII in:
+- Tool **responses** (returned to the host and stored in transcripts the user re-reads
+  long after the call)
+- Tool **error messages** (do not embed the failing URL with query string — strip
+  query before reporting)
+- **Feedback records** — surfaced by the agent on demand, persisted for review (see
+  [feedback-tool.md](feedback-tool.md))
+- **Tracebacks** returned to the agent — strip locals/repr before sending; the agent
+  may quote them back to the user verbatim
 
-- Tool **responses** (returned to the host and stored in transcripts)
-- Tool **error messages** (especially: do not embed the failing URL with query string;
-  strip query before reporting)
-- **Logs** (application logs, request logs, observability events — see
-  [observability.md](observability.md))
-- **Feedback records** (see [feedback-tool.md](feedback-tool.md))
-- **Tracebacks** returned to the agent — strip locals/repr before sending
-
-Active hygiene measures:
-
-- **Redact at the logger.** A redaction filter on the logging pipeline catches known
-  secret shapes (JWT, AWS, GitHub, OAuth, hex/base64 of plausible key length) even when
-  the code forgets to redact.
-- **Pull secrets at use, do not log at startup.** "Loaded config" lines that include env
-  values are how secrets end up in shipping logs.
-- **Test for leakage.** A unit test that calls each tool with synthetic secrets in the
-  upstream data and asserts they do not appear in the tool response, log, or feedback row.
+For log redaction, observability events, and general redaction-filter patterns see
+[observability.md](observability.md).
 
 ---
 
-## 7. Supply chain — defending your own package
+## 7. Supply chain — the one MCP-specific addition
 
-Your server's threat surface includes everything you ship: source, dependencies, build
-pipeline, registry account. For general supply-chain hygiene (lockfiles, dependency
-audits, 2FA, branch protection, signed releases) follow your ecosystem's standard
-guidance — these are not MCP-specific and the same rules apply as for any published
-package. The MCP-specific addition is:
+General supply-chain hygiene (lockfiles, dependency audits, 2FA, branch protection,
+signed releases) is not MCP-specific — follow your ecosystem's standard guidance. The
+one MCP-specific addition:
 
 - **Publish provenance** for publicly distributed servers (npm provenance, PyPI Trusted
   Publishing, Sigstore) so downstream consumers can verify origin. Defenders' tooling
