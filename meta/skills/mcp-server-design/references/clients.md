@@ -42,8 +42,9 @@ Server ← result      (tools array)
 | `roots` | ❌ NOT declared | Server cannot request workspace root directories |
 | `completions` | ❌ NOT declared | Parameter autocompletion not supported |
 | `io.modelcontextprotocol/ui` | ✅ declared | Proprietary — likely HTML/React artefact rendering in UI. Does not affect tool UX. |
+| `tasks` | ⚠️ UNVERIFIED — not observed in `initialize` response (2026-04-28) | Until probed and confirmed, assume Tasks (SEP-1686) is unsupported. Roll-your-own async handle for long-running operations — see §Design Implications. |
 
-**Bottom line:** Claude Desktop supports only the basic MCP surface (tools). No interactive server-to-client capabilities.
+**Bottom line:** Claude Desktop does not declare the interactive server-to-client capabilities (sampling, elicitation, roots, completions). Tools, Resources, and Prompts still work — the surface is the non-interactive subset of MCP.
 
 > **Sampling deprecation note:** As of DRAFT-2026-v1 (SEP-2596), sampling is formally deprecated protocol-wide with a 1-year support window and no named replacement. Source: [draft sampling spec](https://modelcontextprotocol.io/specification/draft/client/sampling). New servers must not design around sampling.
 
@@ -54,7 +55,7 @@ Server ← result      (tools array)
 | Notification | Status | Details |
 |---|---|---|
 | `notifications/message` (logging) | ❌ Silently dropped | Transport delivers it; model never sees it. Agent confirmed it receives no log messages or progress. Do not use for progress reporting. |
-| `notifications/progress` | ❌ Not functional | Requires `progressToken` in `_meta` — Claude Desktop (stdio) does not send it. Verified 2026-04-28. |
+| `notifications/progress` | ❌ Not functional | Claude Desktop does not include `progressToken` in `tools/call`'s inbound `_meta`, so server-emitted progress notifications have no recipient. Verified 2026-04-28. |
 | `notifications/tools/list_changed` | ⚠️ UNVERIFIED | Likely dropped — no matching capability declared. |
 | `notifications/resources/updated` | ⚠️ UNVERIFIED | Same assumption — likely dropped. |
 
@@ -64,8 +65,8 @@ Server ← result      (tools array)
 
 ### Timeouts
 
-- **Design budget: ≤20s end-to-end** for tool result delivery in Claude Desktop. Treat anything over 25s as a likely cancellation risk.
-- **Observed:** socket closed after ~26s in one LLM-enriched search operation (single data point, not a spec limit). Use 20s as the planning target; 26s marks the confirmed failure boundary.
+- **Observed:** socket closed after ~26s in one LLM-enriched search operation (single data point on mcp-server-ozon, 2026-04-28 — not a spec limit and not a Desktop-published budget).
+- **Operator-chosen safety margin:** plan for ≤20s end-to-end based on the single 26s observation. Anything longer carries cancellation risk on this client; until more data points exist, treat 20s as defensive guidance, not a documented limit.
 - **After socket close:** server continues executing (lock held), but the result has nowhere to go.
 - **On reconnect:** a new call finds the lock and receives the "server busy" message — agent sees this and can act on it.
 
@@ -92,7 +93,7 @@ In order of reliability:
 
 **Tool call duration:**
 - Target <20s. Anything longer risks connection drop.
-- For slow operations: do not block the call. Claude Desktop does not (as of this recheck) implement the spec Tasks primitive, so use the roll-your-own async-handle fallback (return `id` + `status: "working"` immediately, expose a separate polling tool for state). Canonical recipe and the spec-primitive alternative: [tool-design.md §Long-Running Operations](tool-design.md).
+- For slow operations: do not block the call. Claude Desktop has not (as of 2026-04-28) been observed to declare the `tasks` capability — until a probe confirms otherwise, assume Tasks (SEP-1686) is unsupported and use the roll-your-own async-handle fallback (return `id` + `status: "working"` immediately, expose a separate polling tool for state). Canonical recipe and the spec-primitive alternative: [tool-design.md §Long-Running Operations](tool-design.md).
 - "Server busy" with remaining time estimate is visible to the agent — write informative busy messages.
 
 **Tool names:**
