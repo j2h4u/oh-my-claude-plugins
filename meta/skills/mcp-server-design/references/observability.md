@@ -83,9 +83,9 @@ One line per call to a log file. Trivial to ship; queryable with `jq` or DuckDB
 log_event({"ts": ..., "tool_name": "search_messages", "status": "ok", "duration_ms": 142})
 ```
 
-Rotate daily, retain 30–90 days. For stdio servers, this MUST be a file or stderr — never
-stdout. Daemon-pattern servers ship logs over the socket instead; see
-[daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+Rotate daily, retain 30–90 days. Where the JSONL goes depends on transport — see
+[daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern)
+for the stdio rule and the daemon-pattern inversion.
 
 Analysis example — error rate and p95 latency per tool with `jq` and `awk`:
 

@@ -39,10 +39,11 @@ locally-running server (CSRF). MCP SDKs typically handle this; verify it is not 
 
 ### Annotation trust
 
-Annotations (`readOnlyHint`, `destructiveHint`, etc.) are declared by the server and
-visible to clients. They are **hints, not guarantees**. A client MUST NOT treat them as
-security controls — a compromised server can declare any values. Security enforcement
-belongs in the server's own access control, not in annotations.
+Annotations (`readOnlyHint`, `destructiveHint`, etc.) are server-declared hints, not
+guarantees — canonical statement in [tool-design.md §Annotations](tool-design.md#annotations).
+Security implication: a compromised or malicious server can declare any values, so a
+client MUST NOT use annotations as a security control. Enforcement belongs in the
+server's own access control.
 
 ### Input boundary validation
 

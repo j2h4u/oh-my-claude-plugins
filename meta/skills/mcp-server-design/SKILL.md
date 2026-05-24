@@ -158,8 +158,7 @@ If you adopt the pattern:
 - Agent reports bugs, confusing behaviour, missing capabilities in the moment
 - Operator reviews out-of-band via `feedback list` / `feedback status` / `feedback delete`
 - Separate storage from the server's main data (own SQLite file or table)
-- Pair with a system-prompt directive: *"Use `submit_feedback` immediately when a tool
-  response is wrong, surprising, or missing a useful capability."*
+- Pair with the system-prompt feedback directive — verbatim text + placement guidance at [agent-ux.md §System Prompt as Configuration Surface](references/agent-ux.md#feedback-directive)
 
 → Full interface spec including severity, missing_capability, workaround_used, and the complete parameter contract: [references/feedback-tool.md](references/feedback-tool.md)
 
@@ -219,7 +218,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 - **Prompt injection** — delimit untrusted content in tool responses; never inject raw message/file/DB content
 - **Localhost exposure** — bind to `127.0.0.1` or Unix socket; never expose without auth on public interface
-- **Annotation trust** — annotations are hints, not security boundaries. A server can declare any values; clients MUST NOT auto-approve based on them alone. Set accurately, enforce server-side. → [tool-design.md §Annotations](references/tool-design.md)
+- **Annotation trust** — annotations are hints, not security boundaries. Canonical statement + design implications: [tool-design.md §Annotations](references/tool-design.md#annotations)
 - **Input boundary** — validate all paths, shell arguments, URLs, tenant IDs, and secrets server-side
 
 → Threat reference (data injection, authn/authz, sessions, DoS, secrets, supply chain, release stability): [references/security-threats.md](references/security-threats.md)
