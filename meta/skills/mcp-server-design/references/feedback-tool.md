@@ -1,11 +1,6 @@
 # Agent Feedback Channel — Interface Specification
 
-> **Load when:** Implementing `submit_feedback` or the operator feedback CLI in any MCP server.
->
-> **Scope:** OPINIONATED. This is a recommended maintainer-feedback pattern, not an MCP
-> protocol requirement.
-
-Language-agnostic contract. Implement in Python, TypeScript, Go, or whatever the server is written in.
+> Load when implementing `submit_feedback` or the operator CLI. OPINIONATED — maintainer-feedback pattern, not protocol. Language-agnostic contract.
 
 ---
 
@@ -18,7 +13,19 @@ Data flows in one direction — agent → operator. There is no return channel.
 
 ## MCP Tool: `submit_feedback`
 
-**Type:** write (`readOnlyHint: false`)
+**Canonical annotations** (additive write, not destructive — flip `destructiveHint` off explicitly because it defaults to `true`):
+
+```json
+"annotations": {
+  "readOnlyHint":   false,
+  "destructiveHint": false,
+  "idempotentHint": false,
+  "openWorldHint":  false,
+  "title": "Submit feedback"
+}
+```
+
+`destructiveHint: false` is the load-bearing one — the asymmetric default would otherwise mark the tool destructive. `idempotentHint: false` because repeated submissions create separate records (intentional — duplicate signal is itself signal). `openWorldHint: false` — feedback is stored locally, not in an open external system.
 
 **When the agent should call it** — write this into the tool description verbatim:
 - A tool returned unexpected or incorrect output

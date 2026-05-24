@@ -12,18 +12,7 @@ description: >-
 
 # Building MCP Servers
 
-Patterns and conventions for production-grade MCP servers, distilled from multiple real deployments.
-
-> **For hands-on implementation from scratch** (SDK setup, Python/TypeScript scaffolding,
-> Pydantic/Zod schemas, evaluation harness) use the official Anthropic skill **`mcp-builder`**,
-> available by default in most Claude Code installations:
-> https://github.com/anthropics/skills/tree/main/skills/mcp-builder
-
-**Scope split — this skill vs mcp-builder:**
-- `mcp-server-design` (this skill): tool design, schema design, agent UX, security threat model, audit checklists, client compatibility. *What and why.*
-- `mcp-builder`: scaffolding a server, SDK setup, deployment, language idioms. *How to wire it up.*
-
-Use both together when implementing a server. Use this one alone when reviewing or auditing an existing server.
+This skill: tool/schema design, agent UX, security threat model, audit checklists, client compatibility — *what and why*. Pair with **`mcp-builder`** ([anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/mcp-builder)) for *how to wire it up* — SDK setup, scaffolding, deployment, language idioms.
 
 ## Scope Tags
 
@@ -57,9 +46,10 @@ the references they link to.
 | `outputSchema` | JSON Schema declared on a tool that types its structured output. When declared, the server MUST return `structuredContent` on every successful call. |
 | `structuredContent` | Sibling of `content` in a tool result — carries typed JSON conforming to `outputSchema`. Lets clients render/parse without re-parsing text. |
 | `isError` | Boolean on the tool result. `true` = business/validation error the agent can recover from. Distinct from protocol exceptions (transport-level failures). |
-| `execution.taskSupport` | Per-tool field (spec **2025-11-25**, experimental, SEP-1686): `forbidden` \| `optional` \| `required`. Declares whether the client may (or must) augment a `tools/call` with a `task` param to run it as a polled task via `tasks/get` / `tasks/result`. Spec primitive for long-running ops. SDK + client support is rolling out — check [clients.md](references/clients.md) before marking `required`. |
+| `execution.taskSupport` | Per-tool field (spec **2025-11-25**, experimental, SEP-1686): `forbidden` (default) \| `optional` \| `required`. Declares whether the client may (or must) augment a `tools/call` with a `task` param to run it as a polled task via `tasks/get` / `tasks/result`. Spec primitive for long-running ops. SDK + client support is rolling out — check [clients.md](references/clients.md) before marking `required`. |
+| Tasks two-layer handshake | Tasks (SEP-1686) requires **both** sides to opt in: the server declares the `tasks` capability at `initialize` (`{"tasks": {"requests": {"tools/call": true}}}`), AND the client must declare matching capability. Per-tool `execution.taskSupport` only fires when both sides negotiated `tasks`. As of 2026-05, no tracked client negotiates `tasks` — see [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix). Roll-your-own async handle is the working default today. Full wire-shape: [tool-design.md §Long-Running Operations](references/tool-design.md#long-running-operations). |
 | `server.instructions` | The server-declared system prompt — first-class config surface for shaping agent behaviour without adding tools. Sent at `initialize` (once per session); the host then folds it into its system prompt for the conversation. Keep it tight. |
-| Tool `annotations` | Protocol hints on a tool: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`. Hints to clients/agents, not enforced server-side. |
+| Tool `annotations` | Protocol hints on a tool: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`. Hints to clients/agents, not enforced server-side. **Asymmetric default:** `destructiveHint` defaults to `true` (opt-out — you set `false` to declare additive/safe). The other three default to the *pessimistic* value (`readOnly:false`, `idempotent:false`, `openWorld:true`) and you opt *in* to the safer property. Forgetting to set `destructiveHint: false` on additive writes (e.g. `submit_feedback`) silently marks them destructive. → [tool-design.md §Annotations](references/tool-design.md#annotations). |
 | `posture` (primary / secondary) | Project-level classification: *primary* tools = user-facing capabilities; *secondary/helper* tools = plumbing the agent uses to support primary calls. Not a protocol field. |
 | `resource_link` | Tool result content type (`{type:"resource_link", uri, name, mimeType}`) introduced in 2025-11-25. Tools return a URI pointer instead of inlining content. Not guaranteed to appear in `resources/list`. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). |
 | `icons` (tool/resource/prompt field) | Optional array `{src, mimeType, sizes?[]}` on Tool, Resource, ResourceTemplate, Prompt. Added in 2025-11-25 (SEP-973). Source: [Changelog 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/changelog). |
@@ -82,9 +72,8 @@ Read sequentially. `clients` is third on purpose: it shapes downstream choices (
 
 | Use case | Read |
 |----------|------|
+| **Designing a new server end-to-end** | follow the spine above |
 | **Auditing** an existing server | audit-checklist plus the UNIVERSAL refs; add conditional refs only when the stack matches |
-| **Designing a server that exposes data** | tool-design §Three Primitives (Resources) |
-| **Designing reusable agent workflows** | tool-design §Three Primitives (Prompts) |
 | **Security review** | security-threats, clients, audit-checklist (§14 Security, §12 Transport and Logging, §5 Parameter Schemas) |
 | **Tool-surface review / 80-20 audit** | observability, audit-checklist (§1 Design Philosophy) |
 | **Stateful backend** (DB, WebSocket, ML model) | daemon-architecture |
@@ -136,10 +125,10 @@ Read sequentially. `clients` is third on purpose: it shapes downstream choices (
 - Declare `outputSchema` on structured tools — when declared, MUST return `structuredContent` on every call (see glossary + tool-design.md)
 - Use `isError: true` for business errors (validation, API failures) — never raise protocol exceptions for domain errors
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
-- Flat parameter schemas — no nested objects; LLMs hallucinate nested key names
+- Flat parameter schemas — no bare `dict` / `object` without `properties`. Typed nested models with fully-declared `properties` at ≤1 level are fine; ≥2 levels hallucinate regardless of typing. → [tool-design.md §Argument Flattening](references/tool-design.md#argument-flattening)
 - Hard-cap all list responses; include pagination token when truncated
 - ≤10 primary tools is a signal, not a hard cap *(OPINIONATED — rationale and exceptions in `references/tool-design.md` §Classification)*. Diagnostic tools (`health`, `version`), polling tools paired with async handles or `taskSupport: required`, and the `submit_feedback` channel are *secondary* — they don't count against the ≤10 budget.
-- Declare `tools: {}` unconditionally; add `"tools": {"listChanged": true}` only if your tool set mutates after init (auth gating, feature flags, multi-tenant surfaces). Static surfaces that declare `listChanged: true` mislead defenders into watching for events that never fire. Delivery is not guaranteed across clients — see [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) and [tool-design.md §Dynamic Tool Sets](references/tool-design.md#dynamic-tool-sets--listchanged).
+- Spec MUST: declare `tools` capability whenever the server exposes tools. Minimum is `"tools": {}`; upgrade to `"tools": {"listChanged": true}` only when your tool set mutates after init (auth gating, feature flags, multi-tenant). Declaring `listChanged: true` on a static surface misleads defenders into watching for events that never fire; delivery across clients is uneven — see [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) and [tool-design.md §Dynamic Tool Sets](references/tool-design.md#dynamic-tool-sets--listchanged).
 
 → Full conventions: [references/tool-design.md](references/tool-design.md)
 
@@ -186,11 +175,13 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 ## Transport
 
+**Default: `stdio`.** Pick a network transport only when a concrete reason rules `stdio` out (multi-process clients on the same host, remote consumers, gateway aggregation, container-network access from sibling containers). `stdio` has no port allocation, no Origin headers, no DNS-rebinding surface, no session-id semantics — pick the simpler thing first.
+
 **Decision tree** (apply in order — first matching branch wins, then keep walking for the auth layer):
 
-- Server launched as a subprocess by Claude Desktop / a CLI host? → **`stdio`**
-- Remote SaaS endpoint consumed by Claude Code (or any HTTP-capable client) over the public internet? → **Streamable HTTP + OAuth 2.1** (see [clients.md §Claude Code](references/clients.md#claude-code) for the supported OAuth shape)
-- Network-accessible (inter-container Docker, HTTP-capable clients)? → **Streamable HTTP**
+- Server launched as a subprocess by Claude Desktop / a CLI host (including local Claude Code via `.mcp.json` with a `command`)? → **`stdio`**
+- Remote SaaS endpoint consumed by Claude Code (or any HTTP-capable client) over the public internet? → **Streamable HTTP + TLS + OAuth 2.1** (per-principal, narrow scopes, audience-bound tokens — see [clients.md §Claude Code](references/clients.md#claude-code) for the supported OAuth shape; full requirements in the worked-pairings table below and `security-threats.md §3`)
+- Need to be reached by sibling containers / non-subprocess clients on the same host (Docker network, separate host process)? → **Streamable HTTP**
 - Exposed outside a trusted network? → **add an auth layer** (OAuth 2.1; tokens MUST include audience claim per RFC 8707 — see [references/security-threats.md](references/security-threats.md))
 - Internal Docker network with no untrusted neighbours? → plaintext is acceptable
 
@@ -202,11 +193,11 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 | Docker MCP gateway behind shared OAuth edge | `streamable-http` on `0.0.0.0:<port>` inside the docker network | OAuth 2.1 terminated at the gateway, not per backend |
 | Remote SaaS server for external users (incl. Claude Code) | `streamable-http` + TLS | OAuth 2.1 per-principal; narrow scopes; audience-bound tokens |
 
-> **Streamable HTTP** (spec 2025-11-25, replacing deprecated HTTP+SSE): single endpoint, POST + GET. Server chooses `application/json` vs `text/event-stream` per response — SSE is for streaming multiple messages on one request, not always-on. Client MUST include `MCP-Protocol-Version: 2025-11-25` header; server SHOULD assume `2025-03-26` if absent, MUST respond 400 if invalid. `Mcp-Session-Id`: server MAY assign at init; client MUST include thereafter. DNS rebinding: server MUST validate `Origin` header (403 if invalid); SHOULD bind to localhost, not `0.0.0.0`, or use a Unix domain socket (browsers cannot reach Unix sockets — strongest mitigation). Source: [Transports spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
+> **Streamable HTTP** (spec 2025-11-25, replacing deprecated HTTP+SSE): single endpoint, POST + GET. Server chooses `application/json` vs `text/event-stream` per response — SSE is for streaming multiple messages on one request, not always-on. Client MUST include `MCP-Protocol-Version: 2025-11-25` header; server SHOULD assume `2025-03-26` if absent, MUST respond 400 if invalid. *(FastMCP / Python `mcp` and `@modelcontextprotocol/sdk-typescript` handle this header negotiation transparently; only matters for raw / framework-direct HTTP implementations.)* `Mcp-Session-Id`: server MAY assign at init; client MUST include thereafter. DNS rebinding: server MUST validate `Origin` header (403 if invalid). Spec says SHOULD bind to localhost rather than `0.0.0.0`; this skill treats it as **MUST for default deployments** — only relax when a private-container-network + auth-gateway pairing makes `0.0.0.0` safe (see worked-pairings table). Strongest mitigation is a Unix domain socket (browsers cannot reach it). Source: [Transports spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
-- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. Canonical rule + daemon-pattern stderr inversion: [references/daemon-architecture.md §Stderr Rule](references/daemon-architecture.md#stderr-rule-reversed-under-this-pattern). Transport table: [references/security-threats.md §Transport choice and stderr](references/security-threats.md).
+- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. Canonical rule + daemon-pattern inversion: [references/daemon-architecture.md §Stderr Rule](references/daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
 → Security per transport: [references/security-threats.md](references/security-threats.md)
@@ -238,6 +229,34 @@ Per-call logs drive dead-tool / hot-tool / error-rate decisions. Minimum fields:
 - After any code change: rebuild (if containerised) and run smoke test before marking done
 - Green unit tests do not prove the live server works — green smoke test does
 
+**Minimal smoke-test recipes** (run after build, before marking done):
+
+*stdio:* pipe a JSON-RPC `initialize` + `tools/list` through the server binary and assert non-empty `tools` and that **no non-JSON bytes appear on stdout** (see [security-threats.md §Transport choice and stderr](references/security-threats.md#transport-choice-and-stderr) for the stdout-cleanliness one-liner).
+
+*Streamable HTTP:*
+
+```bash
+# 1. initialize handshake — expect JSON-RPC result, not 404/500
+curl -sS -X POST "$URL" \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2025-11-25' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
+
+# 2. tools/list — expect non-empty tools array
+curl -sS -X POST "$URL" \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2025-11-25' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+
+# 3. Origin check — expect 403 from non-allow-listed origin
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$URL" \
+  -H 'Origin: http://evil.test' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}'
+```
+
+Gateway / multi-server smoke: [gateway-aggregation.md §Smoke test](references/gateway-aggregation.md).
+
 ---
 
 ## Auditing an Existing Server
@@ -260,7 +279,7 @@ Before shipping or handing off:
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
 - [ ] For `stdio`, logs go to `stderr`, never `stdout`
 - [ ] Integration smoke test passes against live server
-- [ ] No nested objects in parameter schemas — flat primitives only
+- [ ] No bare `dict` / `object` without `properties` in parameter schemas; typed nested models OK at ≤1 level
 - [ ] Per-call usage log in place — `ts`, `tool_name`, `status`, `duration_ms` minimum; no raw args/responses `[OPINIONATED]`
 
 ---
@@ -271,7 +290,7 @@ Each bullet ends in an action you can take *now*, not "watch this space".
 
 - **MCP Apps** (SEP-1865, announced 2025-11-21): optional backwards-compatible extension adding `ui://` URI scheme, tool→UI metadata linking, sandboxed iframe rendering, bi-directional JSON-RPC over `postMessage`. *Action now:* if your tool returns HTML/JSON intended for rendering, keep `structuredContent` schema-stable so MCP Apps adoption later is a non-breaking addition, not a rewrite. Repo: [modelcontextprotocol/ext-apps](https://github.com/modelcontextprotocol/ext-apps). Blog: [2025-11-21 announcement](https://blog.modelcontextprotocol.io/posts/2025-11-21-mcp-apps/).
 - **Sampling deprecated** in DRAFT-2026-v1 (SEP-2596). *Action now:* do not design new servers around `sampling/createMessage`; remove any optimistic capability checks for it.
-- **Tasks** (SEP-1686) landed in 2025-11-25 as experimental — per-tool `execution.taskSupport` field; see glossary. *Action now:* declare `taskSupport: optional` on tools that already exceed your ~20s budget — that's safe today; reserve `taskSupport: required` until [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) shows your target clients negotiating `tasks` at `initialize`.
+- **Tasks** (SEP-1686) landed in 2025-11-25 as experimental — per-tool `execution.taskSupport` field; see glossary. *Action now:* declare `taskSupport: optional` on tools that already exceed Claude Desktop's *defensive ~20s guidance* (single 26s observation, not a documented budget — see [clients.md §Claude Desktop §Timeouts](references/clients.md#timeouts)). Reserve `taskSupport: required` until [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) shows target clients negotiating `tasks` at `initialize`.
 
 ## External References
 

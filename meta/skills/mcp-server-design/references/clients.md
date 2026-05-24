@@ -1,11 +1,6 @@
 # MCP Client Compatibility Notes
 
-> **Load when:** Designing tools or server behaviour that may be affected by client limitations.
->
-> **Scope:** EMPIRICAL. These are compatibility notes, not MCP protocol guarantees.
->
-> **Format:** each limitation is dated — verify periodically whether it's been resolved.
-> Items marked `⚠️ UNVERIFIED` need a targeted check before relying on them.
+> Load when client limitations affect server design. EMPIRICAL — compatibility notes, not protocol guarantees. Each row is dated; recheck periodically. `⚠️` = partial / needs probe.
 
 ---
 
@@ -72,7 +67,7 @@ Server ← result      (tools array)
 | `roots` | ❌ NOT declared | Server cannot request workspace root directories |
 | `completions` | ❌ NOT declared | Parameter autocompletion not supported |
 | `io.modelcontextprotocol/ui` | ✅ declared | Proprietary — likely HTML/React artefact rendering in UI. Does not affect tool UX. |
-| `tasks` | ⚠️ UNVERIFIED — not observed in `initialize` response (2026-04-28) | Until probed and confirmed, assume Tasks (SEP-1686) is unsupported. Roll-your-own async handle for long-running operations — see §Design Implications. |
+| `tasks` (SEP-1686) | ⚠️ Not declared — probed 2026-04-28, absent from `initialize` response | Treat as unsupported. Roll-your-own async handle for long-running operations — see §Design Implications. Recheck periodically. |
 
 **Bottom line:** Claude Desktop does not declare the interactive server-to-client capabilities (sampling, elicitation, roots, completions). Tools, Resources, and Prompts still work — the surface is the non-interactive subset of MCP.
 
@@ -141,11 +136,6 @@ In order of reliability:
 - Resource subscriptions (likely dropped, unverified)
 
 ---
-
-### Open Questions (to verify)
-
-- **`io.modelcontextprotocol/ui`:** what exactly can the server return to trigger HTML rendering? Tool response with specific MIME type?
-- **Timeout precision:** 26s is one observation. More data needed.
 
 ---
 
@@ -234,31 +224,7 @@ Cursor is not covered in this skill — verify against [Cursor's MCP documentati
 
 ---
 
-## Template: Adding a New Client
-
-```markdown
-## <Client Name>
-
-**Verified:** YYYY-MM-DD | **Recheck:** YYYY-MM-DD
-
-Source: <how findings were obtained>
-
-### Capabilities Declared
-
-| Capability | Status | Consequence |
-|---|---|---|
-
-### Notifications
-
-| Notification | Status | Details |
-|---|---|---|
-
-### Timeouts
-
-### Design Implications
-```
-
-**Status legend:**
-- `❌ Not supported / dropped` — confirmed absent as of verified date
-- `⚠️ UNVERIFIED` — needs targeted check before relying on it
-- `✅ Works` — confirmed working as spec describes
+**Status legend** (used throughout this file):
+- `❌` — confirmed absent / dropped as of verified date
+- `⚠️` — partial or needs targeted check; subtext clarifies which
+- `✅` — confirmed working as spec describes

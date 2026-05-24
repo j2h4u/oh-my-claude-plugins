@@ -1,15 +1,6 @@
 # MCP Server Audit Checklist
 
-> **Load when:** Auditing an existing MCP server against skill guidelines.
->
-> **How to use:** Go through each section. For each item mark `✅ pass`, `❌ fail`, or `— N/A`.
-> Collect all `❌` items into a findings list at the end with the fix required.
-> Items marked with `*` are high-priority — fix before anything else.
->
-> **Scope tags:** `[UNIVERSAL]` applies to any MCP server. `[OPINIONATED]` is this skill's
-> recommended production default, not a protocol requirement. `[CONDITIONAL]` applies only when
-> the deployment shape matches. `[STACK:...]` applies only to that technology stack. `[EMPIRICAL]`
-> is observed client behaviour and should be rechecked when versions change.
+> Load when auditing an MCP server. Mark each item `✅` / `❌` / `— N/A`; collect `❌` into findings with fixes. `*` = high-priority. Scope tags: `[UNIVERSAL]` / `[OPINIONATED]` / `[CONDITIONAL]` / `[STACK:...]` / `[EMPIRICAL]` (recheck on version bumps) — defined in `SKILL.md §Scope Tags`.
 
 ---
 
@@ -55,7 +46,7 @@
 
 ## 5. Parameter Schemas
 
-- [ ] * `[UNIVERSAL]` **No nested objects** — parameters are flat top-level primitives. No `filters: dict`, no `options: object`. Use prefixed flat names instead (`filter_from`, `filter_status`).
+- [ ] * `[UNIVERSAL]` **No untyped nested objects** — no bare `filters: dict`, no `options: object` without `properties`. Typed nested models with fully-declared `properties` are acceptable at ≤1 level; ≥2 levels hallucinate regardless of typing. → `tool-design.md §Argument Flattening`
 - [ ] `[UNIVERSAL]` **Enums over free strings** — closed value sets use `Literal` / `enum`, not free `str`.
 - [ ] `[UNIVERSAL]` **Optional parameters have sensible defaults** — optional means meaningful behaviour without the argument, not "nullable required".
 - [ ] `[UNIVERSAL]` **Non-obvious parameters self-document** — IDs, dates, limits, and ambiguous strings carry a description/pattern/example in the schema, not just a type. Use whatever idiom your SDK exposes for this.
@@ -111,7 +102,7 @@
 ## 11. System Prompt (`server.instructions`)
 
 - [ ] `[OPINIONATED]` **System prompt exists and is non-empty** — server has `server.instructions` set.
-- [ ] `[OPINIONATED]` **Feedback directive present** — "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability."
+- [ ] `[OPINIONATED]` **Feedback directive present** — verbatim string: "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session." Canonical owner: `agent-ux.md §System Prompt as Configuration Surface`.
 - [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow.
 - [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time.
 - [ ] `[OPINIONATED]` **System prompt is minimal, not maximal** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt as Configuration Surface`) — every directive justified by an observed agent failure without it. Growth is a smell: either the missing piece is a tool, or the directive belongs in a tool description.
@@ -180,6 +171,7 @@
 
 - [ ] `[UNIVERSAL]` **Integration smoke test exists** — calls every tool through the actual transport against a live server. Unit tests alone don't cover transport or schema serialisation.
 - [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Test`
+- [ ] `[OPINIONATED]` **Agent CustDev done at least once** — interview an agent that has used the server about pain points, missing primitives, confusing names. Distinct from dark-room: dark-room observes behaviour, CustDev solicits report. Both require `submit_feedback` deployed. → Protocol: `agent-ux.md §Two Kinds of Testing`
 
 ---
 

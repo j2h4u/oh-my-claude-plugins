@@ -1,36 +1,19 @@
 # Agent UX Reference
 
-> **Load when:** Writing tool descriptions, designing the system prompt, or running
-> UX validation on a completed MCP server.
->
-> **Scope:** tool descriptions and actionable errors are UNIVERSAL. System prompt structure,
-> dark-room testing, and feedback loops are opinionated production practices.
+> Load when writing tool descriptions, designing `server.instructions`, or running UX validation. Tool descriptions + `Action:` errors are UNIVERSAL; system prompt structure, dark-room testing, and feedback loops are OPINIONATED.
 
 ---
 
-## Two Audiences for Every Tool Description
-
-Tool name + description reaches two distinct readers:
-
-| Reader | Where | What they need |
-|--------|-------|----------------|
-| **LLM (agent)** | reads at inference to decide when/how to call | When to call, what NOT to do, how to interpret output |
-| **Human (operator/user)** | sees it in client UIs — tool panels, hover tooltips | What the tool does in one sentence, side effects |
-
-Write for the LLM first — it's the harder constraint. A description precise enough
-for an LLM (when to call, what NOT to do, field semantics) is scannable enough for
-humans too; the reverse is not reliable.
-
-**Structure that satisfies both:**
+## Tool Description Structure
 
 ```
-One-sentence human summary.
+One-sentence summary (what the tool does, present tense).
 
 LLM guidance: when to call (triggers, proactive conditions),
-what the output means, what not to do, field semantics in prose.
+what the output means, what NOT to do, field semantics in prose.
 ```
 
-The one-liner is what humans scan. The LLM reads the entire block.
+The one-liner doubles as the human tooltip; the LLM reads the entire block.
 
 ---
 
@@ -55,10 +38,7 @@ MCP author has. There is **no evidence** that structural prefix tags like
 > [Faghih et al. 2025 — Tool Preferences in Agentic LLMs are Unreliable](https://arxiv.org/abs/2505.18135);
 > [MCP tool annotations reference](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
-If you're tempted to add a `[primary]` / `[secondary/helper]` prefix to descriptions:
-that is **not** the validated lever. Spend the same effort on the description body
-(assertive triggers, clearer "What NOT to do", or sharper wording that differentiates
-this tool from siblings).
+Do not prefix descriptions with `[primary]` / `[secondary/helper]` — not a validated lever.
 
 ---
 
@@ -81,11 +61,7 @@ then folded into the host's system prompt for the rest of the conversation — k
 **What does NOT belong here:** parameter docs, field walkthroughs, data that changes
 between requests (those are tool responses).
 
-**Canonical example** — one block showing all four content types together
-(domain authority, live state injected at startup, named workflows, stable
-context hint, feedback directive). Treat the shape, not the wording, as the
-template. This is the single canonical instance referenced from `SKILL.md
-§Agent UX` and `design-philosophy.md §server.instructions`.
+**Canonical example — maximum shape, not minimum.** Shows all content types together (domain authority, live-injected state, named workflows, stable context hint, feedback directive) so the template is complete. Your server's actual `server.instructions` should start with only the types you observed agents needing — the budget principle below applies. Treat the shape, not the wording, as the template. Single canonical instance, referenced from `SKILL.md §Agent UX`.
 
 ```
 Read-only access to message history via a local sync cache. If results look stale,
@@ -106,18 +82,14 @@ Use `submit_feedback` immediately when a tool response is wrong, surprising, or
 missing a useful capability — don't wait until end of session.
 ```
 
-**Format rule for the workflow section:** ALL-CAPS labels, one named pattern
-per line. Named patterns give the LLM stable, compact vocabulary to refer to
-multi-step flows. A labelled pattern is easier to retrieve and reason about
-than re-deriving the steps from scratch. Measure whether agents cite the
-labels back on your own surface — the benefit is strongest on complex
-multi-step flows where step order matters.
+**Format rule for the workflow section:** ALL-CAPS labels, one named pattern per line.
 
-**Dynamic data injection:** build the system prompt at startup, not at deploy time.
-Inject live server state (connected account, current limits, active features) so
-the agent has accurate context without a dedicated info tool.
+**Dynamic data injection:** build the system prompt at startup, not at deploy time. Inject live server state (connected account, current limits, active features) so the agent has accurate context without a dedicated info tool.
 
 ```python
+# Python / FastMCP example — [STACK:Python, daemon-architecture]
+# The daemon_connection() call assumes the daemon + on-demand split.
+# For non-daemon servers, fetch live state with whatever client you already use.
 async def _build_server_instructions() -> str:
     base = "Static guidance..."
     try:

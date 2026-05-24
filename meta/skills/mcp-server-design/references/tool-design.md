@@ -1,10 +1,6 @@
 # MCP Tool Design Reference
 
-> **Load when:** Naming, classifying, or writing descriptions for MCP tools; designing
-> parameter schemas; deciding how many tools a server should expose.
->
-> **Scope:** mostly UNIVERSAL. Tool-count thresholds and primary/secondary classification are
-> opinionated heuristics; protocol requirements are called out explicitly.
+> Load when naming/classifying tools, writing descriptions, designing parameter schemas, or sizing the tool surface. Mostly UNIVERSAL; tool-count thresholds and primary/secondary classification are OPINIONATED — protocol MUSTs are called out inline.
 
 ---
 
@@ -57,7 +53,7 @@ mark_dialog_for_sync  search_messages    get_sync_status
 - Avoid generic names: `get_data`, `run_query` — useless to the LLM
 - Watch for namespace collisions with the client: `get_me` intercepted by some clients → use `get_my_account`
 
-**Why snake_case:** the spec (2025-11-25) is permissive about casing, but snake_case is the established convention — GitHub's official MCP server, all official reference implementations, and the broader ecosystem follow it. Claude Desktop agents treat non-snake_case as inconsistent with ecosystem norms. PascalCase is essentially absent in practice.
+**Case:** snake_case. The spec is permissive about casing; the ecosystem (GitHub official MCP, all reference implementations) is uniform on snake_case — match it.
 
 **Character set:** The MCP spec (2025-11-25) says tool names SHOULD be 1–128 chars, matching `^[A-Za-z0-9_\-.]{1,128}$` — this is SHOULD, not MUST. No client tracked in [clients.md](clients.md) is known to narrow the spec range. Convention pattern: `^[a-z0-9_]{1,64}$` (snake_case, underscores for word breaks and prefix namespacing — `asana_search`, `jira_issue_get`). Hyphens and dots are spec-allowed but vanishingly rare in the ecosystem — prefer underscores for namespacing. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
@@ -107,11 +103,9 @@ Four tool annotations. All default to worst-case — declare explicitly whenever
 | `idempotentHint` | `false` | Same args → same result, safe to retry → set `true` |
 | `openWorldHint` | `true` | Tool is local-only, no external services → set `false` |
 
-`destructiveHint` is the one annotation that defaults to the "worse" value (`true`) and is opt-out, not opt-in — every other hint defaults to the pessimistic side and you flip it on to declare a safer property.
-
 Clients use annotations to drive confirmation dialogs, auto-approval policies, and orchestrator trust decisions.
 
-> Defaults from MCP schema reference: `readOnlyHint=false`, `destructiveHint=true` (when not read-only), `idempotentHint=false`, `openWorldHint=true`. Pessimistic-by-default: unannotated tools are treated as most-dangerous. Hints are advisory, not security boundaries. Source: https://modelcontextprotocol.io/specification/2025-11-25/schema
+> Schema defaults: `readOnlyHint=false`, `destructiveHint=true` (when not read-only), `idempotentHint=false`, `openWorldHint=true`. Source: https://modelcontextprotocol.io/specification/2025-11-25/schema
 
 **Caveat:** annotations are hints, not contracts. A client MUST NOT treat them as security controls — a server can declare any values. Set them accurately; never use them to bypass client safety checks.
 
@@ -152,8 +146,6 @@ The description is a **prompt read by the LLM**. Answer three questions:
 > Submissions are fire-and-forget — there is no follow-up, no tracking ID, and no read
 > access for agents.
 
-"Use this proactively" is a directive. Without it, agents wait to be asked.
-
 **For parameters:** explain field semantics in the description, not just in the schema. The LLM reads the description; the schema is for validation.
 
 **For responses:** describe the shape the agent should expect, especially for non-trivial
@@ -184,7 +176,7 @@ Agents can validate against the schema, extract fields reliably without parsing,
 
 **Spec rule** (2025-11-25): when `outputSchema` is declared, `structuredContent` conforming to it is **MUST** on every successful call; a text `content` block is **SHOULD** (backwards-compat). A tool that declares a schema and returns text-only violates the protocol. Source: [Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
-**Pragmatic rule: always return both.** The Python and TypeScript SDKs (and clients built on them) reject responses missing the text `content` block even though the spec is more permissive. Older clients that don't understand `structuredContent` fall back to reading the text block. Including both is the safe shape across the ecosystem.
+**Pragmatic rule — promote SHOULD to MUST in your code: always return both.** Some SDK/client combinations reject responses missing the text `content` block; older clients that don't understand `structuredContent` only read the text block. Behaviour drifts by SDK version (Python `mcp`/FastMCP and `@modelcontextprotocol/sdk-typescript` have both changed handling across releases) — `verify against your target SDK version + client matrix in `clients.md` before relying on `structuredContent`-only`. Including both is the safe default.
 
 **Token economy for tabular data:** don't repeat large JSON blobs in the text `content`. For
 read-only tabular results, make `content` a compact preview such as CSV or a short table, while
@@ -249,9 +241,11 @@ Matching tool response:
     ],
     "total": 2
   },
-  "content": [{ "type": "text", "text": "{\"orders\":[{\"id\":\"ORD-8821\",\"status\":\"shipped\",\"total_usd\":59.99,\"tracking_number\":\"1Z999AA10123456784\"},{\"id\":\"ORD-8734\",\"status\":\"delivered\",\"total_usd\":24.50,\"tracking_number\":\"1Z999AA10123456001\"}],\"total\":2}" }]
+  "content": [{ "type": "text", "text": "2 orders: ORD-8821 (shipped, $59.99, tracking 1Z999AA10123456784); ORD-8734 (delivered, $24.50, tracking 1Z999AA10123456001)." }]
 }
 ```
+
+The text block is a compact human-readable preview, not a JSON dump — see *Token economy for tabular data* above. The full machine-readable payload stays in `structuredContent`.
 
 ---
 
@@ -296,7 +290,14 @@ This typically arises from how language SDKs serialise nullable/optional types i
 }
 ```
 
-Apply the fix at schema generation time using your SDK's idioms. Most language SDKs do not auto-strip the `null` arm — consult upstream SDK/framework docs for the current behaviour.
+Apply the fix at schema generation time using your SDK's idioms.
+
+**SDK status (2026-05):**
+- **FastMCP / Python `mcp`** — fixed in **FastMCP v2.13.0** (2025-11-15) via PR #2073; Pydantic-compatible input validation strips the `null` arm automatically. **If you're on ≥ v2.13.0, do not hand-patch — the SDK already emits a clean schema.** ≤ v2.12.x: hand-patch required.
+- **`@modelcontextprotocol/sdk-typescript`** — verify against your version; behaviour drifts release-to-release.
+- **Other SDKs / raw schema construction** — assume no auto-strip; apply the fix above.
+
+**Related FastMCP gotcha — `additionalProperties: false` stripped by `compress_schema`:** issue [#3008](https://github.com/PrefectHQ/fastmcp/issues/3008), fixed in **v2.14.6** (2026-03-27). Symptom: `Invalid schema for function ...: 'additionalProperties' is required to be supplied and to be false`. ≤ v2.14.5: pass `prune_additional_properties=False` to `compress_schema` explicitly. ≥ v2.14.6: no action.
 
 ### Argument Flattening
 
@@ -389,6 +390,8 @@ There are two ways to expose the non-synchronous patterns. **Prefer the spec pri
 client supports it; fall back to the roll-your-own pattern when it doesn't.**
 
 ### Spec primitive — Tasks (spec **2025-11-25**, experimental, [SEP-1686](https://modelcontextprotocol.io/community/seps/1686-tasks))
+
+> ⚠️ **As of 2026-05, no client tracked in [clients.md](clients.md) has confirmed Tasks support, and the major SDKs (`mcp`/FastMCP, `@modelcontextprotocol/sdk-typescript`) do not yet expose first-class registration helpers for the wire shapes below — they may need to be hand-emitted in the capabilities/tool payload. Use the roll-your-own pattern below as the default today; treat this section as future-leaning. Verify the cross-client matrix and your SDK version before shipping.**
 
 The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`,
 `elicitation/create`). Two declarations are required — top-level capability at `initialize`, plus per-tool intent.

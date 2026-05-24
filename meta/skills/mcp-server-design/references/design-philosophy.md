@@ -1,146 +1,64 @@
 # MCP Design Philosophy — Not an API Wrapper
 
-> **Load when:** Designing the overall tool surface for a new MCP server, or reviewing whether
-> an existing server is well-shaped for agent consumption.
->
-> **Scope:** UNIVERSAL design lens. Examples are illustrative; apply the principles to the
-> server's actual domain rather than copying the sample tool names.
+> **Load when:** designing the overall tool surface for a new MCP server, or reviewing whether an existing surface is well-shaped for agent consumption.
+> **Scope:** UNIVERSAL.
 
 ---
 
-## MCP Is a UI for Agents
+## Design for agents, not developers
 
-> "A good REST API is not a good MCP server." — philschmid.de
-> "MCP is a User Interface for Agents. Different users, different design principles." — philschmid.de
+A good REST API is not a good MCP server. REST endpoints assume a human writes the orchestration; MCP tools must *be* the orchestration. Map endpoints 1:1 → tool pollution (every loaded description taxes the context window) + choreography burden (agent reconstructs intent from low-level primitives) + transactionality breaks (call 2 of 3 fails, no recovery path).
 
-The MCP transport works fine. Servers typically don't — because they are built like REST APIs.
-
-REST was designed for human developers who read documentation once, write a sequential script,
-debug it, and ship. Those same principles — small composable endpoints, CRUD verbs,
-resource-per-URL — become actively harmful when LLMs are the consumer.
-
-**Design for agents, not developers.** An MCP server is not an API client; it is an interface
-layer that translates between agent intent and domain operations.
+Block's Linear server: 30+ tools → 2 tools across three iterations, performance improving at each step. The failure mode is a cliff, not a slope.
 
 ---
 
-## The Thin-Wrapper Antipattern
+## One tool, one goal
 
-**Don't do this:**
+**Bad** — mirrors three REST endpoints:
 
 ```python
-# Bad: three tools mirroring three API endpoints
-get_user_by_email(email)        # → GET /users?email=
-list_orders_for_user(user_id)   # → GET /orders?user=
-get_order_status(order_id)      # → GET /orders/{id}/status
+get_user_by_email(email)
+list_orders_for_user(user_id)
+get_order_status(order_id)
 ```
 
-What breaks:
-
-- **Tool pollution** — the agent loads all tool descriptions on every request. Each tool taxes
-  the context window, even tools that won't be called. Accuracy drops measurably as tool count
-  rises (see [tool-design.md §Classification](tool-design.md#classification) for the ≤10 signal
-  and the evidence behind it).
-- **Choreography burden** — the agent must reconstruct intent from low-level primitives.
-  Sequencing three calls across a conversation is error-prone reasoning, not domain logic.
-- **Accuracy collapse** — Block's Linear server went from 30+ tools to 2 over three iterations,
-  with performance improving at each step. The failure is a cliff, not a slope.
-- **Transactionality breaks** — if call 2 of 3 fails, the agent has no recovery path and
-  system state is inconsistent.
-
-Named patterns for this antipattern: "The Full-API Trap", "Tool Pollution",
-"The HTTP Client Trap", "Inference Burden."
-
-> "If you take your REST or GraphQL service and replicate it for the MCP broker, what are you
-> practically doing differently? The answer is simple — nothing." — nordicapis.com
-
----
-
-## The Correct Model: One Tool, One Goal
-
-> "MCP isn't about surfacing every possible endpoint, it's about teaching an agent what it can
-> do, with what context, and to what end." — nordicapis.com
-
-**Do this instead:**
+**Good** — one user-level goal, orchestration inside the tool:
 
 ```python
-# Good: one tool, one user goal
 track_latest_order(email: str) -> str
 # internally calls /users, /orders, /shipments
 # returns: "Order #12345 shipped via FedEx, arriving Thursday."
 ```
 
-The orchestration (three API calls, joining the results, formatting the answer) happens inside
-the tool. The agent makes one call. The context window sees one tool name.
-
-The **80/20 rule:** 20% of API capabilities serve 80% of user requests. Identify that 20% from
-real user workflows and expose only those. The remaining 80% of endpoints do not justify tool
-explosion.
-
-**Target:** ≤10 primary tools per server (see [tool-design.md §Classification](tool-design.md#classification)).
-Past that signal, split into domain-specific servers — never cram more tools into one server to
-avoid the split. "One server, one job."
-
-> "Your 20-tool MCP server is making every agent that connects to it dumber." — ksopyla.com
+The agent makes one call; the context window sees one tool name.
 
 ---
 
-## Design Principles
+## Rules
 
-**1. Design for outcomes, not operations.**
-Each tool should complete a user-level goal. Bundle the internal complexity — multiple API calls,
-data filtering, normalisation — inside the tool. That complexity is the point, not a smell.
-
-**2. MCP is the seam between reasoning and execution.**
-The agent plans and re-plans (non-deterministic). Tools execute (deterministic). The MCP layer is
-that boundary. Tools should validate inputs, execute reliably, and return machine-checkable
-results. Don't push orchestration into the agent.
-
-**3. Curate ruthlessly.**
-Every tool added taxes every agent that loads the server. Prefer merging tools that serve the
-same goal over splitting them by implementation detail. A tool that returns everything with a
-filter parameter is better than two tools with different return shapes.
-
-**4. Tools, descriptions, and errors are prompt engineering.**
-> "Writing good tool descriptions is not documentation work, it is prompt engineering." — dev.to
-
-The agent reads tool descriptions to decide what to call and when. Error messages are
-observations the agent uses to self-correct. Neither is documentation; both are instructions.
-
-**5. Treat the server like a Backend-for-Frontend for agents.**
-The BFF pattern aggregates multiple service calls into a response shaped for a specific consumer.
-Apply the same principle: shape each tool response for how an agent will consume it, not for how
-the underlying API returns it.
+- **80/20:** 20% of API capabilities serve 80% of user requests. Expose that 20% from real workflows; the rest does not justify tool explosion.
+- **≤10 primary tools per server** is a signal (see [tool-design.md §Classification](tool-design.md#classification)). Past it, split into domain-specific servers — never cram to avoid the split. *One server, one job.*
+- **Bundle, don't expose.** Multiple API calls + filtering + normalisation belong inside the tool. That complexity is the point, not a smell.
+- **Curate ruthlessly.** Every tool added taxes every agent that loads the server. Merging tools that serve the same goal beats splitting them by implementation detail. A single tool with a filter parameter beats two tools with different return shapes.
+- **Tools, descriptions, errors are prompt engineering** — not documentation. The agent reads descriptions to decide what to call; error messages are observations it self-corrects on.
+- **MCP server = BFF for agents.** Aggregate upstream calls; shape responses for how the agent consumes them, not how the underlying API returns them.
 
 ---
 
-## Concrete Comparisons
+## Concrete comparisons
 
 | Domain | Bad (wrapper) | Good (outcome) |
 |--------|--------------|----------------|
-| E-commerce | `get_user`, `list_orders`, `get_status` — 3 calls | `track_latest_order(email)` — 1 call, internal pipeline |
-| Support | `list_responses → get_response → get_messages` | `triage_request(response_id)` — parallel internals, structured return |
-| Email | Raw `payload.body.data` (base64 MIME blob) | `search_emails(query)` → flat `{subject, sender, snippet}` |
-| Task tracker | 30+ GraphQL query tools | `execute_query(query, category)` — routing inside the tool |
+| E-commerce | `get_user`, `list_orders`, `get_status` (3 calls) | `track_latest_order(email)` (1 call) |
+| Support | `list_responses → get_response → get_messages` | `triage_request(response_id)` |
+| Email | Raw `payload.body.data` (base64 MIME) | `search_emails(query)` → `{subject, sender, snippet}` |
+| Task tracker | 30+ GraphQL query tools | `execute_query(query, category)` (routing inside) |
 
 ---
 
-## When Thin IS Correct
+## `server.instructions` — agent orientation block
 
-The above applies to tools that expose domain operations. The **daemon+stateless split**
-(see daemon-architecture.md) is a different kind of "thin" — the MCP server process stays thin (no state,
-no resources) while the *tool implementation* does the orchestration. That split is correct
-architecture; it doesn't contradict this philosophy.
+Returned in the `initialize` response. Agent reads it once at session start; not re-sent on tool calls. Keep it tight: domain authority, named workflows, stable context hints, feedback directive — nothing that belongs in a tool description or response payload.
 
----
-
-## `server.instructions` — Agent Orientation Block
-
-Returned in the `initialize` response. The agent reads it once at session start; it is not re-sent on tool calls. Keep it tight: domain authority, named workflows, stable context hints, feedback directive — nothing that belongs in a tool description or a response payload.
-
-Canonical example covering all four content types, the ALL-CAPS workflow-name
-format rule, dynamic state injection at startup, and the budget principle:
-[agent-ux.md §System Prompt as Configuration Surface](agent-ux.md#system-prompt-as-configuration-surface).
-Don't re-derive a fresh template from this file — copy the shape from there.
-
-Omit `server.instructions` entirely if there is nothing domain-specific to say — an empty or near-empty block wastes tokens and signals nothing.
+Canonical shape + format rules + budget principle live in [agent-ux.md §System Prompt as Configuration Surface](agent-ux.md#system-prompt-as-configuration-surface). Omit `server.instructions` entirely when there is nothing domain-specific to say.

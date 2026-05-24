@@ -1,19 +1,6 @@
 # Remote Gateway Aggregation
 
-> **Skip this file entirely if you are building a single MCP server.** This document is
-> about aggregating *multiple* MCP servers behind one shared gateway with OAuth/OIDC,
-> a tunnel, and curated tool surface — a deployment shape, not a default design.
->
-> **Load when:** Designing or auditing a deployment where multiple MCP servers are exposed
-> through one remote MCP endpoint with a shared OAuth/OIDC edge, especially with Docker MCP
-> Gateway, an auth proxy, and a public tunnel or ingress.
->
-> **Scope:** STACK-SPECIFIC / CONDITIONAL. This is a deployment recipe, not a recommendation
-> that every MCP server should sit behind an aggregator.
-
-This pattern is for operators who do not want every backend MCP server to implement public
-OAuth, TLS, DNS, and client onboarding independently. The backend servers stay private; one
-gateway presents a single MCP endpoint to remote clients.
+> **Skip if building a single MCP server.** `[STACK-SPECIFIC / CONDITIONAL]` Load when aggregating *multiple* MCP servers behind one shared OAuth/OIDC edge + tunnel + curated tool surface (Docker MCP Gateway, auth proxy, public ingress). Backends stay private; one gateway presents a single MCP endpoint to remote clients.
 
 ---
 

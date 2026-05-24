@@ -1,12 +1,6 @@
 # MCP Server Security Reference
 
-> **Load when:** Doing a security review of a server you own, designing a new server that
-> will handle untrusted data, network traffic, or production credentials, or reviewing a
-> server for overall security posture.
->
-> **Scope:** UNIVERSAL principles distilled from real-world MCP and adjacent web/RPC server
-> incidents reported through 2024–2025. Pair with [audit-checklist.md](audit-checklist.md)
-> (item-level review).
+> Load when doing a security review, or designing a server that handles untrusted data, network traffic, or production credentials. UNIVERSAL — incident-derived (2024-2025). Pair with [audit-checklist.md](audit-checklist.md) for item-level review.
 
 ---
 
@@ -35,7 +29,11 @@ Any process on the host can send requests.
 
 For Streamable HTTP transport, reject requests with invalid `Origin` headers — return
 HTTP 403. Without this, a malicious web page can issue cross-site requests to a
-locally-running server (CSRF). MCP SDKs typically handle this; verify it is not disabled.
+locally-running server (CSRF). FastMCP / Python `mcp` and `@modelcontextprotocol/sdk-typescript`
+implement Origin validation in their HTTP transports by default — verify it has not been
+disabled in your server config, and that the allow-list of `Origin` values matches what
+your client actually sends. **Probe:** `curl -i -H 'Origin: http://evil.test' <your-endpoint>`
+must return 403. For raw / framework-direct HTTP implementations the check is on you.
 
 ### Annotation trust
 
@@ -74,28 +72,9 @@ Remote-server authentication shape (OAuth 2.1, audience-bound tokens, per-princi
 
 ---
 
-## Threat model
+## Scope
 
-**You are building a benign server.** The threat model below covers attacks **on** that
-server, or attacks **through** it against its users — not attacks committed by malicious
-servers against hosts (those concern client/host implementers, not you).
-
-Concretely, our adversary can:
-
-- Embed payloads in **upstream data** your tools fetch and return (DB rows, emails,
-  webpages, issue trackers, file contents)
-- Send malicious **tool arguments** through the agent — agent params are model output,
-  shape-controllable by anyone who can prompt the agent
-- Reach your **network endpoints** if you expose HTTP transport — directly, via DNS rebinding,
-  or via a victim's browser
-- Trick your **OAuth / authn flow** if you operate as an authorization server or token
-  consumer
-- Exhaust your **resources** with expensive or unbounded calls
-- Compromise your **supply chain** — dependencies, build pipeline, registry account
-- Wait for you to **silently change** your tool surface and reuse the new behaviour against
-  approved clients
-
-Sections 1–9 below address each vector.
+Sections 1–9 cover attacks **on** a benign server and **through** it against its users. Out of scope: malicious-server-against-host attacks (those concern client/host implementers, not you).
 
 ---
 
@@ -133,8 +112,6 @@ are the conduit.
    server. If your server builds prompts, untrusted spans must stay in user-role messages
    only.
 
-You cannot make injection impossible — only conspicuous and inert. Delimiters + length
-caps + content-type signalling raise the floor.
 
 ---
 
@@ -209,8 +186,11 @@ will not add it for you. The MCP spec (2025-11-25) recommends OAuth 2.1 for remo
 ### Authentication pitfalls
 
 - **No auth on a public endpoint.** A common failure: server bound to `0.0.0.0` in a Docker
-  container, exposed by a permissive ingress, no auth required. Anyone with the URL can
-  call any tool. Bind to `127.0.0.1` or require auth before exposing publicly.
+  container **and** reachable from outside the private container network (permissive
+  ingress, host port-forward, default-bridge exposure) **and** no auth required. Anyone
+  with the URL calls any tool. Bind to `127.0.0.1`; or, if you need `0.0.0.0` to expose
+  the port inside a private container network, terminate auth at the gateway in front
+  (the documented worked pairing — see `SKILL.md §Transport`).
 - **Static bearer tokens shared across users.** A single token = no audit trail, no
   revocation. Issue per-principal tokens; rotate.
 - **OAuth misconfiguration: confused deputy.** Your server holds an upstream API token (the
@@ -393,14 +373,4 @@ Even with sections 1–8 applied, incidents happen. Be ready.
 
 ## Quick threat-review checklist
 
-A 9-question pass over the design or live server:
-
-- [ ] Untrusted data your tools return is delimited and content-type-labelled
-- [ ] Every tool argument is validated against its real consumer (FS / shell / SQL / HTTP)
-- [ ] HTTP transport requires auth; OAuth is per-principal, narrow-scoped, not pass-through
-- [ ] Session IDs are CSPRNG with ≥ 128 bits entropy; `Origin` and `Host` validated
-- [ ] Every tool has a timeout; expensive tools have rate limits and concurrency caps
-- [ ] No secrets in responses, errors, logs, feedback rows; redaction filter active
-- [ ] Lockfile committed; dependency audit gates the build; 2FA on every registry account
-- [ ] Tool surface changes go through semver + changelog; no silent description changes
-- [ ] `SECURITY.md` present; observability logs exist and are queryable
+Item-level checklist lives in [audit-checklist.md §14 Security](audit-checklist.md) (paired with §12 Transport and Logging, §5 Parameter Schemas). No copy here — single source of truth.

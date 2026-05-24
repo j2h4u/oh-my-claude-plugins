@@ -1,37 +1,16 @@
 # MCP Server Observability Reference
 
-> **Load when:** Designing a new server, auditing an existing one for a tool-surface review,
-> or planning the first post-MVP iteration.
->
-> **Scope:** UNIVERSAL principle; OPINIONATED implementation defaults.
+> Load when designing logging or running a tool-surface review. UNIVERSAL principle, OPINIONATED implementation defaults.
 
 ---
 
-## Why log tool calls
+## What the log is for
 
-A production MCP server is a UI for agents — and like any UI, you cannot tune it without
-usage data. Three concrete decisions need numbers, not intuition:
+Three decisions the log unlocks (consumer: `audit-checklist.md §80/20 check`):
 
-1. **Dead tools** — surface bloat hides high-value tools. Tools called 0–2 times across
-   thousands of sessions are usually not discoverable, not useful, or both. **Caveat:** a
-   correctness-critical tool can legitimately fire rarely (emergency rollback, one-shot
-   setup, fallback for an unusual error path). Before deleting, confirm low frequency is
-   not "low frequency of *needing* it". Otherwise, rewrite the description first (likely
-   cause: agents do not understand when to call it); remove if a follow-up window still
-   shows zero calls.
-2. **Hot tools** — traffic typically concentrates in a handful of tools (commonly the top
-   3–5, sometimes more depending on surface shape). Their descriptions and error messages
-   have the highest leverage. Find your own top-N from the log and invest there first.
-3. **Error-prone tools** — high error rate per call signals an agent UX bug, not a backend
-   bug. Look at the `Action:` hint, parameter shape, or required prerequisites.
-
-Without a usage log, the only signal is qualitative feedback and operator gut feeling.
-`submit_feedback` is a useful pattern when there is a maintainer who actively reads the queue;
-without that, the log is the only durable signal. Either way, neither alone is enough to
-decide what to cut.
-
-The audit-checklist `80/20 check` is the consumer of this data. Do not run a tool-surface
-audit without it.
+- **Dead tools** — 0–2 calls across thousands of sessions = undiscoverable, useless, or both. *Caveat:* correctness-critical tools (emergency rollback, one-shot setup, rare-error fallback) can legitimately fire rarely. Rewrite the description first; delete only if the next window still shows zero.
+- **Hot tools** — traffic concentrates in 3–5 tools. Their descriptions and error messages have highest leverage. Audit those first.
+- **Error-prone tools** — high error rate signals an agent UX bug, not a backend bug. Inspect the `Action:` hint, parameter shape, or missing prerequisites.
 
 ---
 
@@ -52,7 +31,7 @@ Minimal, useful, safe. The four-field minimum (`ts`, `tool_name`, `status`, `dur
 
 Do **NOT** log:
 
-- Raw argument values — they may contain secrets, PII, or untrusted content (see [security-threats.md §1 — Untrusted data flowing through your server](security-threats.md#1-untrusted-data-flowing-through-your-server))
+- Raw argument values — may contain secrets/PII (see [security-threats.md §6 — Secret hygiene](security-threats.md#6-secret-hygiene--mcp-specific-leak-surfaces)) or attacker-injected content (see [security-threats.md §1 — Untrusted data flowing through your server](security-threats.md#1-untrusted-data-flowing-through-your-server))
 - Full response bodies — same reason, plus disk cost
 - Full error messages verbatim if the message echoes user data — log the class, store the
   message in a separate, access-controlled error log if you need it
@@ -83,9 +62,13 @@ One line per call to a log file. Trivial to ship; queryable with `jq` or DuckDB
 log_event({"ts": ..., "tool_name": "search_messages", "status": "ok", "duration_ms": 142})
 ```
 
-Rotate daily, retain 30–90 days. Where the JSONL goes depends on transport — see
-[daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern)
-for the stdio rule and the daemon-pattern inversion.
+Rotate daily, retain 30–90 days. **Which process owns the log file depends on transport:**
+under `stdio`, the MCP server writes the JSONL itself (never to `stdout` — corrupts the
+transport); under the daemon + on-demand pattern, the daemon owns the JSONL via its socket
+and the MCP process must not write logs at all. Canonical channel rule:
+[daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+File path is your choice — typical: `~/.<server>/logs/calls.jsonl` (per-user) or
+`/var/log/<server>/calls.jsonl` (system).
 
 Analysis example — error rate and p95 latency per tool with `jq` and `awk`:
 
@@ -185,9 +168,7 @@ miss.
 
 ---
 
-## What to do with the numbers
-
-Reports without actions are dashboards-as-theatre. Tie each metric to a concrete decision:
+## Signal → action
 
 | Signal | Action |
 |--------|--------|
@@ -196,11 +177,9 @@ Reports without actions are dashboards-as-theatre. Tie each metric to a concrete
 | Two tools with similar names + overlapping callers | Candidate for consolidation into one tool with a `mode=` parameter |
 | Error rate > 10% with same `error_class` dominant | Fix the schema / add validation / add `Action:` hint pointing at the prerequisite tool |
 | p95 latency exceeds the agent's wait tolerance for this tool's perceived cost | Return an async handle (job id) and a status tool, or paginate harder |
-| `submit_feedback` mentions a tool that has high error rate in the log | Two channels agree — high-priority fix |
+| `submit_feedback` mentions a tool with high log error rate | Two channels agree — high-priority fix |
 
-The qualitative channel (`submit_feedback`) and the quantitative channel (usage log) are
-complementary. Feedback tells you *why* something is wrong; usage log tells you *whether* it
-matters at scale.
+`submit_feedback` tells you *why*; the usage log tells you *whether* it matters at scale.
 
 ---
 
