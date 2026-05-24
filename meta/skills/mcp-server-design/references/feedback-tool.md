@@ -64,9 +64,9 @@ Default: shows only `open` and `in_progress`, newest first. This is "what needs 
 
 `--limit N` caps rows returned (default: 50).
 
-**Output format per entry:**
+**Output format per entry** (square brackets and their contents are omitted when the field is absent):
 ```
-id=<N> [<severity|?>] [<status>] <YYYY-MM-DD HH:MM> [changed=<YYYY-MM-DD HH:MM>] [model=<...>] [harness=<...>]
+id=<N> [severity=<...>] [status=<...>] <YYYY-MM-DD HH:MM> [changed=<YYYY-MM-DD HH:MM>] [model=<...>] [harness=<...>]
   message: <text>
   context: <text>         ← only if present
   status_comment: <text>  ← only if present
@@ -106,11 +106,19 @@ Removes the row permanently. Use for spam or test submissions.
 | `message` | agent | required |
 | `severity` | agent | nullable |
 | `context` | agent | nullable |
+| `task` | agent | nullable; user's original request for clustering |
+| `missing_capability` | agent | nullable; highest-signal field for new-feature decisions |
+| `confusing_tool` | agent | nullable; offending tool name |
+| `workaround_used` | agent | nullable; describes the gap |
 | `model` | agent | nullable |
 | `harness` | agent | nullable |
 | `status` | operator | default: `open` |
 | `status_changed_at` | operator | nullable unix timestamp |
 | `status_comment` | operator | nullable; set via `--reason` |
+
+This schema is open — richer signal fields (`task`, `missing_capability`, `confusing_tool`,
+`workaround_used`) extend the row alongside `message`/`context`. Treat the column set as
+additive; do not strip the agent-visible Parameters table down to a "core five".
 
 ---
 
