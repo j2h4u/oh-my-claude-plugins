@@ -188,7 +188,7 @@ def validate_outbound_url(url: str) -> None:
         for *_, sockaddr in resolved:
             _reject_private(ipaddress.ip_address(sockaddr[0]))
 
-def _reject_private(addr: ipaddress.IPAddress) -> None:
+def _reject_private(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> None:
     if addr.is_loopback or addr.is_link_local or addr.is_private:
         raise ValueError(f"Address {addr} is not routable")
 ```

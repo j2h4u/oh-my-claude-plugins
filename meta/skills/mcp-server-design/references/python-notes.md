@@ -68,7 +68,7 @@ class ToolInput(BaseModel):
 
 `SkipJsonSchema[None]` removes the null arm; the callable drops the leaked `"default": null`. Verify with `ToolInput.model_json_schema()` — some older Pydantic v2 releases had a bug where `SkipJsonSchema` silently did nothing.
 
-### Fix 2 — Drop `Optional`, use bare default (fallback when Fix 1 isn't available)
+### Fix 2 — Drop the nullable arm at the model level (fallback when Fix 1 isn't available)
 
 ```python
 # Breaks Claude Desktop — generates anyOf: [int, null]:
@@ -76,10 +76,15 @@ from typing import Optional
 param: Optional[int] = None
 
 # Works everywhere — generates {type: integer}, field absent from required[]:
-param: int = None
+from pydantic import BaseModel, Field
+
+class ToolInput(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+    # Non-optional field with a default — present as integer, not in required[]:
+    param: int = Field(default=0)
 ```
 
-mypy/pyright warn about the second form. Add `# type: ignore` per-line if you can't refactor to Fix 1 right now.
+The trick: drop the `| None` / `Optional[...]` arm entirely and pick a sentinel default (`0`, `""`, `[]`) that your handler treats as "not supplied." This keeps the schema as a plain `{type: integer}` without an `anyOf` branch. Prefer Fix 1 when you can — Fix 2 conflates "absent" with the sentinel value, which is only safe when the sentinel is genuinely outside the valid input range.
 
 ### Fix 3 — Post-process schema (nuclear, for legacy/third-party models)
 
