@@ -68,20 +68,19 @@ the references they link to.
 
 ## References
 
-**Reading order for new servers (spine — read sequentially):**
+**Designing a new server — the single canonical reading order:**
 
 ```
-design-philosophy → tool-design → (language-specific: python-notes OR fastmcp-notes) → audit-checklist
+design-philosophy → tool-design → agent-ux → feedback-tool → security-threats → observability → clients
 ```
 
-Lateral files (security-threats, observability, daemon-architecture, gateway-aggregation, clients, agent-ux, feedback-tool) load on demand when their use case triggers.
+Read sequentially. Add stack-specific refs (python-notes, fastmcp-notes, daemon-architecture, gateway-aggregation) when they match your deployment — see "Load by use case" below.
 
 **Load by use case:**
 
 | Use case | Read |
 |----------|------|
 | **Auditing** an existing server | audit-checklist plus the UNIVERSAL refs; add conditional refs only when the stack matches |
-| **Designing** a new server (spine) | design-philosophy → tool-design → agent-ux → feedback-tool → security-threats → observability → clients |
 | **Designing a server that exposes data** | tool-design §Three Primitives (Resources) |
 | **Designing reusable agent workflows** | tool-design §Three Primitives (Prompts) |
 | **Security review** | security-threats, clients, audit-checklist (§14 Security, §12 Transport and Logging, §5 Parameter Schemas) |

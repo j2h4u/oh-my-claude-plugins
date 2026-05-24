@@ -361,8 +361,15 @@ the user's trust. To not look malicious you must behave non-malicious **visibly*
   Add a new tool, keep the old one, remove on next major.
 - **No description-only behaviour changes.** The description is part of the surface for
   the LLM. Changing "use only for X" → "also use for Y" silently is a behaviour change.
-- **Notify on tool list changes.** Emit `notifications/tools/list_changed` when the surface
-  changes within a session (e.g. login adds tools). Hosts use this; defenders watch for it.
+- **Notify on tool list changes — when your design actually mutates the surface.** If your
+  server adds/removes tools mid-session (e.g. login unlocks tools, feature flag flips),
+  declare `"tools": {"listChanged": true}` and emit `notifications/tools/list_changed`
+  on every change. Defenders watch for these emissions; hosts that support them re-fetch.
+  Do **not** declare `listChanged: true` on a static surface — it adds no value and
+  misleads defenders into expecting events that will never fire. Delivery is not guaranteed
+  across clients (Claude Desktop is documented as likely dropping it — see
+  [clients.md](clients.md)); treat the notification as hygiene, not as the mechanism your
+  correctness depends on. See [tool-design.md §Dynamic Tool Sets](tool-design.md#dynamic-tool-sets--listchanged).
 - **Publish a public stable URL** for your tool catalogue (e.g. via MCP Resources), so
   defenders can diff between versions. *(Applies when serving multiple clients or as part
   of a published distribution. For local/personal servers, irrelevant.)*

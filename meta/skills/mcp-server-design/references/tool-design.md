@@ -454,4 +454,4 @@ Only add `listChanged: true` if your tool list actually mutates after initializa
 await session.send_tool_list_changed()
 ```
 
-Note: security-threats.md may recommend emitting `list_changed` on certain events (e.g., principal change); Claude Desktop is documented in clients.md as likely ignoring it. Declare `listChanged: true` only if the rest of your design depends on it being delivered.
+**Client delivery is not guaranteed.** Claude Desktop is documented in [clients.md](clients.md) as likely dropping `list_changed` notifications. Treat the emission as hygiene (defenders/auditors watch for it on a mutating surface — see [security-threats.md §8](security-threats.md)), not as the mechanism your correctness depends on. If a tool must be present for a flow to succeed, declare it from the start instead of relying on a post-init update arriving.
