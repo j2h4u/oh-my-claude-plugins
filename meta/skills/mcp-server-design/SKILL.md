@@ -200,7 +200,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 - **The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it**
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
-- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. `[CONDITIONAL]` Exception: under the daemon + on-demand server pattern, stderr is piped to the MCP client (not the operator), so the MCP server must NOT write to stderr — it ships logs to the daemon over the socket. Canonical rule and rationale: [references/daemon-architecture.md](references/daemon-architecture.md)
+- For `stdio`, **all logging goes to `stderr`** — `stdout` carries JSON-RPC and any other byte corrupts the transport silently. Canonical rule, transport table, and the daemon-pattern exception: [references/security-threats.md §Transport choice and stderr](references/security-threats.md).
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
 → Security per transport: [references/security-threats.md](references/security-threats.md)
@@ -212,7 +212,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 - **Prompt injection** — delimit untrusted content in tool responses; never inject raw message/file/DB content
 - **Localhost exposure** — bind to `127.0.0.1` or Unix socket; never expose without auth on public interface
-- **Annotation trust** — annotations are hints only; enforcement belongs in server access control, not client
+- **Annotation trust** — annotations are hints, not security boundaries. A server can declare any values; clients MUST NOT auto-approve based on them alone. Set accurately, enforce server-side. → [tool-design.md §Annotations](references/tool-design.md)
 - **Input boundary** — validate all paths, shell arguments, URLs, tenant IDs, and secrets server-side
 
 → Threat reference (data injection, authn/authz, sessions, DoS, secrets, supply chain, release stability): [references/security-threats.md](references/security-threats.md)
