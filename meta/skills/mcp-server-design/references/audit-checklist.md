@@ -16,7 +16,7 @@
 
 ## 2. Tool Naming and Classification
 
-- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. This audit enforces the **convention** pattern `^[a-z0-9_]{1,64}$`. The spec accepts a wider range (`^[A-Za-z0-9_\-.]{1,128}$`) — a server using the wider range isn't spec-broken, but mark it as a convention finding so the auditee can decide. → [tool-design.md §Naming](tool-design.md#naming)
+- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. This audit enforces the **convention** pattern `^[a-z0-9_]{1,64}$`. The 2025-11-25 spec accepts a wider range (`^[a-zA-Z0-9_-]{1,128}$` — no dots) — a server using the wider range isn't spec-broken, but mark it as a convention finding so the auditee can decide. → [tool-design.md §Naming](tool-design.md#naming)
 - [ ] * `[OPINIONATED]` **`title` field set on every tool** — 1–3 words, sentence case, product language. Not a reformatted `name` ("Search Ozon", not `"Search Ozon"` = `ozon_search`). *Skip when:* no client in your target matrix surfaces `title` distinctly from `name`.
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail. *Skip when:* surface has <5 tools (no posture distinction is load-bearing).
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
@@ -86,7 +86,7 @@
 ## 9. Long-Running Operations
 
 - [ ] `[UNIVERSAL]` **No blocking tools > a few seconds** — tools that invoke slow external APIs, file processing, or background sync use the **roll-your-own async handle** (return task ID immediately, separate polling tool) or the Tasks spec primitive once the [clients.md matrix](clients.md#cross-client-capability-matrix) confirms support.
-- [ ] `[UNIVERSAL]` **Roll-your-own async handle implemented correctly** — the submit tool never blocks; it only enqueues and returns `{id, status: "working"}`. Wire shape: [examples/long-running-tasks-wire-shape.md](../examples/long-running-tasks-wire-shape.md#roll-your-own-fallback-use-today).
+- [ ] `[CONDITIONAL]` **Roll-your-own async handle implemented correctly** — the submit tool never blocks; it only enqueues and returns `{id, status: "working"}`. Wire shape: [examples/long-running-tasks-wire-shape.md](../examples/long-running-tasks-wire-shape.md#roll-your-own-fallback-use-today). *Skip when:* server exposes only Tasks-augmented tools (`taskSupport: "optional"` or `"required"`) and every target client negotiates `tasks`.
 
 ---
 
@@ -102,7 +102,7 @@
 ## 11. System Prompt (`server.instructions`)
 
 - [ ] `[OPINIONATED]` **System prompt exists and is non-empty** — server has `server.instructions` set. *Skip when:* no domain-specific orientation is load-bearing (tool descriptions already carry every directive). Empty/near-empty `server.instructions` is worse than absent — omit entirely if there is nothing to say.
-- [ ] `[OPINIONATED]` **Feedback directive present** — verbatim string: "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session." Canonical owner: `agent-ux.md §System Prompt as Configuration Surface`. *Skip when:* §10 `submit_feedback` is N/A (no maintainer queue) — a directive referencing a non-existent tool is worse than no directive.
+- [ ] `[OPINIONATED]` **Feedback directive present** — verbatim string: "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session." Canonical owner: `agent-ux.md §System Prompt as Configuration Surface`. *Skip when:* `submit_feedback` is **not** deployed — N/A *or* considered-and-rejected per §10. A directive referencing a non-existent tool is worse than no directive.
 - [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow. *Skip when:* server's surface has no multi-step flow worth naming (every tool stands alone).
 - [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time. *Skip when:* server is stateless / per-session state is captured fully in tool responses.
 - [ ] `[OPINIONATED]` **System prompt is minimal, not maximal** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt as Configuration Surface`) — every directive justified by an observed agent failure without it. Growth is a smell: either the missing piece is a tool, or the directive belongs in a tool description.

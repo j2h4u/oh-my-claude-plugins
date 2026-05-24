@@ -66,7 +66,7 @@ Rotate daily, retain 30–90 days. **Which process owns the log file depends on 
 
 | Pattern | Who writes the JSONL |
 |---|---|
-| `stdio` (no daemon) | The MCP server. UNIVERSAL rule: logs go to `stderr` or to a sink reachable from the server process; `stdout` is JSON-RPC only — any other byte corrupts the transport silently. |
+| `stdio` (no daemon) | The MCP server writes the JSONL file directly. UNIVERSAL rule: `stdout` is JSON-RPC only — any other byte corrupts the transport silently. Diagnostic / human-readable logs go to `stderr`; structured event logs (JSONL) go to a file the server process owns (e.g. `~/.<server>/logs/calls.jsonl`). |
 | Daemon + on-demand | The daemon (via its Unix socket). MCP-server child writes nothing on either stdio stream — inversion explained in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern). |
 
 File path is your choice — typical: `~/.<server>/logs/calls.jsonl` (per-user) or `/var/log/<server>/calls.jsonl` (system).
@@ -187,7 +187,7 @@ miss.
 
 ---
 
-## Quick check
+## Quick Checks
 
 - [ ] Every tool call produces a log/event with at minimum `ts`, `tool_name`, `status`, `duration_ms`
 - [ ] No raw argument values, no full response bodies, no secrets in the log

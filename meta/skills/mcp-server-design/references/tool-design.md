@@ -49,7 +49,7 @@ mark_dialog_for_sync  search_messages    get_sync_status
 - Avoid generic names: `get_data`, `run_query` — useless to the LLM
 - Watch for namespace collisions with the client: `get_me` intercepted by some clients → use `get_my_account`
 
-**Pattern:** `^[a-z0-9_]{1,64}$` (snake_case + underscores for namespacing). Spec allows more (hyphens, dots, 128 chars); ecosystem uses this narrower form — match it.
+**Pattern:** `^[a-z0-9_]{1,64}$` (snake_case + underscores for namespacing). The 2025-11-25 spec character class is `^[a-zA-Z0-9_-]{1,128}$` — wider (mixed case, hyphens, 128 chars), but ecosystem convention is the narrower snake_case form. Dots are **not** in the spec character class.
 
 **Namespacing in multi-server environments:** prefix the service — `asana_search`, `jira_issue_get`. Prefix before verb (LLMs scan domain-first when picking between servers).
 
@@ -280,7 +280,7 @@ return a handle and let the client poll.
 | < 2 s        | Synchronous | Most read tools fall here. No special handling. |
 | 2–20 s       | Synchronous, with a timeout-warning note in the description | Watch the client's tool-call timeout — see [clients.md](clients.md). Some hosts abort at 30 s; some users abort sooner. |
 | 20 s – 2 min | `taskSupport: "optional"` if any target client supports Tasks; else roll-your-own handle | `optional` keeps synchronous fallback working. Roll-your-own = submit tool returns a handle + separate polling tool. |
-| > 2 min      | `taskSupport: "required"` once your target clients negotiate `tasks` at `initialize`; until then, roll-your-own handle | Synchronous calls will be aborted by client timeouts. Marking `required` on a client that doesn't support Tasks breaks the tool — verify the [clients.md cross-client matrix](clients.md#cross-client-capability-matrix) first. |
+| > 2 min      | Roll-your-own handle (no tracked client negotiates `tasks` today). Switch to `taskSupport: "optional"` once your matrix confirms; switch to `"required"` only after every target client negotiates `tasks`. | Synchronous calls will be aborted by client timeouts. `"required"` rejects synchronous calls on clients that don't support Tasks — see [clients.md cross-client matrix](clients.md#cross-client-capability-matrix). |
 
 There are two ways to expose the non-synchronous patterns. **Prefer the spec primitive when the
 client supports it; fall back to the roll-your-own pattern when it doesn't.**

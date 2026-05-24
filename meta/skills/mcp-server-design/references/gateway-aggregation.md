@@ -163,9 +163,7 @@ Rules:
 - Preserve each backend's `title`, annotations, `outputSchema`, and `structuredContent`; the
   gateway should not be a reason to weaken tool contracts.
 
-Audit trigger: if the aggregated endpoint exposes >10 primary tools, ask whether to split or
-filter. The ≤10 signal applies to gateways too — see
-[tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal).
+Audit trigger: if the aggregated endpoint exposes >10 primary tools, ask whether to split or filter. The ≤10 signal applies to gateways too — but the prefix-namespacing skip-when from SKILL.md §Quick Checks does not apply here, because gateways aggregate distinct backends and the agent still has to choose among all of them at one go. Split endpoints by audience/workflow before relying on prefixes alone — see [tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal).
 
 ---
 

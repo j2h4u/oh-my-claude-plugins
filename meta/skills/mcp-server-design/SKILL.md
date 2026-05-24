@@ -47,7 +47,7 @@ as protocol requirements.
 | Tool `annotations` | Posture hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) — advisory, not security. `title` is **top-level on the Tool object** per spec, not inside `annotations`. **Asymmetric default:** `destructiveHint` defaults to `true` (opt-out) but is **only meaningful when `readOnlyHint: false`** — on read-only tools it's ignored. Forgetting to set it to `false` on an additive write (e.g. `submit_feedback`) silently marks the tool destructive. → [tool-design.md §Annotations](references/tool-design.md#annotations). |
 | `posture` (primary / secondary) | Project-level classification used by this skill (not a protocol field — secondary tools still appear in `tools/list` and count for the client). Primary = user-facing capability; secondary = plumbing (`health`, polling/status pairs, `submit_feedback`). Drives the ≤10 design signal, not a runtime filter. |
 | `resource_link` | Tool result type that returns a URI pointer instead of inlining content. Design use: large payloads, already-addressable resources. Not guaranteed to appear in `resources/list`. |
-| `icons` | Optional icon array on Tool/Resource/Prompt (SEP-973, spec 2025-11-25). Pure presentation — no client in [clients.md](references/clients.md#cross-client-capability-matrix) is known to render them today. Design implication only when targeting clients that confirm rendering — don't invest in icon assets ahead of that confirmation. |
+| `icons` | Optional icon array on Tool/Resource/Prompt (SEP-973, spec 2025-11-25). Pure presentation — no client tracked in [clients.md](references/clients.md) is known to render them today. Design implication only when targeting clients that confirm rendering — don't invest in icon assets ahead of that confirmation. |
 
 ---
 
@@ -106,7 +106,7 @@ References verified as of **2026-05-24**; per-file recheck dates inside [clients
 - Error messages must be actionable: include what went wrong + diagnostic detail + `Action:` hint
 - Flat parameter schemas — no bare `dict` / `object` without `properties`. Typed nested models with fully-declared `properties` at ≤1 level are fine; ≥2 levels hallucinate regardless of typing. → [tool-design.md §Argument Flattening](references/tool-design.md#argument-flattening)
 - Hard-cap all list responses; include pagination token when truncated
-- ≤10 primary tools is a signal, not a hard cap *(OPINIONATED — rationale and decision test in `references/tool-design.md` §Classification)*. Diagnostic tools (`health`, `version`), polling tools paired with the roll-your-own async handle or the Tasks spec primitive (`taskSupport: required` — per-tool flag declared via the Tasks SEP, see [tool-design.md §Long-Running Operations](references/tool-design.md#long-running-operations)), and the `submit_feedback` channel are *secondary* — they don't count against the ≤10 budget.
+- ≤10 primary tools is a signal, not a hard cap *(OPINIONATED — rationale and decision test in `references/tool-design.md` §Classification)*. Secondary tools that don't count against the budget: diagnostics (`health`, `version`); the roll-your-own polling tool paired with its submit tool ([tool-design.md §Long-Running Operations](references/tool-design.md#long-running-operations)); and the `submit_feedback` channel. *Secondary* is a design-time classification, not a runtime filter — these tools still appear in `tools/list`.
 - Spec MUST: declare `tools` capability whenever the server exposes tools. Minimum is `"tools": {}`; upgrade to `"tools": {"listChanged": true}` only when your tool set mutates after init (auth gating, feature flags, multi-tenant). Declaring `listChanged: true` on a static surface misleads defenders into watching for events that never fire; delivery across clients is uneven — see [clients.md cross-client matrix](references/clients.md#cross-client-capability-matrix) and [tool-design.md §Dynamic Tool Sets](references/tool-design.md#dynamic-tool-sets--listchanged).
 
 → Full conventions: [references/tool-design.md](references/tool-design.md)
@@ -174,11 +174,11 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 **Streamable HTTP** = MCP's current HTTP transport (spec 2025-11-25): one endpoint accepting POST + GET, server picks `application/json` or `text/event-stream` per response. Replaces the deprecated HTTP+SSE transport (2024-11-05). **Design-binding rules** (the rest of the protocol shape is in the spec):
 
-- Server MUST validate `Origin` (403 if invalid). FastMCP / Python `mcp` and TS SDK do this by default; verify it's not disabled. Allow-list must match what your client actually sends.
+- Server MUST validate **both `Host` and `Origin`** (403 if invalid). `Host` is the load-bearing DNS-rebinding defence; `Origin` is defence in depth. **Do not assume your SDK does this by default** — FastMCP and the TS SDK ship without an allow-list enabled; configure it explicitly. Allow-list must match what your client actually sends. Full SDK-defaults caveat + probes: [security-threats.md §0 — HTTP Origin + Host validation](references/security-threats.md#http-origin--host-validation-dns-rebinding-defence).
 - Bind to localhost (not `0.0.0.0`) by default — relax only for the docker-network + auth-gateway pairing in the table above. Unix domain socket is the strongest mitigation (browsers cannot reach it).
 - The old HTTP+SSE transport (spec 2024-11-05) is deprecated — never use it.
 - `[STACK:remote-multi-server]` Put auth/proxy/ingress in front of a curated gateway, not in every backend server
-- **For `stdio`, all logging goes to `stderr`. `stdout` carries JSON-RPC; any other byte on `stdout` corrupts the transport silently.** This is the UNIVERSAL rule — applies to every stdio MCP server, every language, every SDK. Probe: `your_server </dev/null >/tmp/out 2>/dev/null & pid=$!; sleep 1; kill $pid; wc -c /tmp/out` must print 0. The one exception is the daemon + on-demand pattern, where the MCP-server child is silent on **both** streams and logs travel to the daemon over the Unix socket — see [daemon-architecture.md §Stderr Rule](references/daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+- **For `stdio`: `stdout` is JSON-RPC only. Any other byte on `stdout` corrupts the transport silently.** This is the UNIVERSAL rule — applies to every stdio MCP server, every language, every SDK. Diagnostic / human-readable logging goes to `stderr`; structured event logs (e.g. JSONL usage logs) go to a file the server process owns — see [observability.md §Where to store](references/observability.md#where-to-store-opinionated-defaults). Probe: `your_server </dev/null >/tmp/out 2>/dev/null & pid=$!; sleep 1; kill $pid; wc -c </tmp/out` must print 0. The one exception is the daemon + on-demand pattern, where the MCP-server child is silent on **both** streams and logs travel to the daemon over the Unix socket — see [daemon-architecture.md §Stderr Rule](references/daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
 → Gateway aggregation: [references/gateway-aggregation.md](references/gateway-aggregation.md)
 → Security per transport: [references/security-threats.md](references/security-threats.md)
@@ -190,6 +190,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 
 - **Prompt injection** — delimit untrusted content in tool responses; never inject raw message/file/DB content
 - **Localhost exposure** — bind to `127.0.0.1` or Unix socket; never expose without auth on public interface
+- **DNS rebinding (Streamable HTTP)** — validate both `Host` and `Origin` headers; SDK defaults often have no allow-list. Canonical rule + probes: [security-threats.md §0](references/security-threats.md#http-origin--host-validation-dns-rebinding-defence)
 - **Annotation trust** — annotations are hints, not security boundaries. Canonical statement + design implications: [tool-design.md §Annotations](references/tool-design.md#annotations)
 - **Input boundary** — validate all paths, shell arguments, URLs, tenant IDs, and secrets server-side
 
@@ -216,7 +217,7 @@ Per-call logs drive dead-tool / hot-tool / error-rate decisions. Minimum fields:
 
 Before shipping or handing off:
 
-- [ ] `title` set on every tool `[OPINIONATED]` — **top-level on the Tool object**, 1–3 words, sentence case, user-facing. *Skip when:* no target client surfaces `title` distinctly from `name`.
+- [ ] `title` set on every tool `[OPINIONATED]` — **top-level on the Tool object**, 1–3 words, sentence case, user-facing. *Skip when:* no client in your target matrix renders `title` distinctly from `name`.
 - [ ] `server.instructions` reviewed `[OPINIONATED]` — empty / near-empty is worse than absent; either grow it to a real configuration surface or omit entirely. Budget + canonical shape: [agent-ux.md §System Prompt as Configuration Surface](references/agent-ux.md#system-prompt-as-configuration-surface).
 - [ ] Tools designed for outcomes, not 1:1 endpoint wrappers
 - [ ] Primary tool count scrutinised against the ≤10 signal `[OPINIONATED]` — see [tool-design.md §Tool Classification](references/tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal). *Skip when:* surface intentionally domain-broad with prefix namespacing across many tools — namespacing carries the load instead.
@@ -224,7 +225,8 @@ Before shipping or handing off:
 - [ ] *(if adopting feedback pattern — see feedback-tool.md §When NOT to use)* `submit_feedback` present `[OPINIONATED]` — write-only, fire-and-forget; system prompt includes feedback directive. *Skip when:* no maintainer reads the queue, deployment is short-lived/demo, or environment is adversarial.
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
-- [ ] For `stdio`, logs go to `stderr`, never `stdout`
+- [ ] For `stdio`, `stdout` is JSON-RPC only; diagnostic logs go to `stderr`, structured event logs to a file the server owns
+- [ ] For Streamable HTTP, `Host` **and** `Origin` allow-lists are configured (SDK defaults aren't safe) — see [security-threats.md §0](references/security-threats.md#http-origin--host-validation-dns-rebinding-defence)
 - [ ] No bare `dict` / `object` without `properties` in parameter schemas; typed nested models OK at ≤1 level
 - [ ] Per-call usage log in place `[OPINIONATED]` — `ts`, `tool_name`, `status`, `duration_ms` minimum. *Skip when:* pre-production / dev server with no real traffic — treat as debt to clear before first production deploy.
 - [ ] No raw argument values or response bodies in any log `[UNIVERSAL]` — applies whether or not the usage log above exists; raw values may carry secrets, PII, or prompt-injected content.
@@ -234,7 +236,7 @@ Before shipping or handing off:
 ## What's Evolving
 
 - **If your tool returns HTML/JSON for rendering — keep `structuredContent` schema-stable.** MCP Apps ([SEP-1865](https://github.com/modelcontextprotocol/ext-apps)) is rolling out a `ui://` rendering extension; stable schemas keep its later adoption non-breaking.
-- **`sampling/createMessage` works in spec but not in tracked clients.** The 2025-11-25 spec keeps sampling and adds SEP-1577 (sampling with tools / server-side agent loops); only `includeContext` is soft-deprecated. But neither Claude Desktop nor Claude Code declares the capability ([clients.md](references/clients.md#cross-client-capability-matrix)) — so designing around sampling today produces dead code on those clients. Acceptable to *include* a sampling code path behind a capability check; not acceptable to make a primary tool's behaviour depend on it.
+- **`sampling/createMessage` works in spec but neither tracked client declares the capability.** The 2025-11-25 spec keeps sampling and adds SEP-1577 (sampling with tools / server-side agent loops); only `includeContext` is soft-deprecated. But neither Claude Desktop nor Claude Code declares the `sampling` capability ([clients.md](references/clients.md#cross-client-capability-matrix)) — so designing around sampling today produces dead code on those clients. Acceptable to *include* a sampling code path behind a capability check; not acceptable to make a primary tool's behaviour depend on it.
 - **Long-running tools today: the roll-your-own async handle is the working mechanism; `taskSupport: "optional"` is a future-leaning hedge.** `taskSupport` (per-tool field declared via the Tasks SEP) is a no-op on clients that don't negotiate the `tasks` capability — and no client in [clients.md](references/clients.md#cross-client-capability-matrix) is confirmed to do so today (2026-05-22). For Claude Desktop's defensive ~20s ceiling (single 26s observation — see [clients.md §Timeouts](references/clients.md#timeouts)), only the roll-your-own handle protects you; declaring `taskSupport: "optional"` alongside is harmless and switches on automatically when clients catch up. Reserve `taskSupport: "required"` until the matrix flips. Wire shape: [examples/long-running-tasks-wire-shape.md](examples/long-running-tasks-wire-shape.md).
 
 ## External References

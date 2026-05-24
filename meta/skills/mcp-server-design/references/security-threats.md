@@ -25,15 +25,17 @@ Any process on the host can send requests.
 - Never expose a local MCP server on a public interface without authentication
 - Stdio transport avoids this entirely — prefer it for local/CLI use
 
-### HTTP Origin validation
+### HTTP Origin + Host validation (DNS-rebinding defence)
 
-For Streamable HTTP transport, reject requests with invalid `Origin` headers — return
-HTTP 403. Without this, a malicious web page can issue cross-site requests to a
-locally-running server (CSRF). FastMCP / Python `mcp` and `@modelcontextprotocol/sdk-typescript`
-implement Origin validation in their HTTP transports by default — verify it has not been
-disabled in your server config, and that the allow-list of `Origin` values matches what
-your client actually sends. **Probe:** `curl -i -H 'Origin: http://evil.test' <your-endpoint>`
-must return 403. For raw / framework-direct HTTP implementations the check is on you.
+For Streamable HTTP transport, reject requests with invalid `Origin` **and** `Host` headers — return HTTP 403. Without both, a malicious web page can issue cross-site requests to a locally-running server (CSRF), and a DNS-rebinding attack can bypass `Origin` alone (browser sends the rebound IP as `Host`, while `Origin` still names a trusted site). `Host` validation is the load-bearing defence; `Origin` is defence in depth.
+
+**SDK defaults are not safe.** FastMCP and `@modelcontextprotocol/sdk-typescript` HTTP transports do **not** ship with an `Origin` / `Host` allow-list enabled by default — you must configure it. Check your SDK's current defaults before relying on them ([rmcp DNS-rebinding advisory](https://github.com/modelcontextprotocol/rust-sdk/security/advisories/GHSA-89vp-x53w-74fx), [CardinalOps — MCP defaults](https://cardinalops.com/blog/mcp-defaults-hidden-dangers-of-remote-deployment/)).
+
+**Probes** (both must return 403):
+- `curl -i -H 'Origin: http://evil.test' <your-endpoint>`
+- `curl -i -H 'Host: attacker.example' <your-endpoint>`
+
+For raw / framework-direct HTTP implementations the check is entirely on you.
 
 ### Annotation trust
 
@@ -64,7 +66,7 @@ for network-accessible deployments.
 
 **stdio stdout rule** — UNIVERSAL canonical in [SKILL.md §Transport](../SKILL.md#transport); daemon-pattern stderr inversion in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
-Diagnostic: `your_server </dev/null >/tmp/out 2>/dev/null & pid=$!; sleep 1; kill $pid; wc -c /tmp/out` should print 0. (Uses `$!` rather than `%1` so it works under CI / non-interactive shells where job control is off.)
+Diagnostic: `your_server </dev/null >/tmp/out 2>/dev/null & pid=$!; sleep 1; kill $pid; wc -c </tmp/out` must print 0. (Uses `$!` rather than `%1` so it works under CI / non-interactive shells where job control is off; `wc -c </file` prints byte count alone, no filename.)
 
 Remote-server auth shape is §3. Internal Docker networks with no untrusted neighbours can be plaintext.
 
@@ -191,7 +193,7 @@ Specific to Streamable HTTP transport.
 
 ### Origin / Host validation, DNS rebinding
 
-Canonical rule + SDK status + curl probe live in §0 *HTTP Origin validation*. The DNS-rebinding twist: validate `Host` (not only `Origin`) against an exact-hostname allowlist (`localhost`, `127.0.0.1`); require authentication even on `127.0.0.1` (localhost is not a trust boundary in a browser-attacker model); prefer a Unix domain socket for purely-local servers (browsers cannot reach it).
+Canonical rule + SDK defaults + curl probes live in §0 *HTTP Origin + Host validation*. Additional design notes: require authentication even on `127.0.0.1` (localhost is not a trust boundary in a browser-attacker model); prefer a Unix domain socket for purely-local servers (browsers cannot reach it). Host allow-list should contain exact hostnames you accept (`localhost`, `127.0.0.1`) — wildcard or missing allow-list means rebinding succeeds.
 
 ### TLS for non-loopback HTTP
 

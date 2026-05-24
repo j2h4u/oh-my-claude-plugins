@@ -26,7 +26,7 @@ Description content moves tool selection; structural tags don't. Levers, in roug
 | **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Writing Tool Descriptions` |
 | **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` |
 | **Sharper, distinct descriptions** | Each description semantically distant from others; near-duplicates collapse selection | `tool-design.md §Writing Tool Descriptions` |
-| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` — all live inside `annotations`. `title` is top-level on the `Tool` object per spec (older SDK examples sometimes placed it inside `annotations`; canonical location is top-level). | `tool-design.md §Annotations` |
+| **Formal MCP metadata** | `title` (top-level on the `Tool` object per spec — older SDK examples sometimes placed it inside `annotations`; canonical location is top-level), plus the `annotations` object holding `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. | `tool-design.md §Annotations` |
 | **Toolsets / config-level grouping** | Let operators enable/disable groups at install time (e.g. GitHub MCP `--toolsets`) | organisational pattern |
 
 Do not prefix descriptions with `[primary]` / `[secondary/helper]` — not a validated lever.
@@ -88,7 +88,7 @@ async def _build_server_instructions() -> str:
     try:
         async with daemon_connection() as conn:
             data = (await conn.get_me())["data"]
-        base += f' Connected account: id={data["id"]}, name="{name}".'
+        base += f' Connected account: id={data["id"]}, name="{data["name"]}".'
     except Exception:
         pass  # degrade gracefully
     return base
@@ -129,8 +129,8 @@ Apply at both layers:
 These address different failure modes and are run at different points in the lifecycle.
 Both require `submit_feedback` deployed and the feedback directive in the system prompt.
 
-**Dark-room** = "does it function when the agent is blind?" — a smoke test run after
-every significant change. **Agent CustDev** = "does the agent's strategy match the
+**Dark-room** = "does it function when the agent is blind?" — a behavioural check run after
+every significant surface change. **Agent CustDev** = "does the agent's strategy match the
 designer's intent?" — an API design review run once after the first complete surface,
 then after major redesigns.
 

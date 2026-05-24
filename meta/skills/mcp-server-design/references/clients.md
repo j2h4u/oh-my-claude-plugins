@@ -15,17 +15,17 @@
 | Tools | ✅ | ✅ |
 | Resources | ✅ | ✅ (`@server:proto://path` mention) |
 | Prompts | ✅ | ✅ (`/mcp__<server>__<prompt>` slash) |
-| `elicitation` (mid-call user input) | ❌ not declared | ✅ since v2.1.76 |
+| `elicitation` (mid-call user input) | ❌ not declared | ✅ |
 | `roots` | ❌ not declared | ⚠️ unverified |
-| `sampling` (deprecated DRAFT-2026-v1) | ❌ + deprecated | ❌ + deprecated |
+| `sampling/createMessage` | ❌ not declared | ❌ not declared |
 | `completions` | ❌ not declared | ⚠️ unverified |
-| `notifications/tools/list_changed` | ⚠️ likely dropped | ✅ since v2.1.0 |
+| `notifications/tools/list_changed` | ⚠️ likely dropped | ✅ |
 | `notifications/message` (logging → model) | ❌ silently dropped | ⚠️ unverified |
 | `notifications/progress` | ❌ no `progressToken` sent | ⚠️ unverified |
 | `tasks` (SEP-1686) | ⚠️ not observed in `initialize` | ⚠️ unverified |
-| OAuth 2.1 for remote servers | n/a (subprocess client) | ✅ since v1.0.27 (RFC 9728 + dynamic client registration) |
-| Tool-call timeout knob | ~20s defensive (single 26s observation) | `MCP_TOOL_TIMEOUT` env var, no default |
-| Output budget | not published | `MAX_MCP_OUTPUT_TOKENS=25000`, warn at 10000 |
+| OAuth 2.1 for remote servers | n/a (subprocess client) | ✅ (RFC 9728 + dynamic client registration) |
+| Tool-call timeout knob | ~20s defensive (single observation — see Timeouts below) | `MCP_TOOL_TIMEOUT` env var |
+| Output budget | not published | `MAX_MCP_OUTPUT_TOKENS` env var (see Claude Code docs for current default) |
 
 **Safe-surface rule when targeting both:** assume only the non-interactive subset works
 (Tools, Resources, Prompts, `isError`, `server.instructions`, tool descriptions). Push
@@ -46,10 +46,6 @@ Source: MCP debug log (raw JSON-RPC frames) + `sendLoggingMessage` probes + dire
 
 Capability statuses are in the cross-client matrix above; design implications below.
 
-Notable Claude-Desktop-only signal: `io.modelcontextprotocol/ui` capability is declared (proprietary — likely HTML/React artefact rendering; does not affect tool UX).
-
----
-
 ### Server → Client Notifications
 
 | Notification | Status | Details |
@@ -66,7 +62,7 @@ Notable Claude-Desktop-only signal: `io.modelcontextprotocol/ui` capability is d
 ### Timeouts
 
 - **Observed:** socket closed after ~26s in one LLM-enriched search operation (single data point on mcp-server-ozon, 2026-04-28 — not a spec limit and not a Desktop-published budget).
-- **Operator-chosen safety margin:** plan for ≤20s end-to-end based on the single 26s observation. Anything longer carries cancellation risk on this client; until more data points exist, treat 20s as defensive guidance, not a documented limit.
+- **n=1 caveat:** the 26s observation is one event. Until more data exists, treat "<20s end-to-end" as a defensive heuristic for this client, not a documented ceiling. Probe before designing around a specific number.
 - **After socket close:** server continues executing (lock held), but the result has nowhere to go.
 - **On reconnect:** a new call finds the lock and receives the "server busy" message — agent sees this and can act on it.
 
@@ -85,7 +81,7 @@ In order of reliability:
 | `notifications/message` | ❌ Dropped | — |
 | `notifications/progress` | ⚠️ Unknown | Only if client sends `progressToken` |
 | `elicitation/create` | ❌ Not supported | — |
-| `sampling/createMessage` | ❌ Not supported, deprecated protocol-wide | — |
+| `sampling/createMessage` | ❌ Capability not declared | — |
 
 ---
 
@@ -107,7 +103,7 @@ In order of reliability:
 **What NOT to implement for Claude Desktop:**
 - Push progress notifications (model won't see them)
 - `elicitation` mid-execution (not supported)
-- `sampling/createMessage` (not supported, deprecated protocol-wide)
+- `sampling/createMessage` (capability not declared)
 - Resource subscriptions (likely dropped, unverified)
 
 ---
@@ -122,7 +118,7 @@ Source: <https://code.claude.com/docs/en/mcp> and `anthropics/claude-code` CHANG
 
 Capability statuses are in the cross-client matrix above; design implications below. Two Claude-Code-specific notes:
 
-- **OAuth 2.1 (since v1.0.27)** — full RFC 9728 with dynamic client registration, plus a `headersHelper` script alternative for non-OAuth scenarios (see *Dynamic Headers* below).
+- **OAuth 2.1** — full RFC 9728 with dynamic client registration, plus a `headersHelper` script alternative for non-OAuth scenarios (see *Dynamic Headers* below). Verify the version range you need against the [Claude Code changelog](https://code.claude.com/docs/en/changelog).
 - **`elicitation` works** — server can request structured mid-task user input via an interactive dialog.
 
 ---
@@ -138,8 +134,8 @@ Capability statuses are in the cross-client matrix above; design implications be
 
 | Knob | Value | Design implication |
 |------|-------|--------------------|
-| `MCP_TOOL_TIMEOUT` | ms, no default | Operators set per-server; design slow tools to fit or use async-handle pattern. |
-| `MAX_MCP_OUTPUT_TOKENS` | 25 000 default, warn at 10 000 | Paginate / compress before this; per-tool override via `anthropic/maxResultSizeChars` (≤ 500 KB). |
+| `MCP_TOOL_TIMEOUT` | env var (milliseconds) | Operators set per-server; design slow tools to fit or use async-handle pattern. Default and bounds: [Claude Code MCP docs](https://code.claude.com/docs/en/mcp). |
+| `MAX_MCP_OUTPUT_TOKENS` | env var (tokens) | Paginate / compress against this. Default value: [Claude Code MCP docs](https://code.claude.com/docs/en/mcp). Per-tool override: `anthropic/maxResultSizeChars` namespaced field on the tool definition. |
 
 ---
 
@@ -154,7 +150,7 @@ Capability statuses are in the cross-client matrix above; design implications be
 
 ### Tool Name Constraints
 
-No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. The spec range (`^[A-Za-z0-9_\-.]{1,128}$`) is what Claude Code accepts; the snake_case convention pattern lives in [tool-design.md §Naming](tool-design.md#naming).
+No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. The 2025-11-25 spec character class for tool names is `^[a-zA-Z0-9_-]{1,128}$` (alphanumerics, underscore, hyphen; **dots are not in the spec class** — older drafts allowed them). The snake_case convention pattern lives in [tool-design.md §Naming](tool-design.md#naming).
 
 ---
 
@@ -168,7 +164,7 @@ No stricter-than-spec enforcement observed. CHANGELOG references tool-name issue
 
 - **Elicitation works** — servers can request additional user input mid-execution. Worth using over embedding all context in the tool description when optional parameters need clarification.
 - **Dynamic tool lists work** — use `notifications/tools/list_changed` for servers that add/remove tools at runtime (feature flags, multi-tenant surfaces).
-- **Output token budget is generous but finite** — 25 000 tokens default. For large payloads, use `anthropic/maxResultSizeChars` annotation on the tool definition. Compress or paginate before hitting the limit.
+- **Output token budget is generous but finite** — `MAX_MCP_OUTPUT_TOKENS` env var caps total output (default in the [Claude Code MCP docs](https://code.claude.com/docs/en/mcp); verify per version). For large payloads, use the `anthropic/maxResultSizeChars` namespaced field on the tool definition. Compress or paginate before hitting the limit.
 - **`MCP_TOOL_TIMEOUT` is the right knob for slow tools** — set it server-side in `.mcp.json` env block, not in tool logic.
 - **Sampling: do not use** — no evidence of support, and the primitive is deprecated protocol-wide.
 - **`claude mcp serve`** exposes Claude Code itself as an MCP server (stdio) — useful for agent-to-agent tool sharing.
