@@ -4,7 +4,7 @@
 
 ---
 
-## Three Primitives
+## Picking a Primitive — Tool, Resource, or Prompt
 
 MCP defines three distinct server primitives. Always use the right one.
 
@@ -75,7 +75,7 @@ Do not write `title: "Get My Recent Activity"` (just a reformatted `name`). Writ
 
 ---
 
-## Classification
+## Tool Classification — Primary vs Secondary and the 10-Tool Signal
 
 Tools ship in two tiers.
 
@@ -187,65 +187,7 @@ programmatic extraction. Never omit required `structuredContent` just to save to
 
 ### Full example
 
-Tool definition:
-
-```json
-{
-  "name": "search_orders",
-  "title": "Search orders",
-  "description": "Call when the user asks about their orders, order history, or shipment status. Searches orders by customer email and optional status filter. Returns a list of matching orders with id, status, total, and tracking number.",
-  "inputSchema": {
-    "type": "object",
-    "required": ["email"],
-    "additionalProperties": false,
-    "properties": {
-      "email":  { "type": "string", "description": "Customer email address to search by" },
-      "status": { "type": "string", "enum": ["pending", "shipped", "delivered", "cancelled"], "description": "Filter to orders with this status; omit to return all statuses" },
-      "limit":  { "type": "integer", "minimum": 1, "maximum": 50, "default": 10, "description": "Maximum number of orders to return" }
-    }
-  },
-  "outputSchema": {
-    "type": "object",
-    "required": ["orders", "total"],
-    "additionalProperties": false,
-    "properties": {
-      "orders": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": ["id", "status", "total_usd", "tracking_number"],
-          "additionalProperties": false,
-          "properties": {
-            "id":             { "type": "string" },
-            "status":         { "type": "string", "enum": ["pending", "shipped", "delivered", "cancelled"] },
-            "total_usd":      { "type": "number" },
-            "tracking_number":{ "type": ["string", "null"] }
-          }
-        }
-      },
-      "total": { "type": "integer", "description": "Total matching orders before limit" }
-    }
-  },
-  "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
-}
-```
-
-Matching tool response:
-
-```json
-{
-  "structuredContent": {
-    "orders": [
-      { "id": "ORD-8821", "status": "shipped",   "total_usd": 59.99, "tracking_number": "1Z999AA10123456784" },
-      { "id": "ORD-8734", "status": "delivered",  "total_usd": 24.50, "tracking_number": "1Z999AA10123456001" }
-    ],
-    "total": 2
-  },
-  "content": [{ "type": "text", "text": "2 orders: ORD-8821 (shipped, $59.99, tracking 1Z999AA10123456784); ORD-8734 (delivered, $24.50, tracking 1Z999AA10123456001)." }]
-}
-```
-
-The text block is a compact human-readable preview, not a JSON dump — see *Token economy for tabular data* above. The full machine-readable payload stays in `structuredContent`.
+→ [`examples/structured-output-search-orders.md`](../examples/structured-output-search-orders.md) — full tool definition + matching response, showing the canonical shape (`outputSchema` + `structuredContent` + compact text preview + all four annotations).
 
 ---
 
@@ -393,70 +335,13 @@ client supports it; fall back to the roll-your-own pattern when it doesn't.**
 
 > ⚠️ **As of 2026-05, no client tracked in [clients.md](clients.md) has confirmed Tasks support, and the major SDKs (`mcp`/FastMCP, `@modelcontextprotocol/sdk-typescript`) do not yet expose first-class registration helpers for the wire shapes below — they may need to be hand-emitted in the capabilities/tool payload. Use the roll-your-own pattern below as the default today; treat this section as future-leaning. Verify the cross-client matrix and your SDK version before shipping.**
 
-The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`,
-`elicitation/create`). Two declarations are required — top-level capability at `initialize`, plus per-tool intent.
+The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`, `elicitation/create`). **Two declarations are required** — top-level `tasks` capability at `initialize`, plus per-tool intent via `execution.taskSupport` (`forbidden` default | `optional` | `required`).
 
-**1. Declare the `tasks` capability at `initialize`** — without this, clients won't augment any call:
-
-```jsonc
-{
-  "capabilities": {
-    "tools": {},
-    "tasks": { "requests": { "tools/call": true } }
-  }
-}
-```
-
-**2. Declare per-tool with `execution.taskSupport`:**
-
-```jsonc
-{
-  "name": "deep_research",
-  "description": "...",
-  "execution": { "taskSupport": "required" }  // "forbidden" | "optional" | "required"
-}
-```
-
-| Value | Meaning |
-|-------|---------|
-| `forbidden` | Default. Tool is invoked synchronously; no task augmentation. |
-| `optional` | Client may choose to augment with a task or call synchronously. |
-| `required` | Client must augment with a task — synchronous call is rejected. |
-
-Wire shape when the client augments:
-
-```jsonc
-// Client → server
-{"method":"tools/call","params":{"name":"deep_research","arguments":{...},"task":{"ttl":600000}}}
-// Server → client (immediate)
-{"result":{"taskId":"...","status":"working","createdAt":"...","ttl":600000,"pollInterval":2000}}
-// Client polls
-{"method":"tasks/get","params":{"taskId":"..."}}
-// Terminal: working | input_required | completed | failed | cancelled
-{"method":"tasks/result","params":{"taskId":"..."}}  // returns the original CallToolResult
-{"method":"tasks/cancel","params":{"taskId":"..."}}  // optional
-```
-
-Notes:
-- The receiver generates the task ID and may shorten the requested `ttl`.
-- Clients poll. `notifications/tasks/status` is optional — requestors must not rely on it.
-- Bind tasks to the session / auth context; use high-entropy IDs.
-- As of 2026-05, no client tracked in [clients.md](clients.md) has confirmed Tasks support. Treat
-  `taskSupport: "required"` as future-leaning — probe the target client first, or expose `optional`
-  so synchronous fallback still works.
+→ Full wire shape (`initialize` payload, per-tool declaration, `tools/call` augmentation, `tasks/get` / `tasks/result` / `tasks/cancel` polling): [`examples/long-running-tasks-wire-shape.md`](../examples/long-running-tasks-wire-shape.md). Server-side invariants (ID generation, `ttl` shortening, polling-only contract, session binding) live there too.
 
 ### Fallback — roll-your-own async handle
 
-For clients that don't yet implement tasks, expose two tools:
-
-1. Submit tool returns immediately with a domain `id` and `status: "working"`.
-2. A separate polling tool (`get_task_status`, `check_job_result`) takes the `id` and returns current state.
-3. Final state returns the actual result or error.
-
-No spec feature needed — just two tools and a server-side state store. Same invariant: the first
-tool never blocks; it only enqueues work and returns a handle. Prefer the spec primitive once your
-target clients support it — the roll-your-own pattern leaks polling cadence into prompt engineering
-and depends on the agent remembering to call the status tool.
+The default today (no tracked client negotiates `tasks`). Submit tool returns immediately with a domain `id` and `status: "working"`; a separate polling tool (`get_task_status`, `check_job_result`) returns current state until terminal. Same invariant as the spec primitive: the submit tool never blocks. Pattern leaks polling cadence into prompt engineering and depends on the agent calling the status tool — switch to the spec primitive once target clients support it. Full recipe: [`examples/long-running-tasks-wire-shape.md` §Roll-your-own](../examples/long-running-tasks-wire-shape.md#roll-your-own-fallback-use-today).
 
 ### When blocking is fine
 
@@ -465,7 +350,7 @@ timeout — see [clients.md](clients.md) for empirical numbers per host.
 
 ---
 
-## One Tool, One Concern
+## When to Split or Merge a Tool
 
 Split when:
 - Two modes have different descriptions/triggers

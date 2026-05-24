@@ -38,7 +38,7 @@ The agent makes one call; the context window sees one tool name.
 ## Rules
 
 - **80/20:** 20% of API capabilities serve 80% of user requests. Expose that 20% from real workflows; the rest does not justify tool explosion.
-- **≤10 primary tools per server** is a signal (see [tool-design.md §Classification](tool-design.md#classification)). Past it, split into domain-specific servers — never cram to avoid the split. *One server, one job.*
+- **≤10 primary tools per server** is a signal (see [tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal)). Past it, split into domain-specific servers — never cram to avoid the split. *One server, one job.*
 - **Bundle, don't expose.** Multiple API calls + filtering + normalisation belong inside the tool. That complexity is the point, not a smell.
 - **Curate ruthlessly.** Every tool added taxes every agent that loads the server. Merging tools that serve the same goal beats splitting them by implementation detail. A single tool with a filter parameter beats two tools with different return shapes.
 - **Tools, descriptions, errors are prompt engineering** — not documentation. The agent reads descriptions to decide what to call; error messages are observations it self-corrects on.

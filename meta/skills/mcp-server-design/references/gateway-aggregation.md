@@ -165,7 +165,7 @@ Rules:
 
 Audit trigger: if the aggregated endpoint exposes >10 primary tools, ask whether to split or
 filter. The ≤10 signal applies to gateways too — see
-[tool-design.md §Classification](tool-design.md#classification).
+[tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal).
 
 ---
 

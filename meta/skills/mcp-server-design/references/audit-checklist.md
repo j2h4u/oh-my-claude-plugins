@@ -6,7 +6,7 @@
 
 ## 1. Design Philosophy
 
-- [ ] * `[OPINIONATED]` **Tool count under scrutiny** — count primary tools in the registry. >10 is a signal to consolidate or split into domain servers, not a hard cap. See [tool-design.md §Classification](tool-design.md#classification) for rationale and exceptions.
+- [ ] * `[OPINIONATED]` **Tool count under scrutiny** — count primary tools in the registry. >10 is a signal to consolidate or split into domain servers, not a hard cap. See [tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal) for rationale and exceptions.
 - [ ] * `[UNIVERSAL]` **No thin API wrapper** — for each tool, ask: "does this map 1:1 to a backend endpoint?" If yes, it should bundle the downstream calls internally instead.
 - [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. `track_latest_order`, not `get_order_status`.
 - [ ] `[UNIVERSAL]` **One server, one job** — can you describe the server's purpose in one sentence? If not, scope is too broad.
@@ -17,8 +17,8 @@
 ## 2. Tool Naming and Classification
 
 - [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — e.g. `list_dialogs`, `get_entity_info`, `submit_feedback`. No `getData`, `RunQuery`, `handle_request` (too generic), no spaces or special chars. Convention pattern: `^[a-z0-9_]{1,64}$` (snake_case, underscores for namespacing). Spec range is wider (`^[A-Za-z0-9_\-.]{1,128}$`) and no tracked client narrows it — but underscores are the ecosystem convention; see [tool-design.md §Character set](tool-design.md).
-- [ ] * `[OPINIONATED]` **`title` field set on every tool** — `title` is optional per the MCP spec ([Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)); this is the skill's production recommendation, not a protocol requirement. Rationale: humans see `title` in Claude Desktop UI ("Claude is using…" blocks and the tool list); agents see `name` in their context. Both audiences are served by keeping these separate. Without `title`, the raw `name` is shown to users (`ozon_search`, `get_my_recent_activity`), leaking internal naming. 1–3 words, sentence case, in the product's language. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status".
-- [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail.
+- [ ] * `[OPINIONATED]` **`title` field set on every tool** — `title` is optional per the MCP spec ([Tools spec 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)); this is the skill's production recommendation, not a protocol requirement. Rationale: humans see `title` in Claude Desktop UI ("Claude is using…" blocks and the tool list); agents see `name` in their context. Both audiences are served by keeping these separate. Without `title`, the raw `name` is shown to users (`ozon_search`, `get_my_recent_activity`), leaking internal naming. 1–3 words, sentence case, in the product's language. Not a reformatted `name` — write what a user would say: "Search Ozon", "Recent activity", "Sync status". *Skip when:* no client in your target matrix surfaces `title` distinctly from `name` (verify against [clients.md](clients.md)).
+- [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail. *Skip when:* surface has <5 tools (no posture distinction is load-bearing).
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
 
 ---
@@ -40,7 +40,7 @@
 - [ ] `[UNIVERSAL]` **Parameter semantics in prose** — field meanings explained in description, not just in schema. The LLM reads descriptions; schema is for validation.
 - [ ] `[UNIVERSAL]` **Response shape documented** — non-trivial tools describe key fields, units, truncation, and whether text is a preview of `structuredContent`.
 - [ ] `[CONDITIONAL]` **Static reference material uses Resources** — field catalogs, enum lists, query syntax, and service limits are exposed as MCP Resources instead of repeated in tool descriptions.
-- [ ] `[OPINIONATED]` **Assertive proactive language present where relevant** — for tools the agent should call without being asked, the description includes a direct directive ("Use this proactively whenever…"). This is the empirically validated lever for biasing tool selection — see `agent-ux.md §What Actually Moves Tool Selection`.
+- [ ] `[OPINIONATED]` **Assertive proactive language present where relevant** — for tools the agent should call without being asked, the description includes a direct directive ("Use this proactively whenever…"). This is the empirically validated lever for biasing tool selection — see `agent-ux.md §What Actually Moves Tool Selection`. *Skip when:* every tool is reactive-only (only invoked on direct user request).
 
 ---
 
@@ -79,7 +79,7 @@
 - [ ] `[UNIVERSAL]` **Pagination tokens are opaque** — tokens encode enough state to reproduce the next page; agents don't need to parse them.
 - [ ] `[UNIVERSAL]` **Pagination token validated on next call** — mismatch (wrong dialog, wrong context) returns explicit error, not silent wrong results.
 - [ ] `[UNIVERSAL]` **Empty results distinguished from errors** — "no results" and "search failed" are different responses.
-- [ ] `[OPINIONATED]` **Tabular text output is compact** — text `content` does not repeat large JSON; use compact tables/CSV previews while preserving required `structuredContent`.
+- [ ] `[OPINIONATED]` **Tabular text output is compact** — text `content` does not repeat large JSON; use compact tables/CSV previews while preserving required `structuredContent`. *Skip when:* server has no tabular tools (only free-form summaries, confirmations, or single-object responses).
 
 ---
 
@@ -101,10 +101,10 @@
 
 ## 11. System Prompt (`server.instructions`)
 
-- [ ] `[OPINIONATED]` **System prompt exists and is non-empty** — server has `server.instructions` set.
-- [ ] `[OPINIONATED]` **Feedback directive present** — verbatim string: "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session." Canonical owner: `agent-ux.md §System Prompt as Configuration Surface`.
-- [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow.
-- [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time.
+- [ ] `[OPINIONATED]` **System prompt exists and is non-empty** — server has `server.instructions` set. *Skip when:* no domain-specific orientation is load-bearing (tool descriptions already carry every directive). Empty/near-empty `server.instructions` is worse than absent — omit entirely if there is nothing to say.
+- [ ] `[OPINIONATED]` **Feedback directive present** — verbatim string: "Use `submit_feedback` immediately when a tool response is wrong, surprising, or missing a useful capability — don't wait until end of session." Canonical owner: `agent-ux.md §System Prompt as Configuration Surface`. *Skip when:* §10 `submit_feedback` is N/A (no maintainer queue) — a directive referencing a non-existent tool is worse than no directive.
+- [ ] `[OPINIONATED]` **Named workflow patterns (ALL-CAPS)** — at least one named pattern for the most common multi-step flow. *Skip when:* server's surface has no multi-step flow worth naming (every tool stands alone).
+- [ ] `[OPINIONATED]` **Live state injected at startup** — connected account, active limits, or other runtime state built dynamically, not hardcoded at deploy time. *Skip when:* server is stateless / per-session state is captured fully in tool responses.
 - [ ] `[OPINIONATED]` **System prompt is minimal, not maximal** (see `SKILL.md §Agent UX` and `agent-ux.md §System Prompt as Configuration Surface`) — every directive justified by an observed agent failure without it. Growth is a smell: either the missing piece is a tool, or the directive belongs in a tool description.
 
 ---
@@ -170,17 +170,17 @@
 ## 15. Testing
 
 - [ ] `[UNIVERSAL]` **Integration smoke test exists** — calls every tool through the actual transport against a live server. Unit tests alone don't cover transport or schema serialisation.
-- [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Test`
+- [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Test`. *Requires:* `submit_feedback` deployed and the feedback directive in the system prompt — gate on §10 first.
 - [ ] `[OPINIONATED]` **Agent CustDev done at least once** — interview an agent that has used the server about pain points, missing primitives, confusing names. Distinct from dark-room: dark-room observes behaviour, CustDev solicits report. Both require `submit_feedback` deployed. → Protocol: `agent-ux.md §Two Kinds of Testing`
 
 ---
 
 ## 16. Observability
 
-- [ ] * `[OPINIONATED]` **Per-call usage log exists** — every tool call recorded with at minimum `ts`, `tool_name`, `status`, `duration_ms`. Without it, §1 80/20 check cannot be answered. → [observability.md](observability.md)
+- [ ] * `[OPINIONATED]` **Per-call usage log exists** — every tool call recorded with at minimum `ts`, `tool_name`, `status`, `duration_ms`. Without it, §1 80/20 check cannot be answered. → [observability.md](observability.md). *Skip when:* pre-production / development server with no real traffic — mark as debt to fix before first production deploy.
 - [ ] `[UNIVERSAL]` **No raw argument values or response bodies in the log** — only schema-only `args_shape`, sizes, and error classes. Raw values may carry secrets, PII, or prompt-injected content.
-- [ ] `[OPINIONATED]` **Reports are runnable, not just data** — dead-tool, error-rate-per-tool, p95-latency-per-tool queries exist or are trivial to write (DuckDB / SQL / Loki).
-- [ ] `[OPINIONATED]` **Dead-tool query has been acted on at least once** — tool surface has been pruned or descriptions rewritten based on usage data. A log that is never read is theatre.
+- [ ] `[OPINIONATED]` **Reports are runnable, not just data** — dead-tool, error-rate-per-tool, p95-latency-per-tool queries exist or are trivial to write (DuckDB / SQL / Loki). *Requires:* per-call usage log (previous item).
+- [ ] `[OPINIONATED]` **Dead-tool query has been acted on at least once** — tool surface has been pruned or descriptions rewritten based on usage data. A log that is never read is theatre. *Requires:* ≥30 days of production log (§1 80/20 prerequisite).
 
 ---
 

@@ -41,8 +41,8 @@ the references they link to.
 |------|------------------|
 | `stdio` transport | MCP over a process's stdin/stdout; the host launches the server as a subprocess. Default for Claude Desktop and CLI hosts. |
 | `Streamable HTTP` transport | The current MCP network transport (spec 2025-11-25): single endpoint, POST + GET. Server returns `application/json` or `text/event-stream` per response. Client MUST send `MCP-Protocol-Version` header. Replaces deprecated HTTP+SSE. |
-| **Resource** | Read-only addressable content the client/application selects and injects. Stable, URI-addressable. In Claude Code: `@server:proto://path` mention syntax (e.g. `@github:issue://123`). → [tool-design.md §Three Primitives](references/tool-design.md#three-primitives) |
-| **Prompt** | Parameterized text snippet the user invokes by name. Surfaces in Claude Code as `/mcp__<server>__<prompt>` slash command. → [tool-design.md §Three Primitives](references/tool-design.md#three-primitives) |
+| **Resource** | Read-only addressable content the client/application selects and injects. Stable, URI-addressable. In Claude Code: `@server:proto://path` mention syntax (e.g. `@github:issue://123`). → [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt) |
+| **Prompt** | Parameterized text snippet the user invokes by name. Surfaces in Claude Code as `/mcp__<server>__<prompt>` slash command. → [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt) |
 | `outputSchema` | JSON Schema declared on a tool that types its structured output. When declared, the server MUST return `structuredContent` on every successful call. |
 | `structuredContent` | Sibling of `content` in a tool result — carries typed JSON conforming to `outputSchema`. Lets clients render/parse without re-parsing text. |
 | `isError` | Boolean on the tool result. `true` = business/validation error the agent can recover from. Distinct from protocol exceptions (transport-level failures). |
@@ -112,8 +112,8 @@ Read sequentially. `clients` is third on purpose: it shapes downstream choices (
 
 **Choose the right primitive first:**
 - Model decides when to invoke it → **Tool**
-- Stable, URI-addressable context the client pre-loads → **Resource** (see [tool-design.md §Three Primitives](references/tool-design.md#three-primitives))
-- User triggers an explicit reusable workflow by name → **Prompt** (see [tool-design.md §Three Primitives](references/tool-design.md#three-primitives))
+- Stable, URI-addressable context the client pre-loads → **Resource** (see [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt))
+- User triggers an explicit reusable workflow by name → **Prompt** (see [tool-design.md §Picking a Primitive](references/tool-design.md#picking-a-primitive--tool-resource-or-prompt))
 
 **Tool rules:**
 - Names: `snake_case`, verb_noun — `list_dialogs`, `get_entity_info`, `submit_feedback`
@@ -270,17 +270,17 @@ Gateway / multi-server smoke: [gateway-aggregation.md §Smoke test](references/g
 
 Before shipping or handing off:
 
-- [ ] `title` set on every tool `[OPINIONATED]` — 1–3 words, sentence case, user-facing
+- [ ] `title` set on every tool `[OPINIONATED]` — 1–3 words, sentence case, user-facing. *Skip when:* no target client surfaces `title` distinctly from `name`.
 - [ ] Tools designed for outcomes, not 1:1 endpoint wrappers
-- [ ] Primary tool count scrutinised against the ≤10 signal `[OPINIONATED]` — see tool-design.md §Classification
+- [ ] Primary tool count scrutinised against the ≤10 signal `[OPINIONATED]` — see [tool-design.md §Tool Classification](references/tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal). *Skip when:* surface intentionally domain-broad with prefix namespacing across many tools — namespacing carries the load instead.
 - [ ] Mutating tools safe by default — draft/paused/dry-run unless explicit activation
-- [ ] *(if adopting feedback pattern — see feedback-tool.md §When NOT to use)* `submit_feedback` present `[OPINIONATED]` — write-only, fire-and-forget; system prompt includes feedback directive
+- [ ] *(if adopting feedback pattern — see feedback-tool.md §When NOT to use)* `submit_feedback` present `[OPINIONATED]` — write-only, fire-and-forget; system prompt includes feedback directive. *Skip when:* no maintainer reads the queue, deployment is short-lived/demo, or environment is adversarial.
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
 - [ ] For `stdio`, logs go to `stderr`, never `stdout`
 - [ ] Integration smoke test passes against live server
 - [ ] No bare `dict` / `object` without `properties` in parameter schemas; typed nested models OK at ≤1 level
-- [ ] Per-call usage log in place — `ts`, `tool_name`, `status`, `duration_ms` minimum; no raw args/responses `[OPINIONATED]`
+- [ ] Per-call usage log in place — `ts`, `tool_name`, `status`, `duration_ms` minimum; no raw args/responses `[OPINIONATED]`. *Skip when:* pre-production / dev server with no real traffic — treat as debt to clear before first production deploy.
 
 ---
 
