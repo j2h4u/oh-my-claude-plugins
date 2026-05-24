@@ -9,7 +9,7 @@
 
 A good REST API is not a good MCP server. REST endpoints assume a human writes the orchestration; MCP tools must *be* the orchestration. Map endpoints 1:1 → tool pollution (every loaded description taxes the context window) + choreography burden (agent reconstructs intent from low-level primitives) + transactionality breaks (call 2 of 3 fails, no recovery path).
 
-Block's Linear server: 30+ tools → 2 tools across three iterations, performance improving at each step. The failure mode is a cliff, not a slope.
+The failure mode is a cliff, not a slope — agent accuracy collapses past the description-budget threshold. Empirical anchor: GitHub Copilot's 40→13 tool trim in Nov 2025 ([tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal)). Anecdotal Block / Linear server reductions report similar shapes.
 
 ---
 

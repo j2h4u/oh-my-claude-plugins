@@ -64,15 +64,9 @@ for network-accessible deployments.
 
 **stdio stdout rule** + daemon-pattern stderr inversion — canonical in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
-Diagnostic: `your_server </dev/null >/tmp/out 2>/dev/null & sleep 1; kill %1; wc -c /tmp/out` should print 0.
+Diagnostic: `your_server </dev/null >/tmp/out 2>/dev/null & pid=$!; sleep 1; kill $pid; wc -c /tmp/out` should print 0. (Uses `$!` rather than `%1` so it works under CI / non-interactive shells where job control is off.)
 
 Remote-server auth shape is §3. Internal Docker networks with no untrusted neighbours can be plaintext.
-
----
-
-## Scope
-
-Sections 1–9 cover attacks **on** a benign server and **through** it against its users. Out of scope: malicious-server-against-host attacks (those concern client/host implementers, not you).
 
 ---
 
@@ -284,9 +278,6 @@ the user's trust. To not look malicious you must behave non-malicious **visibly*
 - **Publish a public stable URL** for your tool catalogue (e.g. via MCP Resources), so
   defenders can diff between versions. *(Applies when serving multiple clients or as part
   of a published distribution. For local/personal servers, irrelevant.)*
-
-Surface stability is a security property because instability is indistinguishable from
-attack from a defender's vantage point.
 
 ---
 

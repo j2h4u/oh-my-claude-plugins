@@ -63,12 +63,13 @@ log_event({"ts": ..., "tool_name": "search_messages", "status": "ok", "duration_
 ```
 
 Rotate daily, retain 30–90 days. **Which process owns the log file depends on transport:**
-under `stdio`, the MCP server writes the JSONL itself (never to `stdout` — corrupts the
-transport); under the daemon + on-demand pattern, the daemon owns the JSONL via its socket
-and the MCP process must not write logs at all. Canonical channel rule:
-[daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
-File path is your choice — typical: `~/.<server>/logs/calls.jsonl` (per-user) or
-`/var/log/<server>/calls.jsonl` (system).
+
+| Pattern | Who writes the JSONL |
+|---|---|
+| `stdio` (no daemon) | The MCP server. Never write to `stdout` — it corrupts the transport. |
+| Daemon + on-demand | The daemon (via its Unix socket). MCP server writes nothing — see canonical rule at [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern). |
+
+File path is your choice — typical: `~/.<server>/logs/calls.jsonl` (per-user) or `/var/log/<server>/calls.jsonl` (system).
 
 Analysis example — error rate and p95 latency per tool with `jq` and `awk`:
 

@@ -23,7 +23,7 @@
 | `notifications/message` (logging → model) | ❌ silently dropped | ⚠️ unverified |
 | `notifications/progress` | ❌ no `progressToken` sent | ⚠️ unverified |
 | `tasks` (SEP-1686) | ⚠️ not observed in `initialize` | ⚠️ unverified |
-| OAuth 2.1 for remote servers | n/a (subprocess client) | ✅ since v1.0.27 (RFC 9728 + CIMD) |
+| OAuth 2.1 for remote servers | n/a (subprocess client) | ✅ since v1.0.27 (RFC 9728 + dynamic client registration) |
 | Tool-call timeout knob | ~20s defensive (single 26s observation) | `MCP_TOOL_TIMEOUT` env var, no default |
 | Output budget | not published | `MAX_MCP_OUTPUT_TOKENS=25000`, warn at 10000 |
 
@@ -154,7 +154,7 @@ Capability statuses are in the cross-client matrix above; design implications be
 
 ### Tool Name Constraints
 
-No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. The spec range (`^[A-Za-z0-9_\-.]{1,128}$`) is what Claude Code accepts; the snake_case convention pattern lives in [tool-design.md §Character set](tool-design.md).
+No stricter-than-spec enforcement observed. CHANGELOG references tool-name issues but none relate to character-set rejection beyond MCP spec. The spec range (`^[A-Za-z0-9_\-.]{1,128}$`) is what Claude Code accepts; the snake_case convention pattern lives in [tool-design.md §Naming](tool-design.md#naming).
 
 ---
 

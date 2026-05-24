@@ -14,10 +14,6 @@ MCP defines three distinct server primitives. Always use the right one.
 | **Resource** | The application/client | Passive — context data the client selects and injects | Current file, user profile, config snapshot |
 | **Prompt** | The user | Reusable template the user invokes by name | "Summarise unread", "Draft a reply" |
 
-If the model decides when to call it — Tool. If it's stable, addressable context an app pre-loads — Resource. If the user triggers it explicitly — Prompt.
-
-Most servers start tools-only. Add Resources when you have stable URI-addressable data. Add Prompts when you find yourself writing the same system-prompt boilerplate repeatedly.
-
 **Decision tree** (walk top-to-bottom; first matching branch wins):
 
 1. **Does the model decide *when* to call it (mid-conversation, based on its own judgement)?** → **Tool**
@@ -57,19 +53,9 @@ mark_dialog_for_sync  search_messages    get_sync_status
 
 **Namespacing in multi-server environments:** prefix the service — `asana_search`, `jira_issue_get`. Prefix before verb (LLMs scan domain-first when picking between servers).
 
-**`title` field — set on every tool. `[OPINIONATED]`** Humans see `title` in the client UI; agents see `name`. Without `title`, clients show the raw `name`.
+**`title` field — set on every tool. `[OPINIONATED]`** Both audiences receive the full Tool definition (name, title, description, annotations), but clients that render a "Claude is using…" UI string surface `title` to humans verbatim while agents anchor selection on `name` + `description`. Without `title`, the UI falls back to the raw `name` (`ozon_search`, `GetMyRecentActivity`) — internal leakage.
 
-```
-name:  "ozon_search"          →  Claude Desktop shows: "Claude is using tool ozon_search"  ← bad
-title: "Search Ozon"          →  Claude Desktop shows: "Claude is using Search Ozon"       ← good
-
-name:  "GetMyRecentActivity"  →  Claude Desktop shows: "Claude is using tool GetMyRecentActivity"  ← bad
-title: "Recent activity"      →  Claude Desktop shows: "Claude is using Recent activity"           ← good
-```
-
-**Format:** 1–3 words, in the language of the product, user-facing. Sentence case (first word capitalised, rest lowercase). A short verb phrase or noun phrase that describes what the tool does from the user's perspective — not what it does technically.
-
-Do not write `title: "Get My Recent Activity"` (just a reformatted `name`). Write what a user would naturally say: "Recent activity", "Search messages", "Sync status".
+Format: 1–3 words, product language, sentence case (`"Search Ozon"`, `"Recent activity"`, `"Sync status"`). Not a reformatted `name`. **Client surfacing varies** — Claude Desktop renders the "Claude is using …" string; Claude Code does not surface tool calls with that exact wording. Skip when no client in your matrix renders `title` distinctly from `name`.
 
 ---
 
@@ -193,7 +179,7 @@ programmatic extraction. Never omit required `structuredContent` just to save to
 
 ### Schema Compatibility Gotcha: `anyOf` with null
 
-Claude Desktop (and some other clients) reject schemas where an optional parameter is exposed as `{"anyOf": [{"type": "T"}, {"type": "null"}]}`. Fix: strip the null variant, collapse single-non-null `anyOf` to the bare type, drop `"default": null`.
+**Scope: `inputSchema`.** Claude Desktop (and some other clients) reject `inputSchema` where an optional parameter is exposed as `{"anyOf": [{"type": "T"}, {"type": "null"}]}`. Fix: strip the null variant, collapse single-non-null `anyOf` to the bare type, drop `"default": null`.
 
 ```json
 // broken
@@ -203,7 +189,9 @@ Claude Desktop (and some other clients) reject schemas where an optional paramet
 { "name": "limit", "schema": { "type": "integer", "default": 20 } }
 ```
 
-**SDK shortcut:** FastMCP / Python `mcp` strips the null arm automatically since **v2.13.0** — don't hand-patch on newer versions. TypeScript SDK and others: verify per version. Related FastMCP gotcha: `compress_schema` stripped `additionalProperties: false` until **v2.14.6** — upgrade or pass `prune_additional_properties=False`.
+**`outputSchema` nullable fields appear to be safe** as `{"type": ["string", "null"]}` (used in [`examples/structured-output-search-orders.md`](../examples/structured-output-search-orders.md)) — `inputSchema` validation runs on the client at call-dispatch time, but `outputSchema` is the server's contract for what it emits; clients don't reject the schema itself. Empirically untested across the matrix — probe before relying on it for a new target client.
+
+**SDK shortcut:** FastMCP / Python `mcp` strips the null arm from `inputSchema` automatically since **v2.13.0** — don't hand-patch on newer versions. TypeScript SDK and others: verify per version (the official `@modelcontextprotocol/sdk-typescript` does not auto-strip as of skill-verified versions; build your own helper or post-process the Tool descriptor). Related FastMCP gotcha: `compress_schema` stripped `additionalProperties: false` from **both** input- and output-schemas until **v2.14.6** — upgrade or pass `prune_additional_properties=False`.
 
 ### Argument Flattening
 

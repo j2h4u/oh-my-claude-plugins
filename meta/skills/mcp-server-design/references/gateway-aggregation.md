@@ -182,7 +182,7 @@ Gateway-specific trust boundary rules:
 
 Generic rules (per-principal tokens, secret redaction, no secrets in URLs) apply here as they do
 everywhere — see [security-threats.md §3 — Authentication and authorization](security-threats.md#3-authentication-and-authorization)
-and [security-threats.md §6 — Secret hygiene](security-threats.md#6-secret-hygiene).
+and [security-threats.md §6 — Secret hygiene](security-threats.md#6-secret-hygiene--mcp-specific-leak-surfaces).
 
 ---
 

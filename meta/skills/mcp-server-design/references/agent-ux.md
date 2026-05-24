@@ -174,6 +174,8 @@ After the session, review `<server> feedback list`.
 
 **When to run:** after any significant change to the tool surface — per change, not per release.
 
+**Continuous variant.** With `submit_feedback` deployed and the feedback directive in `server.instructions`, every production session becomes a dark-room test automatically. Instruct the agent to populate `submit_feedback.task` with the user's original request verbatim — that clusters submissions by task type for later review. Gating: active maintainer, non-adversarial environment, long-enough deployment lifetime ([feedback-tool.md §When NOT to use](feedback-tool.md#when-not-to-use)).
+
 ### Agent CustDev
 
 Run a dedicated session where capable agents review the API itself — no task, explicitly
@@ -201,8 +203,3 @@ it in feels like completing a thought, not consulting a spec.
 **When to run:** once after the first complete tool surface; again after any major
 redesign. This is a design review, not a QA step — run it before the surface stabilises.
 
----
-
-## submit_feedback + system prompt — turns production into continuous dark-room
-
-When `submit_feedback` is deployed and the feedback directive is in `server.instructions`, every production session feeds the queue. To cluster submissions by task type, instruct the agent to populate `submit_feedback`'s `task` field with the user's original request verbatim (`feedback-tool.md` parameter table). Gating: assumes an active maintainer, non-adversarial environment, long-enough deployment lifetime — [feedback-tool.md §When NOT to use](feedback-tool.md#when-not-to-use).

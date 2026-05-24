@@ -121,6 +121,30 @@ This schema is open — richer signal fields (`task`, `missing_capability`, `con
 `workaround_used`) extend the row alongside `message`/`context`. Treat the column set as
 additive; do not strip the agent-visible Parameters table down to a "core five".
 
+### Reference DDL (SQLite)
+
+```sql
+CREATE TABLE feedback (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  submitted_at        INTEGER NOT NULL,                          -- unix epoch seconds
+  message             TEXT    NOT NULL CHECK (length(message) BETWEEN 1 AND 10000),
+  severity            TEXT             CHECK (severity IN ('bug','suggestion','question')),
+  context             TEXT             CHECK (length(context) <= 2000),
+  task                TEXT             CHECK (length(task) <= 2000),
+  missing_capability  TEXT             CHECK (length(missing_capability) <= 1000),
+  confusing_tool      TEXT             CHECK (length(confusing_tool) <= 200),
+  workaround_used     TEXT             CHECK (length(workaround_used) <= 1000),
+  model               TEXT             CHECK (length(model) <= 200),
+  harness             TEXT             CHECK (length(harness) <= 200),
+  status              TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','done','dismissed')),
+  status_changed_at   INTEGER,
+  status_comment      TEXT
+);
+CREATE INDEX idx_feedback_status_submitted ON feedback (status, submitted_at DESC);
+```
+
+Postgres: replace `INTEGER PRIMARY KEY AUTOINCREMENT` with `BIGSERIAL PRIMARY KEY`, `INTEGER` timestamps with `TIMESTAMPTZ`, `TEXT CHECK length` with `VARCHAR(N)`. CHECK constraints on `severity` / `status` are load-bearing — they're the on-disk enforcement of the lifecycle table above.
+
 ---
 
 ## Design Principles

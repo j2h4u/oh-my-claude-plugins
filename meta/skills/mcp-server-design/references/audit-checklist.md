@@ -16,7 +16,7 @@
 
 ## 2. Tool Naming and Classification
 
-- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. Pattern: `^[a-z0-9_]{1,64}$`. → [tool-design.md §Naming](tool-design.md)
+- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. Pattern: `^[a-z0-9_]{1,64}$`. → [tool-design.md §Naming](tool-design.md#naming)
 - [ ] * `[OPINIONATED]` **`title` field set on every tool** — 1–3 words, sentence case, product language. Not a reformatted `name` ("Search Ozon", not `"Search Ozon"` = `ozon_search`). *Skip when:* no client in your target matrix surfaces `title` distinctly from `name`.
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail. *Skip when:* surface has <5 tools (no posture distinction is load-bearing).
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
@@ -46,11 +46,11 @@
 
 ## 5. Parameter Schemas
 
-- [ ] * `[UNIVERSAL]` **No untyped nested objects** — no bare `filters: dict`, no `options: object` without `properties`. Typed nested models with fully-declared `properties` are acceptable at ≤1 level; ≥2 levels hallucinate regardless of typing. → `tool-design.md §Argument Flattening`
+- [ ] * `[UNIVERSAL]` **No untyped nested objects** — no bare `filters: dict`, no `options: object` without `properties`. Typed nested models with fully-declared `properties` are acceptable at ≤1 level; ≥2 levels hallucinate regardless of typing. → [tool-design.md §Argument Flattening](tool-design.md#argument-flattening)
 - [ ] `[UNIVERSAL]` **Enums over free strings** — closed value sets use `Literal` / `enum`, not free `str`.
 - [ ] `[UNIVERSAL]` **Optional parameters have sensible defaults** — optional means meaningful behaviour without the argument, not "nullable required".
 - [ ] `[UNIVERSAL]` **Non-obvious parameters self-document** — IDs, dates, limits, and ambiguous strings carry a description/pattern/example in the schema, not just a type. Use whatever idiom your SDK exposes for this.
-- [ ] `[EMPIRICAL]` **`anyOf:[T, null]` stripped** `[Claude Desktop]` — fix + SDK auto-strip status: `tool-design.md §Schema Compatibility Gotcha`
+- [ ] `[EMPIRICAL]` **`anyOf:[T, null]` stripped** `[Claude Desktop]` — fix + SDK auto-strip status: [tool-design.md §Schema Compatibility Gotcha](tool-design.md#schema-compatibility-gotcha-anyof-with-null)
 - [ ] `[UNIVERSAL]` **`min_length=1` is not enough** — whitespace-only strings checked explicitly; `"   "` passes `min_length=1`.
 
 ---
