@@ -83,11 +83,15 @@ data. Keep long static reference material in MCP Resources, not in every tool do
 
 ## FastMCP-Specific Gotchas
 
-**`compress_schema` silently strips `additionalProperties: false` — fixed in v2.14.6**
+**`compress_schema` silently strips `additionalProperties: false` — fixed in v3.0.0 (not backported to v2.x)**
 
-Bug existed in v2.14.4–v2.14.5: FastMCP's internal schema compression (`prune_additional_properties=True` by default) removed `additionalProperties: false`, breaking MCP client compatibility. User-visible failure: `Invalid schema for function ...: 'additionalProperties' is required to be supplied and to be false`. Issue #3008 (<https://github.com/PrefectHQ/fastmcp/issues/3008>), PR #3102 (<https://github.com/PrefectHQ/fastmcp/pull/3102>), merged 2026-02-06.
+Bug exists in all v2.x releases ≤ v2.14.x: FastMCP's internal schema compression (`prune_additional_properties=True` by default) removes `additionalProperties: false`, breaking MCP client compatibility. User-visible failure: `Invalid schema for function ...: 'additionalProperties' is required to be supplied and to be false`. Issue #3008 (<https://github.com/PrefectHQ/fastmcp/issues/3008>), PR #3102 (<https://github.com/PrefectHQ/fastmcp/pull/3102>), merged into `main` 2026-02-06.
 
-**Fix shipped in v2.14.6** (2026-03-27) and all v3.x releases. If pinned to v2.14.5 or older, pass the flag explicitly: `compress_schema(schema, prune_additional_properties=False)`.
+**Fix shipped in v3.0.0b2** (2026-02-07) and all subsequent v3.x releases. **Not backported to the v2.x line** — verified against `release/2.x` history as of v2.14.6. If pinned to any v2.x release, pass the flag explicitly: `compress_schema(schema, prune_additional_properties=False)`.
+
+**`$ref`/`$defs` not inlined — fixed in v2.14.6 (v2.x line) and v3.x**
+
+Separate, later bug on the v2.x line: tool input/output schemas were sent to MCP clients with raw `$ref`/`$defs` instead of being inlined, breaking clients such as VS Code Copilot. The `dereference_refs()` helper existed (backported in PR #2861) but was never wired into the schema pipeline. Issue #3153, PR #3170 (<https://github.com/PrefectHQ/fastmcp/pull/3170>), merged into `release/2.x` 2026-02-12. **Shipped in v2.14.6** (2026-03-27, "$Ref Dead Redemption"). Note: this was reverted in v3.2.0 (April 2026) after self-referencing Pydantic types caused circular-reference crashes during `tools/list` (issue #3760, PR #3774). If you have nested self-referencing models on v3.2.0+, check the current behaviour before relying on auto-dereferencing.
 
 **`structured_output=False` to opt out of auto-inference**
 

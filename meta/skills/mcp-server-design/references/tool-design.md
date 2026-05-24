@@ -91,7 +91,7 @@ Four tool annotations. All default to worst-case — declare explicitly whenever
 
 Clients use annotations to drive confirmation dialogs, auto-approval policies, and orchestrator trust decisions.
 
-> Defaults from MCP schema reference: `readOnlyHint=false`, `destructiveHint=true` (when not read-only), `idempotentHint=false`, `openWorldHint=true`. Pessimistic-by-default: unannotated tools are treated as most-dangerous. Hints are advisory, not security boundaries. Source: https://modelcontextprotocol.io/specification/2025-06-18/schema
+> Defaults from MCP schema reference: `readOnlyHint=false`, `destructiveHint=true` (when not read-only), `idempotentHint=false`, `openWorldHint=true`. Pessimistic-by-default: unannotated tools are treated as most-dangerous. Hints are advisory, not security boundaries. Source: https://modelcontextprotocol.io/specification/2025-11-25/schema
 
 **Caveat:** annotations are hints, not contracts. A client MUST NOT treat them as security controls — a server can declare any values. Set them accurately; never use them to bypass client safety checks.
 
@@ -364,7 +364,7 @@ return a handle and let the client poll.
 There are two ways to do this. **Prefer the spec primitive when the client supports it; fall
 back to the roll-your-own pattern when it doesn't.**
 
-### Spec primitive — Tasks (`DRAFT-2025-11-25`, [SEP-1686](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1686))
+### Spec primitive — Tasks (spec **2025-11-25**, experimental, [SEP-1686](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1686))
 
 The spec adds a first-class task primitive that augments `tools/call` (and `sampling/createMessage`,
 `elicitation/create`). Declare per-tool with `execution.taskSupport`:
