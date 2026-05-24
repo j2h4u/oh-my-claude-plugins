@@ -26,7 +26,7 @@ Description content moves tool selection; structural tags don't. Levers, in roug
 | **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Writing Tool Descriptions` |
 | **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` |
 | **Sharper, distinct descriptions** | Each description semantically distant from others; near-duplicates collapse selection | `tool-design.md §Writing Tool Descriptions` |
-| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title` | `audit-checklist.md §3` |
+| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` (plus `title` — surfaced in annotations by some SDKs, top-level on `Tool` per spec) | `tool-design.md §Annotations` |
 | **Toolsets / config-level grouping** | Let operators enable/disable groups at install time (e.g. GitHub MCP `--toolsets`) | organisational pattern |
 
 Do not prefix descriptions with `[primary]` / `[secondary/helper]` — not a validated lever.
@@ -183,7 +183,7 @@ about the tool surface. Different models expose different blind spots; use at le
 
 **Protocol:**
 
-1. Present the full tool catalogue to one or more capable agents
+1. Present the full tool surface to one or more capable agents
 2. Ask explicitly: *"Look at these tools as a user who has never used this server.
    For each tool: does the name immediately tell you what it does and when to call it?
    Are there parameters that seem redundant, misnamed, or missing? Is there anything

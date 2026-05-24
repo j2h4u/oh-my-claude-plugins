@@ -29,8 +29,8 @@
 
 **Safe-surface rule when targeting both:** assume only the non-interactive subset works
 (Tools, Resources, Prompts, `isError`, `server.instructions`, tool descriptions). Push
-state through tool responses, not push notifications. Defer to async-handle pattern for
-anything >20s.
+state through tool responses, not push notifications. Defer to the roll-your-own async
+handle for anything >20s.
 
 ---
 

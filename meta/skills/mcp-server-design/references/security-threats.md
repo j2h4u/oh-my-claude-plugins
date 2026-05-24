@@ -62,7 +62,7 @@ for network-accessible deployments.
 | `stdio` | None — local subprocess | Claude Desktop; any client that launches subprocesses |
 | Streamable HTTP | Network-accessible | Inter-container (Docker); any HTTP-capable client |
 
-**stdio stdout rule** + daemon-pattern stderr inversion — canonical in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+**stdio stdout rule** — UNIVERSAL canonical in [SKILL.md §Transport](../SKILL.md#transport); daemon-pattern stderr inversion in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
 Diagnostic: `your_server </dev/null >/tmp/out 2>/dev/null & pid=$!; sleep 1; kill $pid; wc -c /tmp/out` should print 0. (Uses `$!` rather than `%1` so it works under CI / non-interactive shells where job control is off.)
 

@@ -28,9 +28,9 @@ MCP server process  ──(Unix socket, newline-JSON)──▶  Daemon process
 - **Logging via socket** — MCP server sends all log entries to the daemon over the same Unix socket
   (as a structured log message type alongside RPC calls); daemon owns the log sink (file, journal).
 
-## Stderr Rule — Reversed Under This Pattern
+## Stderr Rule (Reversed Under This Pattern)
 
-Canonical source (SKILL.md, security-threats.md, observability.md link here).
+The UNIVERSAL stdio rule (logs go to `stderr`; `stdout` is JSON-RPC only) is stated inline in [SKILL.md §Transport](../SKILL.md#transport) and [observability.md §Where to store](observability.md#where-to-store-opinionated-defaults). This section describes the **inversion** under the daemon pattern only.
 
 | Pattern | `stdin` | `stdout` | `stderr` | Logs go to |
 |---|---|---|---|---|

@@ -66,8 +66,8 @@ Rotate daily, retain 30–90 days. **Which process owns the log file depends on 
 
 | Pattern | Who writes the JSONL |
 |---|---|
-| `stdio` (no daemon) | The MCP server. Never write to `stdout` — it corrupts the transport. |
-| Daemon + on-demand | The daemon (via its Unix socket). MCP server writes nothing — see canonical rule at [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern). |
+| `stdio` (no daemon) | The MCP server. UNIVERSAL rule: logs go to `stderr` or to a sink reachable from the server process; `stdout` is JSON-RPC only — any other byte corrupts the transport silently. |
+| Daemon + on-demand | The daemon (via its Unix socket). MCP-server child writes nothing on either stdio stream — inversion explained in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern). |
 
 File path is your choice — typical: `~/.<server>/logs/calls.jsonl` (per-user) or `/var/log/<server>/calls.jsonl` (system).
 
@@ -183,8 +183,7 @@ miss.
   as successes.
 - Logging must never fail the call. Wrap the log write in `try/except` and discard on
   failure; an observability bug should not break the product.
-- Stdio transport rule and the daemon-pattern exception (socket-based logging) are canonical in
-  [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
+- UNIVERSAL stdio rule is stated in [SKILL.md §Transport](../SKILL.md#transport); the daemon-pattern exception (silent on both stdio streams, socket-based logging) is in [daemon-architecture.md §Stderr Rule](daemon-architecture.md#stderr-rule-reversed-under-this-pattern).
 
 ---
 

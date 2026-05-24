@@ -6,7 +6,7 @@
 
 ## 1. Design Philosophy
 
-- [ ] * `[OPINIONATED]` **Tool count under scrutiny** — count primary tools in the registry. >10 is a signal to consolidate or split into domain servers, not a hard cap. See [tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal) for rationale and exceptions.
+- [ ] * `[OPINIONATED]` **Tool count under scrutiny** — count primary tools in the surface. >10 is a signal to consolidate or split into domain servers, not a hard cap. Decision test for an exception: the auditee can state the 11th tool's one-sentence justification, and no two tools' justifications collapse to the same sentence. See [tool-design.md §Tool Classification](tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal) for rationale and exception shapes.
 - [ ] * `[UNIVERSAL]` **No thin API wrapper** — for each tool, ask: "does this map 1:1 to a backend endpoint?" If yes, it should bundle the downstream calls internally instead.
 - [ ] * `[UNIVERSAL]` **Outcome orientation** — each tool name describes a user goal, not an operation. `track_latest_order`, not `get_order_status`.
 - [ ] `[UNIVERSAL]` **One server, one job** — can you describe the server's purpose in one sentence? If not, scope is too broad.
@@ -16,7 +16,7 @@
 
 ## 2. Tool Naming and Classification
 
-- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. Pattern: `^[a-z0-9_]{1,64}$`. → [tool-design.md §Naming](tool-design.md#naming)
+- [ ] `[UNIVERSAL]` **`snake_case` verb_noun names** — `list_dialogs`, `get_entity_info`. No `getData`, `RunQuery`, `handle_request`. This audit enforces the **convention** pattern `^[a-z0-9_]{1,64}$`. The spec accepts a wider range (`^[A-Za-z0-9_\-.]{1,128}$`) — a server using the wider range isn't spec-broken, but mark it as a convention finding so the auditee can decide. → [tool-design.md §Naming](tool-design.md#naming)
 - [ ] * `[OPINIONATED]` **`title` field set on every tool** — 1–3 words, sentence case, product language. Not a reformatted `name` ("Search Ozon", not `"Search Ozon"` = `ozon_search`). *Skip when:* no client in your target matrix surfaces `title` distinctly from `name`.
 - [ ] `[OPINIONATED]` **Primary/secondary classification consistent** — primary tools are user-facing capabilities; secondary/helper tools are plumbing. No primary tool that's implementation detail. *Skip when:* surface has <5 tools (no posture distinction is load-bearing).
 - [ ] `[EMPIRICAL]` **No namespace collision risk** — tool names don't collide with well-known client meta-operations (e.g. `get_me` → `get_my_account`).
@@ -85,8 +85,8 @@
 
 ## 9. Long-Running Operations
 
-- [ ] `[UNIVERSAL]` **No blocking tools > a few seconds** — tools that invoke slow external APIs, file processing, or background sync use the async handle pattern (return task ID immediately, separate polling tool).
-- [ ] `[UNIVERSAL]` **Handle pattern implemented correctly** — the first tool never blocks; it only enqueues and returns a handle.
+- [ ] `[UNIVERSAL]` **No blocking tools > a few seconds** — tools that invoke slow external APIs, file processing, or background sync use the **roll-your-own async handle** (return task ID immediately, separate polling tool) or the Tasks spec primitive once the [clients.md matrix](clients.md#cross-client-capability-matrix) confirms support.
+- [ ] `[UNIVERSAL]` **Roll-your-own async handle implemented correctly** — the submit tool never blocks; it only enqueues and returns `{id, status: "working"}`. Wire shape: [examples/long-running-tasks-wire-shape.md](../examples/long-running-tasks-wire-shape.md#roll-your-own-fallback-use-today).
 
 ---
 

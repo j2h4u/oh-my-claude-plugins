@@ -65,14 +65,16 @@ Tools ship in two tiers.
 
 | Tier | When to use | Visibility |
 |------|-------------|------------|
-| `primary` | User-facing capability, the LLM should know it exists | Listed in tool catalogue |
-| `secondary` / `helper` | Supporting operation, plumbing | May be hidden from catalogue |
+| `primary` | User-facing capability, the LLM should know it exists | Listed in the tool surface |
+| `secondary` / `helper` | Supporting operation, plumbing | May be hidden from the tool surface |
 
 **≤10 primary tools.** `[OPINIONATED]` More tools dilute LLM selection accuracy — every loaded tool description taxes the context window, even tools the agent never calls. Keep primary tools to ≤10.
 
 Evidence: GitHub Copilot trimmed 40 default tools to 13, +2–5pp success / −400ms latency ([GitHub Blog, Nov 19 2025](https://github.blog/ai-and-ml/github-copilot/how-were-making-github-copilot-smarter-with-fewer-tools/)).
 
 Before adding a tool: can two tools merge? Can a tool be promoted to a parameter? Past ≤10, answer those questions first.
+
+**Decision test when you want to declare an exception:** write the one-sentence justification for the 11th primary tool ("this exists because…, and consolidating it into N would cause…"). If you can't write it in one sentence — or two tools' justifications collapse to the same sentence — you're past the threshold and should consolidate, not append. Acceptable exception shapes: namespaced surface (`asana_*`, `jira_*` with a strict per-namespace ≤10), runtime-gated subsets where any given session sees ≤10, and audited domain-broad servers where the operator has measured selection accuracy under load and accepted the cost.
 
 ---
 
@@ -125,6 +127,8 @@ The description is a **prompt read by the LLM**. Answer three questions:
 > wrong; when an error message is unclear; or when a missing capability would have helped.
 > Submissions are fire-and-forget — there is no follow-up, no tracking ID, and no read
 > access for agents.
+
+**Length budget — aim 80–200 tokens per tool description.** Past 200 the description starts paying for itself in context tax on every loaded call. If you can't fit when, what, and not-do inside the budget, either (a) the tool is doing two jobs and should split, (b) the parameters are unclear and the description is bandaging them, or (c) static reference material (enum catalogs, query syntax, field tables) is leaking in and belongs in an MCP Resource. Treat the budget as a smell, not a hard cap.
 
 **For parameters:** explain field semantics in the description, not just in the schema. The LLM reads the description; the schema is for validation.
 
