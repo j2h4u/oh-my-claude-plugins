@@ -65,4 +65,4 @@
 - `additionalProperties: false` on every nested object in both schemas.
 - All four annotations declared explicitly — `destructiveHint: false` is the load-bearing opt-out.
 - `content[0].text` is a compact human-readable preview, **not** a JSON dump of `structuredContent` (token economy — see [tool-design.md](../references/tool-design.md#structured-output--prefer-schemas-over-text)).
-- Nullable field (`tracking_number`) uses `["string", "null"]` in `outputSchema` — output schemas are server-emitted and not subject to the input-schema `anyOf:[T,null]` client breakage.
+- Nullable field (`tracking_number`) uses `["string", "null"]` in `outputSchema`. Output schemas are server-emitted (client doesn't validate inbound the way it gates inputs), so the `anyOf:[T,null]` input-schema rejection observed on some clients hasn't been seen here — but coverage is thin; probe your target client before relying ([tool-design.md §Schema Compatibility](../references/tool-design.md#schema-compatibility-gotcha-anyof-with-null)).

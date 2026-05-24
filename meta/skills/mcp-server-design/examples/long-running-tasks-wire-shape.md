@@ -23,9 +23,11 @@ Without this the client will not augment any call:
 {
   "name": "deep_research",
   "description": "...",
-  "execution": { "taskSupport": "required" }  // "forbidden" | "optional" | "required"
+  "execution": { "taskSupport": "optional" }  // "forbidden" | "optional" | "required"
 }
 ```
+
+`"optional"` is the only value safe to ship today: clients that don't negotiate `tasks` invoke the tool synchronously; clients that do negotiate it may augment. **Do not set `"required"` until the [clients.md matrix](../references/clients.md#cross-client-capability-matrix) confirms your target client negotiates `tasks` — `"required"` rejects synchronous calls and breaks the tool on every other client.**
 
 | Value | Meaning |
 |-------|---------|

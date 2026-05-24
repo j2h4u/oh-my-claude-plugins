@@ -42,10 +42,10 @@ as protocol requirements.
 | `outputSchema` + `structuredContent` | Server contract: declaring `outputSchema` makes `structuredContent` MUST on every successful call. Declare for any tool returning machine-parseable data; always pair with a compact text preview. Owner for nullable / null-arm / `additionalProperties` rules: [tool-design.md §Schema Compatibility](references/tool-design.md#schema-compatibility-gotcha-anyof-with-null). |
 | `isError` | The right channel for *business / validation* errors (agent self-corrects). Protocol exceptions are for malformed requests, not domain failures. |
 | Tasks (SEP-1686) | Spec primitive for long-running ops. **Status (verified 2026-05-22):** no tracked client confirmed negotiating it — matrix shows `⚠️ not declared / unverified` across both Claude clients ([clients.md](references/clients.md#cross-client-capability-matrix)). Working default is the **roll-your-own async handle** (submit tool returns `{id, status: "working"}`; separate polling tool returns terminal state). Switch to the spec primitive when the matrix flips. Wire shape: [examples/long-running-tasks-wire-shape.md](examples/long-running-tasks-wire-shape.md). Decision tree: [tool-design.md §Long-Running Operations](references/tool-design.md#long-running-operations). |
-| `_meta` | Spec-defined open-ended object on requests / results / tool definitions. Vendor-specific knobs ride here when the spec hasn't standardised them yet — e.g. Claude Code's `anthropic/maxResultSizeChars` is a tool-definition annotation, not inside `_meta` (see [clients.md](references/clients.md)). When in doubt: tool-level knobs go on the tool definition; per-call hints go in request `_meta`; per-result hints in result `_meta`. |
-| `server.instructions` | Server-declared system prompt — a config surface for shaping agent behaviour without adding tools. Keep it tight; budget rules in [agent-ux.md](references/agent-ux.md#system-prompt-as-configuration-surface). SDK wiring (verified): FastMCP `instructions=` constructor arg; TypeScript SDK `Server` `instructions` field at construction. Other SDKs (Go, Rust, low-level Python `mcp`) expose the same `instructions` field on the server constructor — check the SDK's `Server`/`McpServer` reference. Smoke-test it lands by reading `result.instructions` from your initialize probe. |
-| Tool `annotations` | Posture hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`) — advisory, not security. **Asymmetric default:** `destructiveHint` defaults to `true` (opt-out). Forgetting to set it to `false` on an additive write (e.g. `submit_feedback`) silently marks the tool destructive. → [tool-design.md §Annotations](references/tool-design.md#annotations). |
-| `posture` (primary / secondary) | Project-level classification used by this skill (not a protocol field). Primary = user-facing capability; secondary = plumbing. Drives the ≤10 budget. |
+| `_meta` | Spec-defined open-ended object on requests / results / tool definitions. Vendor-specific knobs ride here when the spec hasn't standardised them yet — e.g. Claude Code's `anthropic/maxResultSizeChars` is a namespaced field on the tool definition itself, not inside `_meta` (verify exact placement against the [Claude Code MCP docs](https://code.claude.com/docs/en/mcp) for your version). When in doubt: tool-level knobs go on the tool definition; per-call hints go in request `_meta`; per-result hints in result `_meta`. |
+| `server.instructions` | Server-declared system prompt — a config surface for shaping agent behaviour without adding tools. Keep it tight; budget rules in [agent-ux.md](references/agent-ux.md#system-prompt-as-configuration-surface). SDK wiring (verified): FastMCP `instructions=` constructor arg; TypeScript SDK `Server` `instructions` field at construction. Other SDKs (Go, Rust, low-level Python `mcp`) expose the same `instructions` field on the server constructor — check the SDK's `Server`/`McpServer` reference. |
+| Tool `annotations` | Posture hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) — advisory, not security. `title` is **top-level on the Tool object** per spec, not inside `annotations`. **Asymmetric default:** `destructiveHint` defaults to `true` (opt-out) but is **only meaningful when `readOnlyHint: false`** — on read-only tools it's ignored. Forgetting to set it to `false` on an additive write (e.g. `submit_feedback`) silently marks the tool destructive. → [tool-design.md §Annotations](references/tool-design.md#annotations). |
+| `posture` (primary / secondary) | Project-level classification used by this skill (not a protocol field — secondary tools still appear in `tools/list` and count for the client). Primary = user-facing capability; secondary = plumbing (`health`, polling/status pairs, `submit_feedback`). Drives the ≤10 design signal, not a runtime filter. |
 | `resource_link` | Tool result type that returns a URI pointer instead of inlining content. Design use: large payloads, already-addressable resources. Not guaranteed to appear in `resources/list`. |
 | `icons` | Optional icon array on Tool/Resource/Prompt (SEP-973, spec 2025-11-25). Pure presentation — no client in [clients.md](references/clients.md#cross-client-capability-matrix) is known to render them today. Design implication only when targeting clients that confirm rendering — don't invest in icon assets ahead of that confirmation. |
 
@@ -96,7 +96,7 @@ References verified as of **2026-05-24**; per-file recheck dates inside [clients
 
 **Tool rules:**
 - Names: `snake_case`, verb_noun — `list_dialogs`, `get_entity_info`, `submit_feedback`
-- `title`: include on every tool `[OPINIONATED]` — spec marks it optional; in practice clients display it as user-facing prose. 1–3 words, product language, sentence case ("Search messages", not `search_messages`)
+- `title`: include on every tool `[OPINIONATED]` — spec marks it optional; in practice clients display it as user-facing prose. **Top-level on the Tool object** (not inside `annotations`). 1–3 words, product language, sentence case ("Search messages", not `search_messages`)
 - `icons`: optional `{src, mimeType, sizes?[]}` array on Tool/Resource/Prompt (SEP-973, 2025-11-25)
 - Classify each tool: `primary` (user-facing) or `secondary/helper` (plumbing)
 - Annotate explicitly: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
@@ -135,6 +135,7 @@ If you adopt the pattern:
 ## Agent UX
 
 - Tool descriptions serve two audiences: LLM (reads as prompt) and human (sees in UI). Write for LLM first
+- **`elicitation`** (mid-call structured user input, Claude Code v2.1.76+, not in Claude Desktop) is the right channel for optional parameters that need clarification — use it instead of stuffing every conditional into the tool description. Cross-client safe path: design the tool to work without elicitation; treat elicitation as a UX upgrade when the negotiated capability is present. → [clients.md §Claude Code Design Implications](references/clients.md#design-implications-for-claude-code)
 - System prompt (`server.instructions`): keep minimal — grow only when you see agents making wrong decisions without the directive. ALL-CAPS named workflow patterns, built dynamically at startup. Canonical ~100-word example covering all four content types: [agent-ux.md §System Prompt as Configuration Surface](references/agent-ux.md#system-prompt-as-configuration-surface)
 - Two complementary UX checks: **dark-room** (run after each surface change — agent + server + real task + no briefing → review feedback queue; copy-paste prompt template: [agent-ux.md §Dark-Room Test](references/agent-ux.md#dark-room-test)) and **agent CustDev** (run once before the surface stabilises and after major redesigns — capable agents review the tool catalogue itself, no task; protocol: [agent-ux.md §Agent CustDev](references/agent-ux.md#agent-custdev)). Both require `submit_feedback` deployed.
 - Error messages: include `Action:` hint for every recoverable error — agents act on error text directly
@@ -159,7 +160,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 - Client launches the server as a subprocess (Claude Desktop; Claude Code via `.mcp.json` with `"command"`; any CLI host)? → **`stdio`**. Same-machine, single-consumer, no port allocation, no Origin/DNS-rebinding surface.
 - Client connects to a long-lived endpoint? → **Streamable HTTP**. Pick the auth shape by *who reaches the endpoint*:
   - Public internet, multiple/external users → **TLS + OAuth 2.1 per-principal, narrow scopes, audience-bound tokens** (RFC 8707). See `security-threats.md §3`.
-  - Private network only (Tailscale, internal VPN, sibling containers) — single trusted user → TLS optional inside the trusted network; a single shared token is acceptable.
+  - Private network only (Tailscale, internal VPN, sibling containers) — single trusted user → TLS optional inside the trusted network; **a single shared token is still required** (defence in depth — the network is not the only attacker).
   - Internal Docker network with no untrusted neighbours → plaintext + auth terminated at a gateway (worked pairing row 2 below).
 
 **Worked pairings:**
@@ -168,7 +169,7 @@ Unix socket rules, crash isolation, when NOT to use this pattern.
 |------------------|-----------|------|
 | Claude Desktop / local Claude Code launches your server as a subprocess | `stdio` | none (process boundary) |
 | Docker MCP gateway behind shared OAuth edge | `streamable-http` on `0.0.0.0:<port>` inside the docker network | OAuth 2.1 terminated at the gateway, not per backend |
-| Personal / single-user server behind Tailscale, VPN, or private LAN | `streamable-http` (TLS if crossing untrusted hops) | single bearer token tied to the principal, or none on a fully trusted network |
+| Personal / single-user server behind Tailscale, VPN, or private LAN | `streamable-http` (TLS if crossing untrusted hops) | single bearer token tied to the principal (do not skip — §0 applies even on private networks) |
 | Remote SaaS server for external users (incl. remote Claude Code) | `streamable-http` + TLS | OAuth 2.1 per-principal; narrow scopes; audience-bound tokens |
 
 **Streamable HTTP** = MCP's current HTTP transport (spec 2025-11-25): one endpoint accepting POST + GET, server picks `application/json` or `text/event-stream` per response. Replaces the deprecated HTTP+SSE transport (2024-11-05). **Design-binding rules** (the rest of the protocol shape is in the spec):
@@ -202,55 +203,12 @@ Per-call logs drive dead-tool / hot-tool / error-rate decisions. Minimum fields:
 
 ---
 
-## Testing and Validation
-
-- Unit tests: cover tool logic and schema validation in isolation
-- Integration smoke test: call every tool through the actual transport against a live server
-- After any code change: rebuild (if containerised) and run smoke test before marking done
-- Green unit tests do not prove the live server works — green smoke test does
-
-**Minimal smoke-test recipes** (run after build, before marking done):
-
-*stdio:* pipe a JSON-RPC `initialize` + `tools/list` through the server binary and assert non-empty `tools` and that **no non-JSON bytes appear on stdout** (see [security-threats.md §Transport choice and stderr](references/security-threats.md#transport-choice-and-stderr) for the stdout-cleanliness one-liner).
-
-*Streamable HTTP:*
-
-```bash
-# 1. initialize handshake — expect JSON-RPC result, not 404/500
-curl -sS -X POST "$URL" \
-  -H 'Content-Type: application/json' \
-  -H 'MCP-Protocol-Version: 2025-11-25' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
-
-# 2. notifications/initialized — required by spec before any other request
-curl -sS -X POST "$URL" \
-  -H 'Content-Type: application/json' \
-  -H 'MCP-Protocol-Version: 2025-11-25' \
-  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-
-# 3. tools/list — expect non-empty tools array
-curl -sS -X POST "$URL" \
-  -H 'Content-Type: application/json' \
-  -H 'MCP-Protocol-Version: 2025-11-25' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
-
-# 4. Origin check — expect 403 from non-allow-listed origin
-curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$URL" \
-  -H 'Origin: http://evil.test' \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}'
-```
-
-Gateway / multi-server smoke: [gateway-aggregation.md §Smoke Test Protocol](references/gateway-aggregation.md#smoke-test-protocol).
-
----
-
 ## Auditing an Existing Server
 
 → [references/audit-checklist.md](references/audit-checklist.md) — 16-section, ~80-item checklist,
 `*` marks high-priority items, produces HIGH / MEDIUM / LOW findings summary.
 
-**Precondition.** §1's 80/20 / dead-tool checks require ≥30 days of production tool-call logs ([audit-checklist.md §1](references/audit-checklist.md#1-design-philosophy)). For a new or pre-production server, mark §1 N/A and start at §2; queue a rerun once usage data exists.
+**Precondition.** §1's 80/20 / dead-tool *usage-data* items require ≥30 days of production tool-call logs ([audit-checklist.md §1](references/audit-checklist.md#1-design-philosophy)). For a new or pre-production server, mark only those usage-data items N/A; the rest of §1 (tool count vs. ≤10 signal, 1:1 endpoint wrappers, outcome orientation, one-job scoping) reads on design alone — run it now and queue the usage-data rerun once traffic exists.
 
 ---
 
@@ -258,7 +216,8 @@ Gateway / multi-server smoke: [gateway-aggregation.md §Smoke Test Protocol](ref
 
 Before shipping or handing off:
 
-- [ ] `title` set on every tool `[OPINIONATED]` — 1–3 words, sentence case, user-facing. *Skip when:* no target client surfaces `title` distinctly from `name`.
+- [ ] `title` set on every tool `[OPINIONATED]` — **top-level on the Tool object**, 1–3 words, sentence case, user-facing. *Skip when:* no target client surfaces `title` distinctly from `name`.
+- [ ] `server.instructions` reviewed `[OPINIONATED]` — empty / near-empty is worse than absent; either grow it to a real configuration surface or omit entirely. Budget + canonical shape: [agent-ux.md §System Prompt as Configuration Surface](references/agent-ux.md#system-prompt-as-configuration-surface).
 - [ ] Tools designed for outcomes, not 1:1 endpoint wrappers
 - [ ] Primary tool count scrutinised against the ≤10 signal `[OPINIONATED]` — see [tool-design.md §Tool Classification](references/tool-design.md#tool-classification--primary-vs-secondary-and-the-10-tool-signal). *Skip when:* surface intentionally domain-broad with prefix namespacing across many tools — namespacing carries the load instead.
 - [ ] Mutating tools safe by default — draft/paused/dry-run unless explicit activation
@@ -266,7 +225,6 @@ Before shipping or handing off:
 - [ ] `outputSchema` declared tools always return `structuredContent` (MUST)
 - [ ] Business errors use `isError: true` with actionable diagnostics — no protocol exceptions
 - [ ] For `stdio`, logs go to `stderr`, never `stdout`
-- [ ] Integration smoke test passes against live server
 - [ ] No bare `dict` / `object` without `properties` in parameter schemas; typed nested models OK at ≤1 level
 - [ ] Per-call usage log in place `[OPINIONATED]` — `ts`, `tool_name`, `status`, `duration_ms` minimum. *Skip when:* pre-production / dev server with no real traffic — treat as debt to clear before first production deploy.
 - [ ] No raw argument values or response bodies in any log `[UNIVERSAL]` — applies whether or not the usage log above exists; raw values may carry secrets, PII, or prompt-injected content.
@@ -276,7 +234,7 @@ Before shipping or handing off:
 ## What's Evolving
 
 - **If your tool returns HTML/JSON for rendering — keep `structuredContent` schema-stable.** MCP Apps ([SEP-1865](https://github.com/modelcontextprotocol/ext-apps)) is rolling out a `ui://` rendering extension; stable schemas keep its later adoption non-breaking.
-- **Do not design new servers around `sampling/createMessage`.** Marked for deprecation in the protocol draft (`DRAFT-2026-v1`) and unsupported across both Claude clients ([clients.md](references/clients.md#cross-client-capability-matrix)) — remove optimistic capability checks.
+- **`sampling/createMessage` works in spec but not in tracked clients.** The 2025-11-25 spec keeps sampling and adds SEP-1577 (sampling with tools / server-side agent loops); only `includeContext` is soft-deprecated. But neither Claude Desktop nor Claude Code declares the capability ([clients.md](references/clients.md#cross-client-capability-matrix)) — so designing around sampling today produces dead code on those clients. Acceptable to *include* a sampling code path behind a capability check; not acceptable to make a primary tool's behaviour depend on it.
 - **Long-running tools today: the roll-your-own async handle is the working mechanism; `taskSupport: "optional"` is a future-leaning hedge.** `taskSupport` (per-tool field declared via the Tasks SEP) is a no-op on clients that don't negotiate the `tasks` capability — and no client in [clients.md](references/clients.md#cross-client-capability-matrix) is confirmed to do so today (2026-05-22). For Claude Desktop's defensive ~20s ceiling (single 26s observation — see [clients.md §Timeouts](references/clients.md#timeouts)), only the roll-your-own handle protects you; declaring `taskSupport: "optional"` alongside is harmless and switches on automatically when clients catch up. Reserve `taskSupport: "required"` until the matrix flips. Wire shape: [examples/long-running-tasks-wire-shape.md](examples/long-running-tasks-wire-shape.md).
 
 ## External References

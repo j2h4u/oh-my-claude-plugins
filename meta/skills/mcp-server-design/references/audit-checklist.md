@@ -167,9 +167,8 @@
 
 ---
 
-## 15. Testing
+## 15. Agent-UX Validation
 
-- [ ] `[UNIVERSAL]` **Integration smoke test exists** — calls every tool through the actual transport against a live server. Unit tests alone don't cover transport or schema serialisation.
 - [ ] `[OPINIONATED]` **Dark-room UX test done at least once** — agent given the server with no briefing, asked to complete a real task, feedback queue reviewed. If not done: mark as debt. → Protocol: `agent-ux.md §Dark-Room Test`. *Requires:* `submit_feedback` deployed and the feedback directive in the system prompt — gate on §10 first.
 - [ ] `[OPINIONATED]` **Agent CustDev done at least once** — interview an agent that has used the server about pain points, missing primitives, confusing names. Distinct from dark-room: dark-room observes behaviour, CustDev solicits report. Both require `submit_feedback` deployed. → Protocol: `agent-ux.md §Two Kinds of Testing`
 

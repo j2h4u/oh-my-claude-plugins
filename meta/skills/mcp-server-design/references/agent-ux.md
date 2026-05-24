@@ -26,7 +26,7 @@ Description content moves tool selection; structural tags don't. Levers, in roug
 | **Assertive proactive language** | "Use this **proactively** whenever the agent notices X" inside the description | `tool-design.md §Writing Tool Descriptions` |
 | **Namespacing in the tool name** | Service prefix on the identifier — `asana_search`, `jira_search` | `tool-design.md §Naming` |
 | **Sharper, distinct descriptions** | Each description semantically distant from others; near-duplicates collapse selection | `tool-design.md §Writing Tool Descriptions` |
-| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` (plus `title` — surfaced in annotations by some SDKs, top-level on `Tool` per spec) | `tool-design.md §Annotations` |
+| **Formal MCP annotations** | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` — all live inside `annotations`. `title` is top-level on the `Tool` object per spec (older SDK examples sometimes placed it inside `annotations`; canonical location is top-level). | `tool-design.md §Annotations` |
 | **Toolsets / config-level grouping** | Let operators enable/disable groups at install time (e.g. GitHub MCP `--toolsets`) | organisational pattern |
 
 Do not prefix descriptions with `[primary]` / `[secondary/helper]` — not a validated lever.

@@ -13,15 +13,18 @@ Data flows in one direction — agent → operator. There is no return channel.
 
 ## MCP Tool: `submit_feedback`
 
-**Canonical annotations** — `destructiveHint: false` is the load-bearing opt-out (asymmetric default; see SKILL.md glossary).
+**Canonical tool definition.** `title` is top-level on the Tool per spec; the four hint flags live inside `annotations`. `destructiveHint: false` is the load-bearing opt-out (asymmetric default; see SKILL.md glossary). `openWorldHint: false` only holds when the queue is a process-local store (own SQLite file, same host); set `true` if the feedback sink is a remote bug tracker, message bus, or operator queue reached over the network.
 
 ```json
-"annotations": {
-  "readOnlyHint":   false,
-  "destructiveHint": false,
-  "idempotentHint": false,
-  "openWorldHint":  false,
-  "title": "Submit feedback"
+{
+  "name": "submit_feedback",
+  "title": "Submit feedback",
+  "annotations": {
+    "readOnlyHint":   false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint":  false
+  }
 }
 ```
 

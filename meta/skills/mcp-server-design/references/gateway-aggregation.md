@@ -186,16 +186,6 @@ and [security-threats.md §6 — Secret hygiene](security-threats.md#6-secret-hy
 
 ---
 
-## Smoke Test Protocol
-
-Run from a container attached to the backend network — not from the host.
-
-1. **Gateway `initialize`** — `curl -i http://mcp-gateway:8811/mcp` with a JSON-RPC `initialize` body (see [SKILL.md §Testing](../SKILL.md#testing-and-validation) for the payload shape). Then `notifications/initialized` + `tools/list` with the returned `Mcp-Session-Id` (omit if stateless). Verify: gateway in `serverInfo`, `tools/list` matches `--servers`, tool count below your client's budget, backend schemas survive (`title`, annotations, `outputSchema`).
-2. **Auth proxy** — `curl -i http://mcp-auth-proxy/mcp` unauthenticated must return `401`.
-3. **Backends reachable** — `curl -i http://<backend>:<port>/mcp` from inside the network.
-
----
-
 ## Common Failure Modes
 
 - Backend binds to `127.0.0.1` inside the container, so the gateway cannot connect.
