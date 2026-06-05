@@ -1,9 +1,59 @@
 ---
 name: dignified-python
-description: This skill should be used when the user asks to "write Python code", "review Python", "refactor Python", "fix Python types", "improve error handling", "use pathlib", "create ABC interface", "fix mypy errors", "add type hints", mentions "Python", ".py files", "type annotations", or works with any Python development. Enforces LBYL exception handling, modern type syntax (list[str], str | None), pathlib operations, ABC-based interfaces, absolute imports, explicit error boundaries at CLI level, and production-tested code smell patterns from Dagster Labs. Includes automatic Python version detection and version-specific guidance.
+description:
+  This skill should be used when the user asks to "write Python code", "review Python",
+  "refactor Python", "fix Python types", "improve error handling", "use pathlib",
+  "create ABC interface", "fix mypy errors", "add type hints", "make this pythonic",
+  "LBYL vs EAFP", or mentions "Python", ".py files", "type annotations", "pathlib",
+  "subprocess", or Python CLI patterns. Provides opinionated production Python standards with
+  automatic version detection (3.10-3.13), modern type syntax, explicit condition checks where
+  practical, pathlib operations, interface guidance, and pragmatic production patterns.
+references:
+  - dignified-python-core
+  - cli-patterns
+  - versions/python-3.10
+  - versions/python-3.11
+  - versions/python-3.12
+  - versions/python-3.13
+  - references/advanced/api-design
+  - references/advanced/exception-handling
+  - references/advanced/interfaces
+  - references/advanced/typing-advanced
 ---
 
-# Dignified Python Coding Standards
+# Dignified Python
+
+Opinionated Python guidance for writing clean, maintainable, modern Python code (versions
+3.10-3.13).
+
+## When to Use This Skill
+
+Auto-invoke when users ask about:
+
+- "make this pythonic" / "is this good python"
+- "type hints" / "type annotations" / "typing"
+- "LBYL vs EAFP" / "exception handling"
+- "pathlib vs os.path" / "path operations"
+- "CLI patterns" / "click usage"
+- "code review" / "improve this code"
+- Any Python code quality or standards question
+
+**Note**: This skill is **general-purpose Python style guidance**, not Dagster-specific. It
+captures one explicit, LBYL-leaning set of conventions; project conventions can override it when needed.
+
+## When to Use This Skill vs. Others
+
+| User Need                    | Use This Skill              | Alternative Skill         |
+| ---------------------------- | --------------------------- | ------------------------- |
+| "make this pythonic"         | ✅ Yes - Python standards   |                           |
+| "is this good python"        | ✅ Yes - code quality       |                           |
+| "type hints"                 | ✅ Yes - typing guidance    |                           |
+| "LBYL vs EAFP"               | ✅ Yes - exception patterns |                           |
+| "pathlib vs os.path"         | ✅ Yes - path handling      |                           |
+| "best practices for dagster" | ❌ No                       | `/dagster-best-practices` |
+| "implement X pipeline"       | ❌ No                       | `/dg` for implementation  |
+| "which integration to use"   | ❌ No                       | `/dagster-expert`         |
+| "CLI argument parsing"       | ✅ Yes - CLI patterns       |                           |
 
 ## Core Knowledge (ALWAYS Loaded)
 
@@ -27,18 +77,40 @@ description: This skill should be used when the user asks to "write Python code"
 
 ## Conditional Loading (Load Based on Task Patterns)
 
-Core files above cover 80%+ of Python code patterns. Only load these additional files when you detect specific patterns:
+Core files above cover 80%+ of Python code patterns. Only load these additional files when you
+detect specific patterns:
 
 Pattern detection examples:
 
 - If task mentions "click" or "CLI" -> Load `cli-patterns.md`
 - If task mentions "subprocess" -> Load `subprocess.md`
 
+## Reference Documentation Structure
+
+This skill's reference material is organized by topic:
+
+### Core References
+
+- **`dignified-python-core.md`** - Essential standards (always loaded)
+- **`cli-patterns.md`** - Command-line interface patterns (click, argparse)
+
+### Version-Specific References (`versions/`)
+
+- **`python-3.10.md`** - Features available in Python 3.10+
+- **`python-3.11.md`** - Features available in Python 3.11+
+- **`python-3.12.md`** - Features available in Python 3.12+
+- **`python-3.13.md`** - Features available in Python 3.13+
+
+### Advanced Topics (`references/advanced/`)
+
+- **`exception-handling.md`** - LBYL patterns, error boundaries
+- **`interfaces.md`** - ABC and Protocol patterns
+- **`typing-advanced.md`** - Advanced typing patterns
+- **`api-design.md`** - API design principles
+
 ## When to Read Each Reference Document
 
-The `references/` directory contains detailed guidance for specialized topics. Load these on-demand when you encounter relevant patterns:
-
-### `references/exception-handling.md`
+### `references/advanced/exception-handling.md`
 
 **Read when**:
 
@@ -47,7 +119,7 @@ The `references/` directory contains detailed guidance for specialized topics. L
 - Seeing or writing `from e` or `from None`
 - Unsure if LBYL alternative exists
 
-### `references/interfaces.md`
+### `references/advanced/interfaces.md`
 
 **Read when**:
 
@@ -56,7 +128,7 @@ The `references/` directory contains detailed guidance for specialized topics. L
 - Designing gateway layer interfaces
 - Choosing between ABC and Protocol
 
-### `references/typing-advanced.md`
+### `references/advanced/typing-advanced.md`
 
 **Read when**:
 
@@ -74,7 +146,7 @@ The `references/` directory contains detailed guidance for specialized topics. L
 - Seeing Path() or computation at module level
 - Considering inline imports
 
-### `references/api-design.md`
+### `references/advanced/api-design.md`
 
 **Read when**:
 
@@ -93,8 +165,10 @@ The `references/` directory contains detailed guidance for specialized topics. L
 
 ## How to Use This Skill
 
-1. **Core knowledge** is loaded automatically (LBYL, pathlib, basic imports, anti-patterns)
-2. **Version detection** happens once - identify the minimum Python version and load the appropriate version file
+1. **Core knowledge** is loaded automatically (defaults, pathlib, imports,
+   anti-patterns)
+2. **Version detection** happens once - identify the minimum Python version and load the appropriate
+   version file
 3. **Reference documents** are loaded on-demand based on the triggers above
 4. **Additional patterns** may require extra loading (CLI patterns, subprocess)
 5. **Each file is self-contained** with complete guidance for its domain
