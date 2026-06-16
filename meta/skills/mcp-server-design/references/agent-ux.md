@@ -41,6 +41,12 @@ The system prompt (`server.instructions` in MCP) is a first-class knob for shapi
 agent behaviour without adding tools. It's sent at `initialize` (once per session),
 then folded into the host's system prompt for the rest of the conversation — keep it tight.
 
+**Gateway caveat:** this only holds when the client connects directly to this server or the
+gateway preserves upstream instructions. Aggregators such as Docker MCP Gateway can present
+their own initialize response and omit backend `server.instructions`. Do not put the only copy
+of a load-bearing rule here; keep critical tool-selection, safety, and response-contract facts
+recoverable from tool descriptions, schemas, `isError` messages, or structured results.
+
 **What belongs here:**
 
 | Type | Example |
@@ -202,4 +208,3 @@ it in feels like completing a thought, not consulting a spec.
 
 **When to run:** once after the first complete tool surface; again after any major
 redesign. This is a design review, not a QA step — run it before the surface stabilises.
-
