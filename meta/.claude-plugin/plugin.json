@@ -1,7 +1,7 @@
 {
   "name": "claude-code-meta",
-  "version": "1.1.1",
-  "description": "Claude Code meta-tools: skill creation, CLAUDE.md management; mcp-server-design (MCP design patterns, audit, client compatibility)",
+  "version": "1.1.2",
+  "description": "Claude Code meta-tools: skill creation, CLAUDE.md management, OpenCode configuration, and orphan cleanup",
   "author": {
     "name": "j2h4u"
   }

@@ -169,6 +169,9 @@ Claude Code tooling and meta-skills.
 
 **Utility:** `statusline` — Custom statusline showing costs & context usage. Install via `@"statusline-setup"` agent.
 
+**Moved:** `mcp-server-design` now lives in
+[`skill-mcp-server-design`](https://github.com/j2h4u/skill-mcp-server-design).
+
 ### productivity
 
 Analysis tools.
