@@ -33,7 +33,6 @@ oh-my-claude-plugins/
 ├── claude-code-meta/             # Claude Code tooling
 │   ├── plugin.json
 │   └── skills/
-│       ├── claude-md-redirect/
 │       ├── claude-md-writer/
 │       ├── cli-skill-creator/
 │       ├── mcp-builder/
@@ -154,7 +153,6 @@ Claude Code tooling and meta-skills.
 |-------|-------------|---------|
 | cli-skill-creator | Meta-skill for creating CLI tool skills | ⭐⭐⭐⭐⭐ |
 | mcp-builder | MCP server development: Python, Node.js | ⭐⭐⭐⭐⭐ |
-| claude-md-redirect | Redirect to AGENTS.md with PostToolUse hook | ⭐⭐⭐ |
 | claude-md-writer | CLAUDE.md best practices: size limits, 3-tier docs | ⭐⭐⭐⭐ |
 | opencode-config | Custom providers, model selection | ⭐⭐⭐ |
 
@@ -200,7 +198,7 @@ Good depth, well-structured, production ready:
 | **meeting-insights-analyzer** | productivity | Original approach to meeting analysis |
 | **vercel-react-best-practices** | web-dev | Great structure but just packages Vercel rules |
 
-### ⭐⭐⭐ Solid but Shallow (5 skills)
+### ⭐⭐⭐ Solid but Shallow (4 skills)
 
 **⚠️ Candidates for replacement/deepening** — Complete but lacking depth or originality:
 
@@ -209,7 +207,6 @@ Good depth, well-structured, production ready:
 | **changelog-generator** | git-tools | Just a workflow, not deep | Find deeper changelog philosophy/patterns |
 | **git-workflow-manager** | git-tools | Basic conventional commits reference | Find advanced git workflow patterns |
 | **opencode-config** | claude-code-meta | Just config reference, shallow | Find deeper OpenCode configuration insights |
-| **claude-md-redirect** | claude-code-meta | Utility, very shallow | Consider removing or expanding |
 | **readme-generator** | docs | Just process, shallow content | Find README philosophy/patterns beyond basics |
 
 ### ⭐⭐ Incomplete (2 skills)
@@ -243,7 +240,6 @@ Quality is rated on **four dimensions**:
 - Just a workflow without deep insights (changelog-generator)
 - Simple reference/config guide (git-workflow-manager, opencode-config)
 - Packaging existing docs without original approach (vercel-react-best-practices)
-- Utility skill without depth (claude-md-redirect)
 
 Check **Notes** column for specifics.
 
