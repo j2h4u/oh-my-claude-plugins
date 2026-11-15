@@ -416,65 +416,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validate frontmatter in agent files
-        run: |
-          echo "Validating YAML frontmatter in agent files..."
-
-          agent_files=$(find ./agents -name "*.md" -type f -path "*/agents/*" 2>/dev/null || true)
-
-          if [ -z "$agent_files" ]; then
-            echo "No agent files found"
-            exit 0
-          fi
-
-          exit_code=0
-          for agent_file in $agent_files; do
-            echo ""
-            echo "Checking: $agent_file"
-
-            # Check if file starts with ---
-            if ! head -n 1 "$agent_file" | grep -q "^---$"; then
-              echo "✗ Missing frontmatter delimiter at start"
-              exit_code=1
-              continue
-            fi
-
-            # Extract frontmatter and validate YAML
-            frontmatter=$(awk '/^---$/{i++}i==1{print;next}i==2{exit}' "$agent_file" | sed '1d')
-
-            pycheck='import sys,yaml;d=yaml.safe_load(sys.stdin)'
-            if echo "$frontmatter" | python3 -c "$pycheck" 2>/dev/null; then
-              # Check required fields
-              pychk_name="$pycheck;sys.exit(0 if 'name' in d else 1)"
-              if ! echo "$frontmatter" | python3 -c "$pychk_name"; then
-                echo "✗ Missing required field: name"
-                exit_code=1
-                continue
-              fi
-
-              pychk_desc="$pycheck;sys.exit(0 if 'description' in d else 1)"
-              if ! echo "$frontmatter" | python3 -c "$pychk_desc"; then
-                echo "✗ Missing required field: description"
-                exit_code=1
-                continue
-              fi
-
-              echo "✓ Valid frontmatter with required fields"
-            else
-              echo "✗ Invalid YAML in frontmatter"
-              exit_code=1
-            fi
-          done
-
-          if [ $exit_code -eq 0 ]; then
-            echo ""
-            echo "✅ All agent frontmatter is valid"
-          else
-            echo ""
-            echo "❌ Some agent files have invalid frontmatter"
-            exit 1
-          fi
-
   validate-skill-descriptions:
     name: Validate Skill Description Format
     runs-on: ubuntu-latest

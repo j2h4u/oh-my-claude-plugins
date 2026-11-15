@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-**oh-my-claude-plugins** is a curated marketplace of Claude Code plugins organized into 8 plugin categories with 19 skills and 3 custom agents. Each plugin is self-contained with its own `plugin.json` manifest and follows Claude Code plugin development standards.
+**oh-my-claude-plugins** is a curated marketplace of Claude Code plugins organized into plugin categories with 21 skills. Each plugin is self-contained with its own `plugin.json` manifest and follows Claude Code plugin development standards.
 
 ## Critical Constraints
 
@@ -131,7 +131,6 @@ Conventional commits → semantic versioning (`git-tools/skills/git-workflow-man
 | `devops/` | System administration | devops |
 | `meta/` | Claude Code tooling | claude-code-meta |
 | `productivity/` | Analysis tools | productivity |
-| `agents/` | Custom agents | agents |
 
 ### Progressive Disclosure
 

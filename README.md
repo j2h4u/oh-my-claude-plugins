@@ -30,9 +30,6 @@ oh-my-claude-plugins/
 ├── .claude-plugin/
 │   ├── marketplace.json          # Marketplace metadata
 │   └── plugin.json               # Plugin registry
-├── agents/                       # Custom agents
-│   ├── plugin.json
-│   └── quick-worker/
 ├── claude-code-meta/             # Claude Code tooling
 │   ├── plugin.json
 │   └── skills/
@@ -173,16 +170,6 @@ Analysis tools.
 | Skill | Description | Quality |
 |-------|-------------|---------|
 | meeting-insights-analyzer | Communication patterns, speaking ratios | ⭐⭐⭐⭐ |
-
-### agents
-
-Custom agents for mechanical tasks.
-
-| Agent | Triggers | Description |
-|-------|----------|-------------|
-| quick-worker | "do this task" | Fast executor for mechanical tasks |
-
----
 
 ## Skills by Quality
 
