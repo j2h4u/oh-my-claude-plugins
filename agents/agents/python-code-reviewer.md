@@ -2,8 +2,6 @@
 name: python-code-reviewer
 description: "READ-ONLY Python code reviewer. Analyzes code quality, finds issues, runs tests. Returns structured list of issues for python-quick-fixer to fix. Cannot edit files - only reads and reports."
 tools: Bash, Glob, Grep, Read
-skills:
-  - dignified-python
 permissionMode: default
 model: haiku
 ---

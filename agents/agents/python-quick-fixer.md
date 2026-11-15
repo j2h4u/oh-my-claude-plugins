@@ -2,8 +2,6 @@
 name: python-quick-fixer
 description: "Python-specific quick fixer for batch fixing code issues. Use when you have a list of Python problems: lint errors, type hints, code review comments, mypy/ruff/flake8 warnings. Best for straightforward, mechanical fixes."
 tools: Bash, Glob, Grep, Read, Edit, Write, TodoWrite
-skills:
-  - dignified-python
 permissionMode: acceptEdits
 model: haiku
 ---

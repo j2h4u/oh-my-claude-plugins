@@ -47,9 +47,7 @@ oh-my-claude-plugins/
 │   ├── plugin.json
 │   └── skills/
 │       ├── dignified-bash/
-│       ├── dignified-python/
-│       ├── kaizen/
-│       └── software-architecture/
+│       └── kaizen/
 ├── databases/                    # Database tools
 │   ├── plugin.json
 │   └── skills/
@@ -104,9 +102,7 @@ Code quality and development philosophy.
 | Skill | Description | Quality |
 |-------|-------------|---------|
 | dignified-bash | Strict mode, shellcheck, defensive patterns | ⭐⭐⭐⭐ |
-| dignified-python | Pragmatic LBYL-leaning standards, version-aware (3.10-3.13), Click CLI | ⭐⭐⭐⭐⭐ |
 | kaizen | Continuous improvement, poka-yoke, YAGNI | ⭐⭐⭐⭐⭐ |
-| software-architecture | Clean Architecture & DDD principles | ⭐⭐ |
 
 ### git-tools
 
@@ -196,7 +192,7 @@ Custom agents for code tasks.
 
 Quick overview grouped by rating to identify improvement priorities:
 
-### ⭐⭐⭐⭐⭐ Exemplary (5 skills)
+### ⭐⭐⭐⭐⭐ Exemplary (4 skills)
 
 Deep insights + original approaches, comprehensive content:
 
@@ -205,7 +201,6 @@ Deep insights + original approaches, comprehensive content:
 | **gh** | git-tools | Deep mental model, original workflow patterns, exemplary progressive disclosure |
 | **mcp-builder** | claude-code-meta | Deep best practices, includes working evaluation tools |
 | **cli-skill-creator** | claude-code-meta | Highly original meta-skill, systematic CLI introspection approach |
-| **dignified-python** | coding-standards | Pragmatic LBYL-leaning Python standards, version-aware typing, production error-handling patterns |
 | **kaizen** | coding-standards | Deep principles with original adaptation to code |
 
 ### ⭐⭐⭐⭐ High Quality (8 skills)
@@ -234,13 +229,12 @@ Good depth, well-structured, production ready:
 | **claude-md-redirect** | claude-code-meta | Utility, very shallow | Consider removing or expanding |
 | **readme-generator** | docs | Just process, shallow content | Find README philosophy/patterns beyond basics |
 
-### ⭐⭐ Incomplete (3 skills)
+### ⭐⭐ Incomplete (2 skills)
 
 **🚨 Priority for improvement** — Functional but missing critical content:
 
 | Skill | Category | What's missing | Search for |
 |-------|----------|----------------|------------|
-| **software-architecture** | coding-standards | Needs examples, library guide | Code pattern examples, library-first guides |
 | **web-artifacts-builder** | web-dev | Needs troubleshooting guide, component patterns, examples | React artifact patterns, debugging guides |
 | **web-design-guidelines** | web-dev | Needs expansion (176→1500 words), sample output examples | UI/UX guidelines, review examples |
 
@@ -260,7 +254,7 @@ Quality is rated on **four dimensions**:
 | ⭐⭐⭐⭐⭐ | Exemplary — deep + original + comprehensive | gh (mental model), mcp-builder (evaluation tools), kaizen (code adaptation) |
 | ⭐⭐⭐⭐ | High quality — good depth + well-structured | dignified-bash, linux-sysadmin, meeting-insights-analyzer |
 | ⭐⭐⭐ | Solid — complete but shallow/standard | changelog-generator (just workflow), opencode-config (config reference) |
-| ⭐⭐ | Incomplete — needs expansion or examples | software-architecture, web-artifacts-builder, web-design-guidelines |
+| ⭐⭐ | Incomplete — needs expansion or examples | web-artifacts-builder, web-design-guidelines |
 
 **Why downgraded from 5→3 stars?**
 - Just a workflow without deep insights (changelog-generator)
@@ -357,7 +351,6 @@ Some skills are based on or derived from external sources:
 
 | Skill | Source | How it's used |
 |-------|--------|---------------|
-| dignified-python | [dagster-io/skills dignified-python](https://github.com/dagster-io/skills/tree/master/skills/dignified-python/skills/dignified-python) | Adapted into the `coding-standards` plugin; kept close to upstream structure while preserving this repo's discovery-friendly skill description format |
 | web-design-guidelines | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) | Thin wrapper that fetches upstream `command.md` at runtime — always up to date |
 | vercel-react-best-practices | [Vercel Engineering blog](https://vercel.com/blog) | Compiled from multiple Vercel blog posts into 45 structured rules with examples |
 | postgres-patterns | [Telegram post on CROSS JOIN LATERAL](https://t.me/bfrankly/84) | LATERAL-as-variables pattern; other patterns from PostgreSQL documentation |
