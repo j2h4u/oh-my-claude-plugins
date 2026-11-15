@@ -32,8 +32,6 @@ oh-my-claude-plugins/
 │   └── plugin.json               # Plugin registry
 ├── agents/                       # Custom agents
 │   ├── plugin.json
-│   ├── python-code-reviewer/
-│   ├── python-quick-fixer/
 │   └── quick-worker/
 ├── claude-code-meta/             # Claude Code tooling
 │   ├── plugin.json
@@ -178,12 +176,10 @@ Analysis tools.
 
 ### agents
 
-Custom agents for code tasks.
+Custom agents for mechanical tasks.
 
 | Agent | Triggers | Description |
 |-------|----------|-------------|
-| python-code-reviewer | "review Python code" | READ-ONLY analysis, creates issue report |
-| python-quick-fixer | "fix Python issues" | Batch fixes from issue list |
 | quick-worker | "do this task" | Fast executor for mechanical tasks |
 
 ---

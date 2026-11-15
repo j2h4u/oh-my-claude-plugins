@@ -1,7 +1,7 @@
 {
   "name": "agents",
-  "version": "1.0.1",
-  "description": "Custom agents for code review and fixing",
+  "version": "2.0.0",
+  "description": "Custom agents for mechanical tasks",
   "author": {
     "name": "j2h4u"
   }

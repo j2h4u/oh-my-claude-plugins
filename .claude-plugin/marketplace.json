@@ -82,8 +82,8 @@
     },
     {
       "name": "agents",
-      "description": "Custom agents: Python code review, quick fixing, mechanical tasks",
-      "version": "1.0.1",
+      "description": "Custom agents: fast executor for mechanical tasks",
+      "version": "2.0.0",
       "author": {
         "name": "j2h4u"
       },
