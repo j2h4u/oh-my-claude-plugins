@@ -258,7 +258,7 @@ Quality is rated on **four dimensions**:
 - Packaging existing docs without original approach (vercel-react-best-practices)
 - Utility skill without depth (claude-md-redirect)
 
-Check **Notes** column for specifics. See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) for detailed improvement roadmap.
+Check **Notes** column for specifics.
 
 ## Claude Code Bug: Plugins Not Loading
 
@@ -309,16 +309,6 @@ Advanced guides for plugin developers:
 | [Best Practices](docs/plugin-development/best-practices/) | Organization, naming conventions, common mistakes (1,156 lines) |
 | [Templates](docs/plugin-development/templates/) | Ready-to-use templates for all plugin components |
 | [Examples](docs/plugin-development/examples/) | Complete plugin walkthrough and testing workflow |
-
-### Skill Quality & Improvement Roadmap
-
-Quality indicators are shown in the skill tables above. For detailed analysis including:
-- Specific issues and recommended fixes
-- Missing content (examples, troubleshooting guides)
-- Word count analysis and expansion needs
-- Priority-ordered improvement roadmap
-
-See [SKILLS-REVIEW-REPORT.md](SKILLS-REVIEW-REPORT.md) — comprehensive review of all 19 skills with actionable improvement suggestions.
 
 ## Requirements
 

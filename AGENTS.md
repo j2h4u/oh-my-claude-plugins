@@ -80,8 +80,6 @@ Skills are rated ⭐⭐ to ⭐⭐⭐⭐⭐ based on:
 3. **Depth** — Insights beyond surface level
 4. **Originality** — Unique approach vs just packaging docs
 
-See `SKILLS-REVIEW-REPORT.md` for detailed analysis and improvement roadmap.
-
 ## Development Standards
 
 ### Skill Description Format
@@ -153,7 +151,6 @@ The `source` field in marketplace.json must match directory names:
 ## Documentation
 
 - **README.md** — User-facing documentation with quality ratings
-- **SKILLS-REVIEW-REPORT.md** — Comprehensive quality analysis and improvement roadmap
 - **docs/plugin-development/** — Official Claude Code plugin development guides (schemas, best practices, templates)
 - **docs/*.md** — Official Claude Code documentation (plugins.md, hooks.md, settings.md)
 
