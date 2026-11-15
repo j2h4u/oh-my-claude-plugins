@@ -1,8 +1,0 @@
-{
-  "name": "claude-code-meta",
-  "version": "2.0.0",
-  "description": "Claude Code meta-tools: skill creation, CLAUDE.md writing, OpenCode configuration, and orphan cleanup",
-  "author": {
-    "name": "j2h4u"
-  }
-}

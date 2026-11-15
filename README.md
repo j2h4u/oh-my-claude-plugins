@@ -30,13 +30,7 @@ oh-my-claude-plugins/
 ├── .claude-plugin/
 │   ├── marketplace.json          # Marketplace metadata
 │   └── plugin.json               # Plugin registry
-├── claude-code-meta/             # Claude Code tooling
-│   ├── plugin.json
-│   └── skills/
-│       ├── claude-md-writer/
-│       ├── cli-skill-creator/
-│       ├── mcp-builder/
-│       └── opencode-config/
+├── meta/utils/statusline/        # omcc statusline (not a plugin)
 ├── coding-standards/             # Code quality plugins
 │   ├── plugin.json
 │   └── skills/
@@ -145,16 +139,7 @@ Database tools and management.
 | metabase-swiss-knife | CLI for Metabase: inspect, diag, backup/restore, cards, dashboards | ⭐⭐⭐⭐ |
 | postgres-patterns | Idiomatic PostgreSQL: LATERAL as variables, CTEs, window functions, indexes | ⭐⭐⭐ |
 
-### claude-code-meta
-
-Claude Code tooling and meta-skills.
-
-| Skill | Description | Quality |
-|-------|-------------|---------|
-| cli-skill-creator | Meta-skill for creating CLI tool skills | ⭐⭐⭐⭐⭐ |
-| mcp-builder | MCP server development: Python, Node.js | ⭐⭐⭐⭐⭐ |
-| claude-md-writer | CLAUDE.md best practices: size limits, 3-tier docs | ⭐⭐⭐⭐ |
-| opencode-config | Custom providers, model selection | ⭐⭐⭐ |
+### statusline
 
 **Utility:** `statusline` — Custom statusline showing costs & context usage. Install via `@"statusline-setup"` agent.
 
@@ -173,18 +158,16 @@ Analysis tools.
 
 Quick overview grouped by rating to identify improvement priorities:
 
-### ⭐⭐⭐⭐⭐ Exemplary (4 skills)
+### ⭐⭐⭐⭐⭐ Exemplary (2 skills)
 
 Deep insights + original approaches, comprehensive content:
 
 | Skill | Category | What makes it exemplary |
 |-------|----------|-------------------------|
 | **gh** | git-tools | Deep mental model, original workflow patterns, exemplary progressive disclosure |
-| **mcp-builder** | claude-code-meta | Deep best practices, includes working evaluation tools |
-| **cli-skill-creator** | claude-code-meta | Highly original meta-skill, systematic CLI introspection approach |
 | **kaizen** | coding-standards | Deep principles with original adaptation to code |
 
-### ⭐⭐⭐⭐ High Quality (8 skills)
+### ⭐⭐⭐⭐ High Quality (7 skills)
 
 Good depth, well-structured, production ready:
 
@@ -194,11 +177,10 @@ Good depth, well-structured, production ready:
 | **linux-sysadmin** | devops | Useful practices, standard content |
 | **metabase-swiss-knife** | databases | Full CLI with backup/restore, zero dependencies |
 | **doc-coauthoring** | docs | Good workflow but not particularly deep |
-| **claude-md-writer** | claude-code-meta | Good compilation of best practices |
 | **meeting-insights-analyzer** | productivity | Original approach to meeting analysis |
 | **vercel-react-best-practices** | web-dev | Great structure but just packages Vercel rules |
 
-### ⭐⭐⭐ Solid but Shallow (4 skills)
+### ⭐⭐⭐ Solid but Shallow (3 skills)
 
 **⚠️ Candidates for replacement/deepening** — Complete but lacking depth or originality:
 
@@ -206,7 +188,6 @@ Good depth, well-structured, production ready:
 |-------|----------|----------------------|----------------------|
 | **changelog-generator** | git-tools | Just a workflow, not deep | Find deeper changelog philosophy/patterns |
 | **git-workflow-manager** | git-tools | Basic conventional commits reference | Find advanced git workflow patterns |
-| **opencode-config** | claude-code-meta | Just config reference, shallow | Find deeper OpenCode configuration insights |
 | **readme-generator** | docs | Just process, shallow content | Find README philosophy/patterns beyond basics |
 
 ### ⭐⭐ Incomplete (2 skills)
@@ -231,31 +212,17 @@ Quality is rated on **four dimensions**:
 
 | Stars | Meaning | Examples |
 |-------|---------|----------|
-| ⭐⭐⭐⭐⭐ | Exemplary — deep + original + comprehensive | gh (mental model), mcp-builder (evaluation tools), kaizen (code adaptation) |
+| ⭐⭐⭐⭐⭐ | Exemplary — deep + original + comprehensive | gh (mental model), kaizen (code adaptation) |
 | ⭐⭐⭐⭐ | High quality — good depth + well-structured | dignified-bash, linux-sysadmin, meeting-insights-analyzer |
-| ⭐⭐⭐ | Solid — complete but shallow/standard | changelog-generator (just workflow), opencode-config (config reference) |
+| ⭐⭐⭐ | Solid — complete but shallow/standard | changelog-generator (just workflow) |
 | ⭐⭐ | Incomplete — needs expansion or examples | web-artifacts-builder, web-design-guidelines |
 
 **Why downgraded from 5→3 stars?**
 - Just a workflow without deep insights (changelog-generator)
-- Simple reference/config guide (git-workflow-manager, opencode-config)
+- Simple reference/config guide (git-workflow-manager)
 - Packaging existing docs without original approach (vercel-react-best-practices)
 
 Check **Notes** column for specifics.
-
-## Claude Code Bug: Plugins Not Loading
-
-Some Claude Code versions silently skip installed plugins if they are not explicitly listed in the `enabledPlugins` map in `~/.claude/settings.json`. Older versions loaded all installed plugins automatically, but newer versions may require this explicit flag. When affected, skills and agents simply don't appear in the session — no error, no warning.
-
-**Symptoms:** You install a plugin, but its skills don't show up in `/skills`. The plugin is listed in `~/.claude/plugins/installed_plugins.json` but missing from `enabledPlugins` in `~/.claude/settings.json`.
-
-**Fix:** Run the included utility that syncs the two files:
-
-```bash
-python3 meta/utils/fix-enabled-plugins/fix-enabled-plugins.py
-```
-
-It shows diagnostics (installed vs enabled count), a diff of what's missing, creates a backup, and applies the fix. Safe to run multiple times. See [fix-enabled-plugins README](meta/utils/fix-enabled-plugins/README.md) for details.
 
 ## Alternative Installation
 
